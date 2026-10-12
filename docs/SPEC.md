@@ -1,6 +1,6 @@
 # PiMate — プロダクト方針
 
-**更新日:** 2026-10-12  
+**更新日:** 2026-10-13  
 **状態:** 開発方針。技術的成立性はPoCで検証する。  
 **対象:** iOS / Androidアプリ、macOS / Linux上のPi
 
@@ -18,7 +18,18 @@ PiMateは、**PC上で実行する通常のPi Coding Agentを、スマホに最�
 - **スマホで完結:** Pi標準CLIの主要機能を、スマホ向けUIから扱える。会話、モデル・Thinking設定、履歴、ツール実行、Diff、作業状況やサブエージェントの確認を重視する。
 - **切断に強い:** スマホのアプリ切替、回線断、再接続でPiの実行が不必要に停止せず、現在の状態へ安全に復帰できる。
 
-UIは**Notionのようなミニマルで洗練されたライトテーマ中心**を目指します。個々の画面構成やコンポーネントは実装時に設計します。
+### UIの方向性
+
+参考は [ompanion](https://github.com/edde746/ompanion)、T3 Codeのモバイルアプリ、ChatGPTアプリです。個々の画面構成やコンポーネントは実装時に設計します。
+
+- **ライトテーマ中心**で、ミニマルかつ落ち着いた見た目にする。ダークテーマも用意する。
+- **配色:** ニュートラルグレーのモノクロ基調に、**緑系のアクセント1色**。それ以外の色は状態（作業中・入力待ち・エラー）やDiffなど、意味のある箇所に限る。アクセントと、Diffの追加行・成功表示の緑が混同されないよう配慮する。
+- **区切り:** 線や影に頼らず、面の濃淡と余白で区切る。
+- **情報密度:** ompanion程度の高密度を基準とする。完了したターンの作業は要約行に畳み、ツール呼び出しは簡潔な行で示して必要なときに展開する。
+- **ナビゲーション:** ChatGPTアプリ型の左ドロワーでPi Instanceを切り替え、メイン画面はチャットとする。
+- **一覧の単位は、会話ではなく実行中のPi Instance。** 各Instanceの現在のセッション、状態、起動元（PC / スマホ）を示し、入力待ちのInstanceを目立たせる。
+- **エージェント側からの確認・選択・入力要求はチャット内に表示**し、モーダルで作業を塞がない。モデル選択など、ユーザー自身が開く操作はモバイルの標準的な作法に従う。
+- Piは標準ではツール実行ごとの承認を求めないため、承認操作を前提とした画面構成にしない。
 
 ## 2. 合意済みの技術方針
 
@@ -97,6 +108,6 @@ PoCで不成立の項目が出たら、**abduco以外への無断切替やPi RPC
 
 ---
 
-**参考:** [Pi公式リポジトリ](https://github.com/badlogic/pi-mono) / [abduco](https://github.com/martanne/abduco) / [PI Dashboard](https://github.com/BlackBeltTechnology/pi-agent-dashboard) / [Remote Pi](https://github.com/jacobaraujo7/remote_pi) / [T3 Code](https://github.com/pingdotgg/t3code)
+**参考:** [Pi公式リポジトリ](https://github.com/badlogic/pi-mono) / [abduco](https://github.com/martanne/abduco) / [ompanion](https://github.com/edde746/ompanion) / [PI Dashboard](https://github.com/BlackBeltTechnology/pi-agent-dashboard) / [Remote Pi](https://github.com/jacobaraujo7/remote_pi) / [T3 Code](https://github.com/pingdotgg/t3code)
 
 旧詳細仕様はGitの履歴から参照できますが、本書を現在の方針の正本とします。
