@@ -19,7 +19,7 @@ export const PROTOCOL_VERSION = 1;
 export type InstanceStatus = "idle" | "running" | "waiting_input";
 /** Where the Pi process was started: by the user in a terminal, or by the Host on request from the phone. */
 export type Origin = "pc" | "mobile";
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface SessionRef {
 	id: string;

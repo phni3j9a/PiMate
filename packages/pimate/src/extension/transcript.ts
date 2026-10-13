@@ -1,0 +1,84 @@
+import type { TranscriptItem } from "@pimate/protocol";
+
+export const MAX_TOOL_TEXT = 32 * 1024;
+function record(value: unknown): Record<string, any> {
+	return value && typeof value === "object" ? (value as Record<string, any>) : {};
+}
+function text(content: unknown): string {
+	return typeof content === "string"
+		? content
+		: Array.isArray(content)
+			? content
+					.filter((c) => c?.type === "text")
+					.map((c) => c.text ?? "")
+					.join("")
+			: "";
+}
+/** Accept persisted entries and live messages through one normalization path. */
+export function normalizeMessage(value: unknown, entryId: string): TranscriptItem | null {
+	const m = record(value);
+	const body = text(m.content);
+	const base = { entryId, ...(typeof m.timestamp === "number" ? { timestamp: m.timestamp } : {}) };
+	if (m.role === "system" && !body.trim()) return null;
+	if (m.role === "user") return { ...base, kind: "user", text: body };
+	if (m.role === "assistant") {
+		const blocks = Array.isArray(m.content) ? m.content : [];
+		return {
+			...base,
+			kind: "assistant",
+			text: body,
+			thinking:
+				blocks
+					.filter((c) => c.type === "thinking")
+					.map((c) => c.thinking)
+					.join("") || undefined,
+			toolCalls: blocks
+				.filter((c) => c.type === "toolCall")
+				.map((c) => ({ id: c.id, name: c.name, args: c.arguments })),
+			model: m.provider && m.model ? { provider: m.provider, id: m.model } : undefined,
+			usage: m.usage
+				? {
+						input: m.usage.input,
+						output: m.usage.output,
+						cacheRead: m.usage.cacheRead,
+						cacheWrite: m.usage.cacheWrite,
+						cost: m.usage.cost?.total,
+					}
+				: undefined,
+			stopReason: m.stopReason,
+			errorMessage: m.errorMessage,
+		};
+	}
+	if (m.role === "toolResult")
+		return {
+			...base,
+			kind: "tool_result",
+			toolCallId: m.toolCallId,
+			toolName: m.toolName,
+			text: body.slice(0, MAX_TOOL_TEXT),
+			...(body.length > MAX_TOOL_TEXT ? { truncated: true } : {}),
+			isError: !!m.isError,
+			details: m.details,
+		};
+	return { ...base, kind: "other", label: m.customType ?? m.role ?? "message", text: body };
+}
+export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
+	return entries.flatMap((value) => {
+		const e = record(value);
+		if (e.type === "message") {
+			const m = normalizeMessage(e.message, e.id);
+			return m ? [m] : [];
+		}
+		if (["compaction", "branch_summary", "custom_message"].includes(e.type))
+			return [
+				{
+					kind: "other" as const,
+					entryId: e.id,
+					label: e.customType ?? e.type,
+					text: e.summary ?? text(e.content),
+					timestamp: Date.parse(e.timestamp) || undefined,
+				},
+			];
+		return [];
+	});
+}
