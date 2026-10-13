@@ -17,14 +17,18 @@
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
-    "@pimate/protocol": "*"
+    "@pimate/protocol": "*",
+    "qrcode": "^1.5.4",
+    "ws": "^8.22.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-ai": "*"
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "1.2.0",
     "@earendil-works/pi-coding-agent": "1.2.0",
-    "@earendil-works/pi-ai": "1.2.0"
+    "@types/qrcode": "^1.5.6",
+    "@types/ws": "^8.18.2"
   }
 }
