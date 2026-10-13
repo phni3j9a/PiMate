@@ -106,6 +106,8 @@ export interface InstanceSnapshot {
 	pendingUI: UIRequest[];
 	/** Last event seq emitted before this snapshot was taken. */
 	seq: number;
+	/** Assistant output streamed so far in the current, not yet finished message (for late subscribers). */
+	streaming?: { text: string; thinking: string };
 	piVersion?: string;
 }
 
@@ -286,3 +288,5 @@ export class LineDecoder {
 export function encodeLine(value: unknown): string {
 	return `${JSON.stringify(value)}\n`;
 }
+
+export * from "./host.ts";
