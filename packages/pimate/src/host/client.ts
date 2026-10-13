@@ -82,14 +82,20 @@ export class RcClient {
 		method: M,
 		params: ParamsOf<M>,
 		guards: Pick<Request, "expectInstanceId" | "expectSessionId"> = {},
+		timeoutMs?: number,
 	): Promise<ResultOf<M>> {
+		// subagents_rpc waits on the RC side for params.timeoutMs; allow for that plus a margin.
+		const rpcTimeout = method === "subagents_rpc" ? (params as { timeoutMs?: number }).timeoutMs : undefined;
+		const wait =
+			timeoutMs ??
+			(method === "subagents_rpc" ? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000) : this.timeoutMs);
 		if (!this.socket || this.socket.destroyed) return Promise.reject(new Error("RC not connected"));
 		const id = randomUUID();
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
 				reject(new RcError("timeout", `RC ${method} timed out`));
-			}, this.timeoutMs);
+			}, wait);
 			this.pending.set(id, { resolve, reject, timer });
 			this.socket!.write(encodeLine({ id, method, params, expectInstanceId: this.instanceId, ...guards }));
 		});

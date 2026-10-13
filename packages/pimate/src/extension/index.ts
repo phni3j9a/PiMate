@@ -4,7 +4,7 @@ import type { ParamsOf } from "@pimate/protocol";
 import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
-import { normalizeMessage } from "./transcript.ts";
+import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { patchUI } from "./ui.ts";
 
 export default function pimate(pi: ExtensionAPI): void {
@@ -18,7 +18,7 @@ export default function pimate(pi: ExtensionAPI): void {
 	const flushMessages = () => {
 		for (const { message, ctx, sessionId } of messages.splice(0)) {
 			if (h.session?.id !== sessionId) continue;
-			const entry = ctx.sessionManager.getBranch().findLast((e) => e.type === "message" && e.message === message);
+			const entry = findMessageEntry(ctx.sessionManager.getBranch(), message);
 			const item = normalizeMessage(message, entry?.id ?? `live-${randomUUID()}`);
 			if (item) h.emit({ type: "message_end", item });
 		}
@@ -26,9 +26,10 @@ export default function pimate(pi: ExtensionAPI): void {
 	h.subscriptions.push(
 		pi.on("session_start", async (event, ctx) => {
 			if (!ctx.hasUI) return;
-			for (const pending of h.pendingUI.values()) pending.cancel();
+			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
 			h.ctx = ctx;
+			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {
 				id: ctx.sessionManager.getSessionId(),
 				file: ctx.sessionManager.getSessionFile(),

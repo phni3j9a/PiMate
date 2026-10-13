@@ -26,8 +26,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: sudo apt-get update && sudo apt-get install -y abduco
-      - run: npm install -g @earendil-works/pi-coding-agent@1.2.0 && which pi abduco
+      # abduco is not packaged in Ubuntu 24.04; build the same pinned static binary we ship.
+      - run: packages/pimate/scripts/build-abduco-linux.sh amd64
+      - run: npm install -g @earendil-works/pi-coding-agent@1.2.0
       - run: npm ci
       # Uses Pi's faux provider; no network LLM.
       - run: npm run test:e2e -w @pimate/pimate
+        env:
+          PIMATE_E2E_REQUIRED: "1"

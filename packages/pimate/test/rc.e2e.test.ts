@@ -22,6 +22,9 @@ async function until<T>(read: () => T | Promise<T>, accept: (v: T) => boolean, t
 	}
 	throw new Error("Timed out waiting for Pi");
 }
+// CI sets PIMATE_E2E_REQUIRED so a missing pi/abduco fails instead of silently skipping.
+if (process.env.PIMATE_E2E_REQUIRED && (!pi || !abduco))
+	throw new Error(`E2E requires pi (${pi}) and abduco (${abduco})`);
 it.skipIf(!pi || !abduco)(
 	"real Pi TUI: discovery, streaming, history, abort, CLI and process cleanup without network LLM",
 	async () => {

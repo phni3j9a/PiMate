@@ -82,3 +82,16 @@ export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
 		return [];
 	});
 }
+
+/** Finds the session entry Pi persisted for a live message_end, so live items and history share an entryId. */
+export function findMessageEntry<E extends { type: string; id: string }>(branch: E[], message: unknown): E | undefined {
+	// Extension messages (role "custom") are persisted as custom_message entries holding the same content object.
+	const m = message as { role?: string; customType?: string; content?: unknown };
+	return branch.findLast((e) => {
+		const x = e as unknown as { message?: unknown; customType?: string; content?: unknown };
+		if (e.type === "message") return x.message === message;
+		return (
+			e.type === "custom_message" && m.role === "custom" && x.customType === m.customType && x.content === m.content
+		);
+	});
+}

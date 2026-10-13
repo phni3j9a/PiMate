@@ -1,11 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Handlers } from "../src/extension/dispatch.ts";
 import { dispatch, validateRequest } from "../src/extension/dispatch.ts";
-import { MAX_TOOL_TEXT, normalizeBranch, normalizeMessage } from "../src/extension/transcript.ts";
+import { findMessageEntry, MAX_TOOL_TEXT, normalizeBranch, normalizeMessage } from "../src/extension/transcript.ts";
 import type { UIState } from "../src/extension/ui.ts";
 import { raceUI } from "../src/extension/ui.ts";
 
 describe("transcript", () => {
+	it("finds the persisted entry for message and custom messages", () => {
+		const user = { role: "user", content: "hi" };
+		const content = [{ type: "text", text: "done" }];
+		const custom = { role: "custom", customType: "subagent", content, display: true };
+		const branch = [
+			{ type: "message", id: "m1", message: user },
+			{ type: "custom_message", id: "c1", customType: "subagent", content: [{ type: "text", text: "done" }] },
+			{ type: "custom_message", id: "c2", customType: "subagent", content },
+		];
+		expect(findMessageEntry(branch, user)?.id).toBe("m1");
+		expect(findMessageEntry(branch, custom)?.id).toBe("c2");
+		expect(findMessageEntry(branch, { role: "custom", customType: "other", content })).toBeUndefined();
+	});
+
 	it("normalizes message roles and drops empty system entries", () => {
 		expect(normalizeMessage({ role: "system", content: "  " }, "s")).toBeNull();
 		expect(

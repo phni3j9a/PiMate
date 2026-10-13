@@ -52,7 +52,8 @@ export class Hub {
 	}
 	isIdle = () => this.ctx?.isIdle() ?? true;
 	emit = (event: InstanceEvent): void => {
-		if (!this.ctx?.hasUI) return;
+		// The server only runs in UI sessions; don't read ctx here, it may be stale during session switches.
+		if (!this.server) return;
 		const line = encodeLine({
 			type: "event",
 			instanceId: this.instanceId,
@@ -94,9 +95,12 @@ export class Hub {
 		const { model: _, thinking: __, pendingUI: ___, seq: ____, ...snapshot } = this.snapshot();
 		const meta: InstanceMeta = { ...snapshot, updatedAt: Date.now() };
 		const tmp = `${this.metaPath}.${randomUUID()}.tmp`;
+		// Best effort: a removed run dir or full disk must not break dialogs or status updates.
 		try {
 			writeFileSync(tmp, JSON.stringify(meta), { mode: 0o600, flag: "wx" });
 			renameSync(tmp, this.metaPath);
+		} catch {
+			// Not logged: writing to stderr would corrupt the TUI. The Host then sees stale or missing meta.
 		} finally {
 			rmSync(tmp, { force: true });
 		}
