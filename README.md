@@ -10,8 +10,10 @@ Pi Coding Agentを、iOS/AndroidのネイティブUIから操作するための�
 
 ## 現在の段階
 
-技術検証（PoC）から着手します。abducoによる通常Pi TUIのバックグラウンド起動、同一TUIへの再接続、Remote Control Extensionからの操作、Hostとのライフサイクル分離、macOS/Linuxへの同梱配布の成立性を検証します。
+Linuxでの技術検証（PoC）を完了し、SPECの構成が成立することを確認しました。次はMVP（Android優先、React Native + Expo）です。
 
-PoCで根本的な問題が見つかった場合は、合意済みのアーキテクチャを独断で変更せず、検証結果と代替案を示します。
+- 検証結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)
+- 検証コードと再現手順: [poc/README.md](poc/README.md)
+- 未検証: macOS、arm64 Linux
 
 以前の詳細仕様書はGit履歴から参照できますが、**現在の設計方針の正本は [docs/SPEC.md](docs/SPEC.md)** です。
