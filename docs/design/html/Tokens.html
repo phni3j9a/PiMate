@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="utf-8">
+<title>デザイントークン</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;display=swap" rel="stylesheet"><style>
+html,body{margin:0;overflow:hidden}
+.sheet>*{flex-shrink:0}
+</style><meta name="viewport" content="width=1330">
+</head>
+<body>
+
+<div style="width: 1330px; height: 844px; box-sizing: border-box; padding: 44px 48px; background: #FFFFFF; color: #1F2326; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; font-size: 14px; line-height: 1.5; word-break: auto-phrase; text-wrap: pretty; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 48px">
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 20px; font-weight: 700">色</h2>
+    
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 600; color: #5E686D">面</div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">背景</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#FFFFFF</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">全画面（ドロワー・設定・シートも）</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #F1F3F4; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">塗り</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#F1F3F4</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">入力欄・コード・質問カード</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #E6E9EB; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">塗り（濃）</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#E6E9EB</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">セグメント・無効ボタン・進捗</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #DFE7EC; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">選択</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#DFE7EC</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">選択行・自分の吹き出し</span>
+          </div>
+        
+      </div>
+    
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 600; color: #5E686D">文字</div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #1F2326; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">本文</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#1F2326</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">本文・見出し</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #5E686D; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">補助</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#5E686D</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">パス・時刻・補足</span>
+          </div>
+        
+      </div>
+    
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 600; color: #5E686D">アクセント（Pi Blue Deep）</div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #1B6B91; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">アクセント</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#1B6B91</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">主操作・送信・スイッチ・選択印</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #155A7A; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">アクセント文字</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#155A7A</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">テキストボタン・メンション</span>
+          </div>
+        
+      </div>
+    
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 600; color: #5E686D">状態（Pi ロゴの3色）</div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #E1AD42; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">入力待ち</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#E1AD42</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">ロゴの黄。文字 #8B5D20</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #E37769; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">失敗</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#E37769</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">ロゴのコーラル。文字 #A84D45（破壊的操作も）</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #4D9ABF; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">完了・接続中</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#4D9ABF</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">ロゴの青。印のみ</span>
+          </div>
+        
+      </div>
+    
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 600; color: #5E686D">Diff</div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #E8F3F9; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">追加</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#E8F3F9</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">青系。文字 #22607E</span>
+          </div>
+        
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 28px">
+            <span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #FBEDEB; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08)"></span>
+            <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 600">削除</span>
+            <code style="width: 64px; flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">#FBEDEB</code>
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: #5E686D">コーラル系。文字 #9A453E</span>
+          </div>
+        
+      </div>
+    
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 20px; font-weight: 700">文字</h2>
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 12px; background: #F1F3F4">
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 17px; font-weight: 600; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">シートの見出し</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">17 / 600</code>
+        </div>
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 15px; font-weight: 600; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ヘッダーのタイトル</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">15 / 600</code>
+        </div>
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 400; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">本文・メッセージ</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">14 / 400</code>
+        </div>
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 400; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">補足・ターンの要約</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">12 / 400</code>
+        </div>
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 11px; font-weight: 400; font-family: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">メタ情報・バッジ</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">11 / 400</code>
+        </div>
+      
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <span style="flex: 1; min-width: 0; font-size: 12px; font-weight: 400; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">~/code/demo · npm test</span>
+          <code style="flex-shrink: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5E686D">Mono 12</code>
+        </div>
+      
+    </div>
+    <div style="font-size: 12px; color: #5E686D">本文はシステムフォント（SF Pro / ヒラギノ / Roboto）、コード・パス・コマンドは JetBrains Mono。行の高さは本文 1.5。</div>
+
+    <h2 style="margin: 14px 0 0; font-size: 20px; font-weight: 700">サイズ</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">タップ領域 / ツールの行</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">44 / 32 px</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">入力欄の中の操作</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">36 px</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">主操作・入力欄</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">カプセル</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">角丸（カード・入力欄）</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">16–24 px</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">角丸（シート）</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">16 px</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">画面の左右 / ターンの間</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">20 / 32 px</div>
+        </div>
+      
+        <div style="padding: 10px 12px; border-radius: 12px; background: #F1F3F4">
+          <div style="font-size: 11px; color: #5E686D">リストの行</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">52 px 以上</div>
+        </div>
+      
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 20px; font-weight: 700">部品</h2>
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <button style="height: 44px; border: 0; padding: 0 22px; border-radius: 22px; background: #1B6B91; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600">主操作</button>
+        <span style="font-size: 12px; color: #5E686D">1画面に1つまで。カプセル形</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px">
+        <button style="height: 44px; border: 0; padding: 0 10px; background: transparent; color: #155A7A; font-family: inherit; font-size: 14px; font-weight: 600">テキスト</button>
+        <button style="height: 44px; border: 0; padding: 0 10px; background: transparent; color: #5E686D; font-family: inherit; font-size: 14px">キャンセル</button>
+        <button style="height: 44px; border: 0; padding: 0 10px; background: transparent; color: #A84D45; font-family: inherit; font-size: 14px">終了…</button>
+        <button aria-label="コピー" style="width: 44px; height: 44px; border: 0; padding: 0; background: transparent; color: #5E686D; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg></button>
+      </div>
+      <div style="font-size: 12px; color: #5E686D">それ以外の操作は塗りなし（文字かアイコンだけ）。色付きの面を敷いたボタンや、背景付きのピルは使わない。</div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 14px">
+      <span style="height: 36px; display: flex; align-items: center; gap: 3px; color: #5E686D; font-size: 13px">Opus 5.5 · high <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg></span>
+      <span style="color: #155A7A; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px">@src/greet.ts</span>
+      <span style="display: flex; align-items: center; gap: 6px; color: #8B5D20; font-size: 12px; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 4px; background: #E1AD42"></span>入力待ち</span>
+      <button role="switch" aria-checked="true" aria-label="スイッチの例" style="width: 51px; height: 31px; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #1B6B91; display: flex; justify-content: flex-end"><span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span></button>
+    </div>
+
+    <div role="radiogroup" aria-label="セグメントの例" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-radius: 10px; background: #E6E9EB">
+      <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 12px; font-weight: 600">選択中</button>
+      <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">未選択</button>
+      <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">未選択</button>
+    </div>
+
+    <div style="padding: 12px; border-radius: 12px; background: #F1F3F4; display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; font-weight: 600; color: #5E686D">状態の印</div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; font-size: 12px">
+        <span style="display: flex; align-items: center; gap: 6px"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style="fill: none; stroke-width: 2"><circle cx="8" cy="8" r="6" style="stroke: #E6E9EB"></circle><path d="M8 2a6 6 0 0 1 6 6" style="stroke: #5E686D; stroke-linecap: round"></path></svg>作業中</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #E1AD42"></span>入力待ち</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #E37769"></span>失敗</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span>完了</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 5px; height: 5px; border-radius: 3px; background: #5E686D; opacity: 0.5"></span>待機</span>
+      </div>
+    </div>
+
+    <div style="padding: 8px 12px; border-radius: 12px; background: #F1F3F4; display: flex; flex-direction: column">
+      <div style="font-size: 12px; font-weight: 600; color: #5E686D; line-height: 24px">トランスクリプトの行</div>
+      <div style="height: 30px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">edit</span>
+        <span style="flex: 1; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D">src/greet.ts</span>
+        <span style="font-size: 11px; color: #22607E">+6</span><span style="font-size: 11px; color: #9A453E">−2</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; padding: 4px 0; color: #5E686D; font-size: 12px">1分12秒 作業 · ツール 8 回 · 2 ファイル編集
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+      <div style="align-self: flex-end; margin: 4px 0; background: #DFE7EC; border-radius: 18px; padding: 8px 14px">自分のメッセージ</div>
+    </div>
+  </section>
+</div>
+
+</body></html>

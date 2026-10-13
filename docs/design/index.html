@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PiMate 画面モック</title>
+<!-- export.mjs が生成するファイル。直接編集しない -->
+<style>
+:root{--bg:#FFFFFF;--fill:#F1F3F4;--text:#1F2326;--muted:#5E686D;--accent-ink:#155A7A}
+html{background:var(--bg)}
+body{margin:0;padding:40px 20px 64px;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',system-ui,sans-serif;font-size:14px;line-height:1.5;word-break:auto-phrase}
+main{max-width:1180px;margin:0 auto}
+h1{margin:0;font-size:22px;font-weight:600}
+.lead{margin:8px 0 0;color:var(--muted)}
+.lead a{color:var(--accent-ink)}
+h2{margin:48px 0 16px;font-size:15px;font-weight:600}
+.grid{display:flex;flex-wrap:wrap;gap:32px 24px}
+.card{display:flex;flex-direction:column;gap:2px;width:195px;color:inherit;text-decoration:none}
+.card.wide{width:min(665px,100%)}
+.card img{display:block;width:100%;height:auto;margin-bottom:10px;border-radius:20px;background:var(--fill);outline:1px solid #E6E9EB;outline-offset:-1px}
+.card.wide img{border-radius:12px}
+.card:hover .title{color:var(--accent-ink)}
+.title{font-size:13px;font-weight:600}
+.file{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',ui-monospace,Menlo,monospace}
+@media (max-width:460px){.grid{gap:28px 16px}.card{width:calc(50% - 8px)}.card.wide{width:100%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>PiMate 画面モック</h1>
+  <p class="lead">画面を選ぶと、実寸（390×844）の HTML を開きます。仕様の正本は <a href="../SPEC.md">docs/SPEC.md</a>、このモックの使い方は <a href="README.md">README.md</a> を参照してください。</p>
+  <h2>メイン画面</h2>
+  <div class="grid">
+      <a class="card" href="html/Main.html">
+        <img src="png/Main.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">チャット — 作業中</span>
+        <span class="file">Main</span>
+      </a>
+      <a class="card" href="html/Drawer.html">
+        <img src="png/Drawer.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">ドロワー — Instance 一覧</span>
+        <span class="file">Drawer</span>
+      </a>
+      <a class="card" href="html/Chat-Waiting.html">
+        <img src="png/Chat-Waiting.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">チャット — 入力待ち</span>
+        <span class="file">Chat-Waiting</span>
+      </a>
+      <a class="card" href="html/Chat-Edge.html">
+        <img src="png/Chat-Edge.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">チャット — 再接続と PC 側の操作</span>
+        <span class="file">Chat-Edge</span>
+      </a>
+      <a class="card" href="html/Chat-Attach.html">
+        <img src="png/Chat-Attach.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">チャット — PC で操作が必要</span>
+        <span class="file">Chat-Attach</span>
+      </a>
+  </div>
+  <h2>シートとフロー</h2>
+  <div class="grid">
+      <a class="card" href="html/Sheet-Model.html">
+        <img src="png/Sheet-Model.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">モデル・Thinking シート</span>
+        <span class="file">Sheet-Model</span>
+      </a>
+      <a class="card" href="html/Sheet-Session.html">
+        <img src="png/Sheet-Session.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">セッション・Instance シート</span>
+        <span class="file">Sheet-Session</span>
+      </a>
+      <a class="card" href="html/Review.html">
+        <img src="png/Review.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">変更レビュー</span>
+        <span class="file">Review</span>
+      </a>
+      <a class="card" href="html/New-Pi.html">
+        <img src="png/New-Pi.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">新しい Pi を起動</span>
+        <span class="file">New-Pi</span>
+      </a>
+  </div>
+  <h2>サブエージェント</h2>
+  <div class="grid">
+      <a class="card" href="html/Chat-Subagents.html">
+        <img src="png/Chat-Subagents.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">チャット — サブエージェント実行中</span>
+        <span class="file">Chat-Subagents</span>
+      </a>
+      <a class="card" href="html/Sheet-Subagents.html">
+        <img src="png/Sheet-Subagents.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">サブエージェント一覧</span>
+        <span class="file">Sheet-Subagents</span>
+      </a>
+      <a class="card" href="html/Subagent-Detail.html">
+        <img src="png/Subagent-Detail.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">サブエージェント — pi-subagents（指示を送れる）</span>
+        <span class="file">Subagent-Detail</span>
+      </a>
+      <a class="card" href="html/Subagent-Detail-Readonly.html">
+        <img src="png/Subagent-Detail-Readonly.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">サブエージェント — 公式サンプル（見るだけ）</span>
+        <span class="file">Subagent-Detail-Readonly</span>
+      </a>
+  </div>
+  <h2>設定とデザイントークン</h2>
+  <div class="grid">
+      <a class="card" href="html/Settings.html">
+        <img src="png/Settings.png" width="195" height="422" alt="" loading="lazy">
+        <span class="title">設定</span>
+        <span class="file">Settings</span>
+      </a>
+      <a class="card wide" href="html/Tokens.html">
+        <img src="png/Tokens.png" width="665" height="422" alt="" loading="lazy">
+        <span class="title">デザイントークン</span>
+        <span class="file">Tokens</span>
+      </a>
+  </div>
+</main>
+</body>
+</html>

@@ -8,6 +8,8 @@ Pi Coding Agentを、iOS/AndroidのネイティブUIから操作するための�
 
 仕様書は意図的に簡潔にしています。ユーザー体験と技術的な前提だけを定め、詳細設計・実装・テスト計画はCodex / Claude Codeなどのコーディングエージェントに任せます。
 
+画面の見た目の基準は **[docs/design/ — 画面モック](docs/design/README.md)** にあります（[一覧ページ](docs/design/index.html)をブラウザで開けます）。
+
 ## 現在の段階
 
 Linuxでの技術検証（PoC）を完了し、SPECの構成が成立することを確認しました。次はMVP（Android優先、React Native + Expo）です。
