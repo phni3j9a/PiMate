@@ -1,0 +1,288 @@
+/**
+ * PiMate protocol v1.
+ *
+ * RC (Remote Control Extension, one per Pi process) <-> Host: newline-delimited JSON over a private
+ * Unix socket. Host <-> mobile app (M1) reuses the same request/response/event shapes, routed by instanceId.
+ *
+ * Rules
+ * - The snapshot is the source of truth; events are deltas. Each instance numbers its events with `seq`
+ *   (monotonic per Pi process). A client that sees a gap, or reconnects, calls `hello` (+ `history`) again.
+ * - Mutating requests may carry `expectInstanceId` / `expectSessionId`; RC rejects them on mismatch so a
+ *   message never lands in another instance or conversation after /new, /resume or a reconnect.
+ * - Nothing is retried automatically. Unknown fields must be ignored; unknown event types skipped.
+ */
+
+export const PROTOCOL_VERSION = 1;
+
+// ---------------------------------------------------------------- domain
+
+export type InstanceStatus = "idle" | "running" | "waiting_input";
+/** Where the Pi process was started: by the user in a terminal, or by the Host on request from the phone. */
+export type Origin = "pc" | "mobile";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export interface SessionRef {
+	id: string;
+	file?: string;
+	name?: string;
+}
+
+export interface ModelRef {
+	provider: string;
+	id: string;
+}
+
+export interface Usage {
+	input: number;
+	output: number;
+	cacheRead?: number;
+	cacheWrite?: number;
+	cost?: number;
+}
+
+export interface ToolCallRef {
+	id: string;
+	name: string;
+	args: unknown;
+}
+
+/** One entry of the current session branch, normalized for display. */
+export type TranscriptItem =
+	| { kind: "user"; entryId: string; text: string; timestamp?: number }
+	| {
+			kind: "assistant";
+			entryId: string;
+			text: string;
+			thinking?: string;
+			toolCalls: ToolCallRef[];
+			model?: ModelRef;
+			usage?: Usage;
+			stopReason?: string;
+			errorMessage?: string;
+			timestamp?: number;
+	  }
+	| {
+			kind: "tool_result";
+			entryId: string;
+			toolCallId: string;
+			toolName: string;
+			/** Text content, truncated by RC (see `truncated`). */
+			text: string;
+			truncated?: boolean;
+			isError: boolean;
+			details?: unknown;
+			timestamp?: number;
+	  }
+	/** Compaction summaries, branch summaries, custom messages etc. shown as a single line. */
+	| { kind: "other"; entryId: string; label: string; text?: string; timestamp?: number };
+
+export type UIRequestKind = "select" | "confirm" | "input" | "editor";
+
+/** A dialog opened by Pi or any extension through ctx.ui, answerable from the phone. */
+export interface UIRequest {
+	requestId: string;
+	kind: UIRequestKind;
+	title: string;
+	message?: string;
+	options?: string[];
+	placeholder?: string;
+	/** editor: the TUI editor stays open after a remote answer (Pi's editor() has no AbortSignal). */
+	tuiStaysOpen?: boolean;
+}
+
+export interface InstanceSnapshot {
+	protocol: number;
+	instanceId: string;
+	pid: number;
+	cwd: string;
+	origin: Origin;
+	/** abduco session name when started by the Host; null for a Pi started directly in a terminal. */
+	abducoSession: string | null;
+	startedAt: number;
+	session: SessionRef | null;
+	status: InstanceStatus;
+	model: ModelRef | null;
+	thinking: ThinkingLevel | null;
+	pendingUI: UIRequest[];
+	/** Last event seq emitted before this snapshot was taken. */
+	seq: number;
+	piVersion?: string;
+}
+
+/** Discovery file `<runDir>/<instanceId>.json` written by RC (0600). The socket is `<runDir>/<instanceId>.sock`. */
+export interface InstanceMeta {
+	protocol: number;
+	instanceId: string;
+	pid: number;
+	cwd: string;
+	origin: Origin;
+	abducoSession: string | null;
+	startedAt: number;
+	session: SessionRef | null;
+	status: InstanceStatus;
+	updatedAt: number;
+}
+
+// ---------------------------------------------------------------- events (RC -> client)
+
+export type InstanceEvent =
+	| { type: "status"; status: InstanceStatus }
+	| { type: "session_changed"; reason: "startup" | "reload" | "new" | "resume" | "fork"; session: SessionRef }
+	| { type: "session_info"; name?: string }
+	| { type: "agent_start" }
+	| { type: "agent_settled"; aborted: boolean }
+	| { type: "user_input"; text: string; source?: string }
+	| { type: "text_delta"; delta: string }
+	| { type: "thinking_delta"; delta: string }
+	/** A message was appended to the session (same shape as `history` items). */
+	| { type: "message_end"; item: TranscriptItem }
+	| { type: "tool_start"; toolCallId: string; toolName: string; args: unknown; parentToolCallId?: string }
+	| { type: "tool_update"; toolCallId: string; toolName: string; partial: unknown }
+	| { type: "tool_end"; toolCallId: string; toolName: string; isError: boolean; durationMs?: number }
+	| { type: "model"; model: ModelRef }
+	| { type: "thinking"; level: ThinkingLevel }
+	| { type: "ui_request"; request: UIRequest }
+	| { type: "ui_request_end"; requestId: string; by: "tui" | "remote" | "error" }
+	/** Any TUI prompt incl. ctx.ui.custom(), which the phone cannot render ("needs the PC"). */
+	| { type: "ui_prompt"; phase: "start" | "end"; kind: string; title?: string }
+	| { type: "notify"; message: string; level: "info" | "warning" | "error" }
+	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string }
+	| { type: "compact_done" }
+	| { type: "compact_error"; error: string }
+	/** Raw relay of another extension's pi.events channel (e.g. pi-subagents). Normalized in M4. */
+	| { type: "bus"; channel: string; data: unknown };
+
+export type InstanceEventType = InstanceEvent["type"];
+
+// ---------------------------------------------------------------- methods (client -> RC)
+
+export type SessionOp = "new" | "switch" | "fork" | "reload";
+
+export interface CommandInfo {
+	name: string;
+	description?: string;
+	source: string;
+}
+
+export interface RcMethods {
+	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
+	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
+	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. */
+	prompt: {
+		params: { text: string; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
+		result: { deliveredAs: "prompt" | "steer" | "followUp" };
+	};
+	abort: { params: Record<string, never>; result: Record<string, never> };
+	ui_respond: {
+		params: { requestId: string; value?: string; confirmed?: boolean; cancelled?: boolean };
+		result: Record<string, never>;
+	};
+	set_thinking: { params: { level: ThinkingLevel }; result: { thinking: ThinkingLevel } };
+	set_model: { params: ModelRef; result: { model: ModelRef } };
+	compact: { params: { instructions?: string }; result: Record<string, never> };
+	/** Pi built-in session commands. Result arrives as a `session_op_done` event. */
+	session_op: { params: { op: SessionOp; arg?: string }; result: Record<string, never> };
+	commands: { params: Record<string, never>; result: { commands: CommandInfo[] } };
+	/** Relay to pi-subagents' in-process RPC (`subagents:rpc:v1:*`). */
+	subagents_rpc: {
+		params: { method: string; params?: unknown; timeoutMs?: number };
+		result: { reply: unknown };
+	};
+}
+
+export type RcMethod = keyof RcMethods;
+export type ParamsOf<M extends RcMethod> = RcMethods[M]["params"];
+export type ResultOf<M extends RcMethod> = RcMethods[M]["result"];
+
+// ---------------------------------------------------------------- envelopes
+
+export interface Request<M extends RcMethod = RcMethod> {
+	id: string;
+	method: M;
+	params?: ParamsOf<M>;
+	expectInstanceId?: string;
+	expectSessionId?: string;
+}
+
+export type ErrorCode =
+	| "bad_request"
+	| "unknown_method"
+	| "not_ready"
+	| "busy"
+	| "instance_mismatch"
+	| "session_changed"
+	| "no_such_request"
+	| "not_found"
+	| "timeout"
+	| "unsupported"
+	| "internal";
+
+export interface ProtocolError {
+	code: ErrorCode;
+	message?: string;
+	/** e.g. `session_changed` carries the current session. */
+	data?: unknown;
+}
+
+export type Response<M extends RcMethod = RcMethod> =
+	| { type: "response"; id: string; ok: true; result: ResultOf<M> }
+	| { type: "response"; id: string | null; ok: false; error: ProtocolError };
+
+export interface EventMessage {
+	type: "event";
+	instanceId: string;
+	sessionId: string | null;
+	seq: number;
+	event: InstanceEvent;
+}
+
+export type ServerMessage = Response | EventMessage;
+
+// ---------------------------------------------------------------- NDJSON framing
+
+/** Incremental newline-delimited JSON decoder. Malformed lines are reported, not thrown. */
+export class LineDecoder {
+	private buf = "";
+	private readonly onValue: (value: unknown) => void;
+	private readonly onError: (line: string) => void;
+	private readonly maxLine: number;
+
+	constructor(
+		onValue: (value: unknown) => void,
+		onError: (line: string) => void = () => {},
+		maxLine = 16 * 1024 * 1024,
+	) {
+		this.onValue = onValue;
+		this.onError = onError;
+		this.maxLine = maxLine;
+	}
+
+	push(chunk: string): void {
+		this.buf += chunk;
+		let i = this.buf.indexOf("\n");
+		while (i >= 0) {
+			const line = this.buf.slice(0, i);
+			this.buf = this.buf.slice(i + 1);
+			if (line.trim()) {
+				let value: unknown;
+				let parsed = false;
+				try {
+					value = JSON.parse(line);
+					parsed = true;
+				} catch {
+					this.onError(line);
+				}
+				if (parsed) this.onValue(value);
+			}
+			i = this.buf.indexOf("\n");
+		}
+		if (this.buf.length > this.maxLine) {
+			this.onError(this.buf.slice(0, 200));
+			this.buf = "";
+		}
+	}
+}
+
+export function encodeLine(value: unknown): string {
+	return `${JSON.stringify(value)}\n`;
+}
