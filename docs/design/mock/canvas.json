@@ -1,0 +1,181 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-12T16:10:00Z"
+  },
+  "title": "PiMate 確定版モック",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Drawer.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "ドロワー — Instance 一覧",
+      "radius": 40
+    },
+    "Main.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "チャット — 作業中",
+      "radius": 40
+    },
+    "Chat-Waiting.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "チャット — 入力待ち",
+      "radius": 40
+    },
+    "Chat-Edge.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "チャット — 再接続と PC 側の操作",
+      "radius": 40
+    },
+    "Sheet-Model.dc.html": {
+      "x": 0,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "モデル・Thinking シート",
+      "radius": 40
+    },
+    "Sheet-Session.dc.html": {
+      "x": 470,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "セッション・Instance シート",
+      "radius": 40
+    },
+    "Review.dc.html": {
+      "x": 940,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "変更レビュー",
+      "radius": 40
+    },
+    "New-Pi.dc.html": {
+      "x": 1410,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "新しい Pi を起動",
+      "radius": 40
+    },
+    "Settings.dc.html": {
+      "x": 0,
+      "y": 3792,
+      "w": 390,
+      "h": 844,
+      "title": "設定",
+      "radius": 40
+    },
+    "Tokens.dc.html": {
+      "x": 470,
+      "y": 3792,
+      "w": 1330,
+      "h": 844,
+      "title": "デザイントークン"
+    },
+    "Chat-Attach.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "チャット — PC で操作が必要",
+      "radius": 40
+    },
+    "Chat-Subagents.dc.html": {
+      "x": 0,
+      "y": 2528,
+      "w": 390,
+      "h": 844,
+      "title": "チャット — サブエージェント実行中",
+      "radius": 40
+    },
+    "Sheet-Subagents.dc.html": {
+      "x": 470,
+      "y": 2528,
+      "w": 390,
+      "h": 844,
+      "title": "サブエージェント一覧",
+      "radius": 40
+    },
+    "Subagent-Detail.dc.html": {
+      "x": 940,
+      "y": 2528,
+      "w": 390,
+      "h": 844,
+      "title": "サブエージェント — pi-subagents（指示を送れる）",
+      "radius": 40
+    },
+    "Subagent-Detail-Readonly.dc.html": {
+      "x": 1410,
+      "y": 2528,
+      "w": 390,
+      "h": 844,
+      "title": "サブエージェント — 公式サンプル（見るだけ）",
+      "radius": 40
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Drawer.dc.html",
+    "Chat-Waiting.dc.html",
+    "Chat-Edge.dc.html",
+    "Chat-Attach.dc.html",
+    "Sheet-Model.dc.html",
+    "Sheet-Session.dc.html",
+    "Review.dc.html",
+    "New-Pi.dc.html",
+    "Chat-Subagents.dc.html",
+    "Sheet-Subagents.dc.html",
+    "Subagent-Detail.dc.html",
+    "Subagent-Detail-Readonly.dc.html",
+    "Settings.dc.html",
+    "Tokens.dc.html"
+  ],
+  "notes": {
+    "n1": {
+      "x": 0,
+      "y": -300,
+      "text": "メイン画面",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "n2": {
+      "x": 0,
+      "y": 964,
+      "text": "シートとフロー",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "n3": {
+      "x": 0,
+      "y": 3492,
+      "text": "設定とデザイントークン",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "n4": {
+      "x": 0,
+      "y": 2228,
+      "text": "サブエージェント",
+      "kind": "title1",
+      "maxW": 2270
+    }
+  },
+  "designSystems": []
+}

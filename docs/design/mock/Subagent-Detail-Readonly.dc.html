@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>サブエージェント — 見るだけ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;overflow:hidden}
+.sheet>*{flex-shrink:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #FFFFFF; color: #1F2326; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; font-size: 14px; line-height: 1.5; word-break: auto-phrase; text-wrap: pretty">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; z-index: 5; height: 47px; box-sizing: border-box; padding: 4px 28px 0 42px; display: flex; align-items: center; justify-content: space-between; color: #1F2326; pointer-events: none">
+    <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums">9:41</span>
+    <span style="display: flex; align-items: center; gap: 6px">
+      <svg width="18" height="12" viewBox="0 0 18 12" style="fill: currentColor"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" style="fill: currentColor"><path d="M8 2.2c2.3 0 4.4.9 6 2.4l1.2-1.3A10.4 10.4 0 0 0 8 .4C5.2.4 2.7 1.5.8 3.3L2 4.6a8.6 8.6 0 0 1 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.2-1.3A6.7 6.7 0 0 0 8 4c-1.8 0-3.4.7-4.6 1.8l1.2 1.3c.9-.8 2.1-1.3 3.4-1.3zM8 9.4c.5 0 .9.2 1.2.5L8 11.6 6.8 9.9c.3-.3.7-.5 1.2-.5z"></path></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13" style="fill: none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" style="stroke: currentColor; opacity: 0.4"></rect><rect x="2" y="2" width="20" height="9" rx="2" style="fill: currentColor"></rect><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" style="fill: currentColor; opacity: 0.4"></path></svg>
+    </span>
+  </div>
+  <div style="height: 47px; flex-shrink: 0"></div>
+
+  <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 6px">
+    <button aria-label="親のチャットに戻る" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; padding: 0; border-radius: 10px; background: transparent; color: #1F2326; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5l-7 7 7 7"></path></svg>
+    </button>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="font-size: 15px; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ログイン処理の調査</div>
+      <div style="font-size: 11px; line-height: 15px; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">scout · Haiku 5.5 · チェーン 1 / 3</div>
+    </div>
+    <div style="flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px; color: #5E686D; font-size: 12px; font-variant-numeric: tabular-nums">
+      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style="fill: none; stroke-width: 2"><circle cx="8" cy="8" r="6" style="stroke: #E6E9EB"></circle><path d="M8 2a6 6 0 0 1 6 6" style="stroke: #5E686D; stroke-linecap: round"></path></svg>
+      作業中 · 0:48
+    </div>
+    <span style="width: 44px; flex-shrink: 0"></span>
+  </header>
+
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 0 20px 10px; display: flex; flex-direction: column; justify-content: flex-end">
+    <section aria-label="親の Pi からの依頼" style="padding: 12px 14px; border-radius: 16px; background: #F1F3F4">
+      <div style="font-size: 12px; font-weight: 600; color: #5E686D">親の Pi からの依頼</div>
+      <p style="margin: 4px 0 0; font-size: 14px; line-height: 21px">Web 版のログイン処理に関係するファイルを探して、呼び出しの流れをまとめて。</p>
+      <ol aria-label="チェーンの順番" style="margin: 10px 0 0; padding: 0; list-style: none; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5E686D">
+        <li style="color: #1F2326; font-weight: 600">scout</li><li aria-hidden="true">→</li><li>planner</li><li aria-hidden="true">→</li><li>worker</li>
+      </ol>
+    </section>
+
+    <div style="margin-top: 12px; display: flex; flex-direction: column">
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5E686D">
+        <span style="width: 14px; display: flex; justify-content: center">
+          <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"></path></svg>
+        </span>
+        <span style="flex: 1">3秒 考えた</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">find</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">"*.tsx" src/</span>
+        <span style="font-size: 11px; color: #5E686D">214 件</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">grep</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">login src/</span>
+        <span style="font-size: 11px; color: #5E686D">18 件</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+    <p style="margin: 6px 0 0">ログインの入口は <code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">src/pages/Login.tsx</code> の1か所です。ここから呼び出しをたどります。</p>
+    <div style="margin-top: 12px; display: flex; flex-direction: column">
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">read</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">src/pages/Login.tsx</span>
+        <span style="font-size: 11px; color: #5E686D">88 行</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><span style="width: 6px; height: 6px; border-radius: 3px; background: #4D9ABF"></span></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">read</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">src/api/session.ts</span>
+        <span style="font-size: 11px; color: #5E686D">64 行</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 10px">
+      <p style="margin: 0">ここまでの流れです。</p>
+      <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px">
+        <li><code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">Login.tsx</code> の送信で <code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">signIn()</code> を呼ぶ</li>
+        <li><code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">signIn()</code> が <code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">/api/session</code> に送信</li>
+        <li>成功したらトークンを保存（保存先を確認中）</li>
+      </ol>
+    </div>
+    <div style="margin-top: 12px; display: flex; flex-direction: column">
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 14px; display: flex; justify-content: center"><svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" style="fill: none; stroke-width: 2"><circle cx="8" cy="8" r="6" style="stroke: #E6E9EB"></circle><path d="M8 2a6 6 0 0 1 6 6" style="stroke: #5E686D; stroke-linecap: round"></path></svg></span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 600">grep</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">useSession src/</span>
+        
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </div>
+    </div>
+  </main>
+
+  <footer style="flex-shrink: 0; padding: 14px 20px 30px; display: flex; flex-direction: column; align-items: center; gap: 4px">
+    <span style="font-size: 12px; line-height: 18px; color: #5E686D; text-align: center">この Extension では、サブエージェントに指示を送れません。<br>止めると、親の Pi の作業もまとめて止まります。</span>
+    <button style="height: 44px; border: 0; padding: 0 12px; background: transparent; color: #A84D45; font-family: inherit; font-size: 15px">すべて停止…</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

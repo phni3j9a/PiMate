@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>変更レビュー</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;overflow:hidden}
+.sheet>*{flex-shrink:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #FFFFFF; color: #1F2326; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; font-size: 14px; line-height: 1.5; word-break: auto-phrase; text-wrap: pretty">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; z-index: 5; height: 47px; box-sizing: border-box; padding: 4px 28px 0 42px; display: flex; align-items: center; justify-content: space-between; color: #1F2326; pointer-events: none">
+    <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums">9:41</span>
+    <span style="display: flex; align-items: center; gap: 6px">
+      <svg width="18" height="12" viewBox="0 0 18 12" style="fill: currentColor"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" style="fill: currentColor"><path d="M8 2.2c2.3 0 4.4.9 6 2.4l1.2-1.3A10.4 10.4 0 0 0 8 .4C5.2.4 2.7 1.5.8 3.3L2 4.6a8.6 8.6 0 0 1 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.2-1.3A6.7 6.7 0 0 0 8 4c-1.8 0-3.4.7-4.6 1.8l1.2 1.3c.9-.8 2.1-1.3 3.4-1.3zM8 9.4c.5 0 .9.2 1.2.5L8 11.6 6.8 9.9c.3-.3.7-.5 1.2-.5z"></path></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13" style="fill: none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" style="stroke: currentColor; opacity: 0.4"></rect><rect x="2" y="2" width="20" height="9" rx="2" style="fill: currentColor"></rect><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" style="fill: currentColor; opacity: 0.4"></path></svg>
+    </span>
+  </div>
+  <div style="height: 47px; flex-shrink: 0"></div>
+
+  <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 2px 0 6px">
+    <button aria-label="チャットに戻る" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; padding: 0; border-radius: 10px; background: transparent; color: #1F2326; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5l-7 7 7 7"></path></svg>
+    </button>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="font-size: 15px; font-weight: 600; line-height: 20px">変更</div>
+      <div style="font-size: 11px; line-height: 15px; color: #5E686D">--shout フラグを追加 · 3 ファイル</div>
+    </div>
+    <span style="font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace"><span style="color: #22607E">+26</span> <span style="color: #9A453E">−2</span></span>
+    <button aria-label="差分をコピー" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; padding: 0; background: transparent; color: #5E686D; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
+    </button>
+  </header>
+
+  <div style="flex-shrink: 0; padding: 4px 20px 12px">
+    <div role="radiogroup" aria-label="範囲" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 10px; background: #E6E9EB">
+      <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 13px; font-weight: 600">このターン</button>
+      <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 13px">セッション全体</button>
+    </div>
+  </div>
+
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 4px 20px 0; display: flex; flex-direction: column; gap: 2px">
+    <button aria-expanded="true" style="height: 52px; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
+      <span style="width: 20px; height: 20px; flex-shrink: 0; border-radius: 5px; background: #F1F3F4; color: #5E686D; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">M</span>
+      <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">src/greet.ts</span>
+      <span style="font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace"><span style="color: #22607E">+6</span> <span style="color: #9A453E">−2</span></span>
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 15l6-6 6 6"></path></svg>
+    </button>
+    <div style="margin: 0 -20px 12px; padding: 4px 0; overflow: hidden; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 20px">
+      <div style="padding: 0 20px; color: #5E686D">@@ -1,6 +1,10 @@ export function greet</div>
+      <sc-for list="{{lines}}" as="l" hint-placeholder-count="12">
+        <div style="display: flex; background: {{l.bg}}; color: {{l.color}}; white-space: pre">
+          <span style="width: 34px; flex-shrink: 0; text-align: right; color: #8A9499">{{l.a}}</span>
+          <span style="width: 26px; flex-shrink: 0; text-align: right; color: #8A9499">{{l.b}}</span>
+          <span style="width: 14px; flex-shrink: 0; text-align: center">{{l.mark}}</span>
+          <span style="flex: 1; min-width: 0; overflow: hidden">{{l.text}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <sc-for list="{{files}}" as="f" hint-placeholder-count="2">
+      <button aria-expanded="false" style="height: 52px; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
+        <span style="width: 20px; height: 20px; flex-shrink: 0; border-radius: 5px; background: {{f.badgeBg}}; color: {{f.badgeColor}}; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{f.kind}}</span>
+        <span style="flex: 1; min-width: 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{f.path}}</span>
+        <span style="font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #22607E">{{f.add}}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+      </button>
+    </sc-for>
+  </main>
+
+  <footer style="flex-shrink: 0; padding: 12px 20px 30px">
+    <button style="width: 100%; height: 48px; border: 0; border-radius: 24px; background: #1B6B91; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 600">この変更について依頼</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const L = (a, b, mark, text) => ({
+      a: a, b: b, mark: mark, text: text,
+      bg: mark === '+' ? '#E8F3F9' : (mark === '-' ? '#FBEDEB' : 'transparent'),
+      color: mark === '+' ? '#22607E' : (mark === '-' ? '#9A453E' : '#1F2326')
+    });
+    return {
+      lines: [
+        L('1', '', '-', 'export function greet(name: string) {'),
+        L('', '1', '+', 'export function greet('),
+        L('', '2', '+', '  name: string,'),
+        L('', '3', '+', '  opts: { shout?: boolean } = {},'),
+        L('', '4', '+', ') {'),
+        L('2', '', '-', '  return `Hello, ${name}!`;'),
+        L('', '5', '+', '  const s = `Hello, ${name}!`;'),
+        L('', '6', '+', '  return opts.shout ? s.toUpperCase() : s;'),
+        L('3', '7', ' ', '}'),
+        L('4', '8', ' ', ''),
+        L('5', '9', ' ', 'export const VERSION = "0.2.0";')
+      ],
+      files: [
+        { kind: 'A', path: 'src/greet.test.ts', add: '+18', badgeBg: '#E8F3F9', badgeColor: '#22607E' },
+        { kind: 'M', path: 'README.md', add: '+2', badgeBg: '#F1F3F4', badgeColor: '#5E686D' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

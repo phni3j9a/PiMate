@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>チャット — 入力待ち</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;overflow:hidden}
+.sheet>*{flex-shrink:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #FFFFFF; color: #1F2326; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; font-size: 14px; line-height: 1.5; word-break: auto-phrase; text-wrap: pretty">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; z-index: 5; height: 47px; box-sizing: border-box; padding: 4px 28px 0 42px; display: flex; align-items: center; justify-content: space-between; color: #1F2326; pointer-events: none">
+    <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums">9:41</span>
+    <span style="display: flex; align-items: center; gap: 6px">
+      <svg width="18" height="12" viewBox="0 0 18 12" style="fill: currentColor"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" style="fill: currentColor"><path d="M8 2.2c2.3 0 4.4.9 6 2.4l1.2-1.3A10.4 10.4 0 0 0 8 .4C5.2.4 2.7 1.5.8 3.3L2 4.6a8.6 8.6 0 0 1 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.2-1.3A6.7 6.7 0 0 0 8 4c-1.8 0-3.4.7-4.6 1.8l1.2 1.3c.9-.8 2.1-1.3 3.4-1.3zM8 9.4c.5 0 .9.2 1.2.5L8 11.6 6.8 9.9c.3-.3.7-.5 1.2-.5z"></path></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13" style="fill: none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" style="stroke: currentColor; opacity: 0.4"></rect><rect x="2" y="2" width="20" height="9" rx="2" style="fill: currentColor"></rect><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" style="fill: currentColor; opacity: 0.4"></path></svg>
+    </span>
+  </div>
+  <div style="height: 47px; flex-shrink: 0"></div>
+
+  <header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 6px">
+    <button aria-label="Instance 一覧を開く" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; padding: 0; border-radius: 10px; background: transparent; color: #1F2326; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round"><path d="M4 8h16M4 16h10"></path></svg>
+    </button>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+      <div style="font-size: 15px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ログイン画面の改修</div>
+    </div>
+    <div style="flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px; color: #8B5D20; font-size: 12px; font-weight: 600">
+      <span style="width: 7px; height: 7px; border-radius: 4px; background: #E1AD42"></span>入力待ち
+    </div>
+    <button aria-label="セッションメニュー" style="width: 44px; height: 44px; flex-shrink: 0; border: 0; padding: 0; border-radius: 10px; background: transparent; color: #5E686D; display: flex; align-items: center; justify-content: center">
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="fill: currentColor; stroke: none"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
+    </button>
+  </header>
+
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 0 20px 12px; display: flex; flex-direction: column; justify-content: flex-end">
+    <div style="display: flex; justify-content: flex-end">
+      <div style="max-width: 280px; background: #DFE7EC; border-radius: 18px; padding: 10px 14px">ログイン画面をメールリンク認証に対応させて</div>
+    </div>
+    <button style="align-self: flex-start; margin-top: 10px; display: flex; align-items: center; gap: 6px; border: 0; padding: 4px 0; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">
+      52秒 作業 · ツール 7 回 · 読み取りのみ
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 10px">
+      <p style="margin: 0">現状の構成を確認しました。</p>
+      <ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px">
+        <li><code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">LoginForm.tsx</code> はパスワード入力のみ</li>
+        <li>認証は <code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 12.5px; background: #F1F3F4; border-radius: 5px; padding: 1px 5px">/api/session</code> に集約</li>
+      </ul>
+      <p style="margin: 0">実装方針を選んでください。</p>
+    </div>
+
+    <section aria-label="Extension からの質問" style="margin-top: 24px; padding: 16px 16px 12px; border-radius: 16px; background: #F1F3F4">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+        <span style="width: 7px; height: 7px; border-radius: 4px; background: #E1AD42"></span>
+        <span style="font-weight: 600; color: #8B5D20">選択してください</span>
+      </div>
+      <div style="margin-top: 8px; font-weight: 600">メールリンクの実装方式は？</div>
+      <div role="radiogroup" aria-label="実装方式" style="margin-top: 4px; display: flex; flex-direction: column">
+        <sc-for list="{{options}}" as="o" hint-placeholder-count="3">
+          <button role="radio" aria-checked="{{o.checked}}" style="min-height: 52px; display: flex; align-items: flex-start; gap: 12px; border: 0; padding: 10px 0; background: transparent; color: #1F2326; font-family: inherit; font-size: 14px; text-align: left">
+            <span style="width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; box-sizing: border-box; border-radius: 9px; border: {{o.ring}}; background: transparent"></span>
+            <span style="display: flex; flex-direction: column">
+              <span>{{o.label}}</span>
+              <span style="font-size: 12px; color: #5E686D">{{o.desc}}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+      <label style="margin-top: 6px; height: 44px; display: flex; align-items: center; padding: 0 14px; border-radius: 20px; background: #FFFFFF">
+        <input type="text" placeholder="その他（自由に入力）" aria-label="その他の回答" style="flex: 1; border: 0; outline: none; padding: 0; background: transparent; color: #1F2326; font-family: inherit; font-size: 14px">
+      </label>
+      <div style="margin-top: 14px; display: flex; align-items: center; justify-content: flex-end; gap: 4px">
+        <button style="height: 40px; border: 0; padding: 0 14px; background: transparent; color: #5E686D; font-family: inherit; font-size: 14px">キャンセル</button>
+        <button style="height: 40px; border: 0; padding: 0 20px; border-radius: 20px; background: #1B6B91; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 600">回答する</button>
+      </div>
+    </section>
+  </main>
+
+  <footer style="flex-shrink: 0; padding: 6px 16px 30px; background: #FFFFFF">
+    <div style="padding: 12px 8px 6px 14px; border-radius: 24px; background: #F1F3F4">
+      <label for="composer-waiting" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">メッセージ</label>
+      <textarea id="composer-waiting" rows="1" disabled placeholder="上の質問に回答すると入力できます" style="display: block; width: 100%; box-sizing: border-box; border: 0; outline: none; resize: none; background: transparent; padding: 0; color: #5E686D; font-family: inherit; font-size: 15px; line-height: 22px; height: 22px"></textarea>
+      <div style="margin-top: 8px; display: flex; align-items: center; gap: 4px">
+        <button aria-label="添付" disabled style="width: 36px; height: 36px; flex-shrink: 0; margin-left: -8px; border: 0; padding: 0; border-radius: 18px; background: transparent; color: #5E686D; opacity: 0.5; display: flex; align-items: center; justify-content: center">
+          <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+        <button aria-haspopup="dialog" style="height: 36px; display: flex; align-items: center; gap: 3px; border: 0; padding: 0 6px; background: transparent; color: #5E686D; font-family: inherit; font-size: 13px">
+          Opus 5.5 · high
+          <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 9l6 6 6-6"></path></svg>
+        </button>
+        <span style="display: flex; align-items: center; gap: 4px; padding: 0 6px; color: #5E686D; font-size: 11px">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="fill: none; stroke-width: 2"><circle cx="8" cy="8" r="6" style="stroke: #E6E9EB"></circle><circle cx="8" cy="8" r="6" transform="rotate(-90 8 8)" style="stroke: #5E686D; stroke-dasharray: 15.5 37.7; stroke-linecap: round"></circle></svg>
+          41%
+        </span>
+        <span style="flex: 1"></span>
+        <button aria-label="送信" disabled style="width: 36px; height: 36px; flex-shrink: 0; border: 0; padding: 0; border-radius: 18px; background: #E6E9EB; color: #5E686D; display: flex; align-items: center; justify-content: center">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+        </button>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const opt = (label, desc, checked) => ({
+      label: label, desc: desc, checked: checked ? 'true' : 'false',
+            ring: checked ? '5px solid #1B6B91' : '1.5px solid #8A9499'
+    });
+    return {
+      options: [
+        opt('既存の認証 API を拡張', '変更は 3 ファイル程度', true),
+        opt('外部の Magic Link サービスを使う', 'SDK の追加と環境変数が必要', false),
+        opt('今回は UI の整理だけ', '認証方式は変更しない', false)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
