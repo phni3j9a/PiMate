@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, isIP } from "node:net";
 import { type NetworkInterfaceInfo, networkInterfaces } from "node:os";
+import { promisify } from "node:util";
 import {
 	DEFAULT_HOST_PORT,
 	type EventMessage,
@@ -16,18 +18,45 @@ import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
 import { HostCore } from "./index.ts";
 
-export function listenAddresses(interfaces: Record<string, NetworkInterfaceInfo[] | undefined>): string[] {
+const execFileAsync = promisify(execFile);
+
+/**
+ * Loopback plus the addresses Tailscale itself reports, if they are configured on a local interface.
+ * The CGNAT range alone is not enough: carriers and other VPNs use 100.64.0.0/10 too.
+ */
+export function listenAddresses(
+	interfaces: Record<string, NetworkInterfaceInfo[] | undefined>,
+	tailscaleIps: string[],
+): string[] {
+	const owned = new Set(tailscaleIps.map((ip) => ip.toLowerCase()));
 	const addresses = ["127.0.0.1"];
 	for (const entry of Object.values(interfaces).flatMap((entries) => entries ?? [])) {
-		const address = entry.address;
+		const address = entry.address.toLowerCase();
+		if (!owned.has(address)) continue;
 		const octets = address.split(".").map(Number);
 		if (
 			(isIP(address) === 4 && octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) ||
-			(isIP(address) === 6 && /^fd7a:115c:a1e0:/i.test(address))
+			(isIP(address) === 6 && /^fd7a:115c:a1e0:/.test(address))
 		)
 			addresses.push(address);
 	}
 	return [...new Set(addresses)];
+}
+const TAILSCALE_CLIS = ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"];
+/** Addresses reported by `tailscale ip`; empty when Tailscale is not installed or not running. */
+export async function tailscaleIps(): Promise<string[]> {
+	for (const cli of TAILSCALE_CLIS) {
+		try {
+			const { stdout } = await execFileAsync(cli, ["ip"], { timeout: 3000 });
+			return stdout.split(/\s+/).filter((ip) => isIP(ip));
+		} catch {
+			// try the next location
+		}
+	}
+	return [];
+}
+export async function defaultListenAddresses(): Promise<string[]> {
+	return listenAddresses(networkInterfaces(), await tailscaleIps());
 }
 const MAX_BUFFER = 8 * 1024 * 1024;
 type Peer = { ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
@@ -73,7 +102,7 @@ export class HostServer {
 	}
 	async start(): Promise<{ address: string; port: number }[]> {
 		await this.refresh();
-		const addresses = this.options.listen ?? listenAddresses(networkInterfaces());
+		const addresses = this.options.listen ?? (await defaultListenAddresses());
 		if (!this.options.listen && addresses.length === 1)
 			console.warn("No Tailscale address found; listening on loopback only.");
 		const bound: { address: string; port: number }[] = [];
@@ -127,17 +156,18 @@ export class HostServer {
 			return;
 		}
 		try {
-			let body = "";
+			const chunks: Buffer[] = [];
 			let size = 0;
-			for await (const chunk of req) {
-				size += Buffer.byteLength(chunk);
+			for await (const chunk of req as AsyncIterable<Buffer>) {
+				size += chunk.length;
 				if (size > 4096) {
 					reply(400, { error: "bad_request" });
 					return;
 				}
-				body += chunk.toString();
+				chunks.push(chunk);
 			}
-			const value = JSON.parse(body);
+			// Decode once: chunk boundaries may split multi-byte UTF-8 characters.
+			const value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 			if (
 				!value ||
 				typeof value.code !== "string" ||

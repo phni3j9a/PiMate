@@ -57,7 +57,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 
 ### セキュリティと同期
 
-- **既定のbindは127.0.0.1とTailscaleアドレスのみ**（IPv4 100.64.0.0/10、IPv6 fd7a:115c:a1e0::/48）。Tailscaleがなければloopbackのみで警告。`--listen` は明示的な上書きで、公開IP/全インターフェースを指定すると外部公開になります。TLSはHostではなくTailscale/WireGuardに依存します。Tailscale ACLも別途設定してください。
+- **既定のbindは127.0.0.1とTailscaleアドレスのみ**。Tailscaleのアドレスは `tailscale ip` が返し、かつ手元のインターフェースにあるものだけを使います（100.64.0.0/10は携帯回線などでも使われるため、範囲だけでは判定しません）。Tailscaleがない・止まっている場合はloopbackのみで警告。`--listen` は明示的な上書きで、公開IP/全インターフェースを指定すると外部公開になります。TLSはHostではなくTailscale/WireGuardに依存します。Tailscale ACLも別途設定してください。
 - 設定は `$PIMATE_CONFIG_DIR` → `$XDG_CONFIG_HOME/pimate` → `~/.config/pimate`。ディレクトリは自分所有の0700、host/device/codeファイルは0600。端末tokenは256bitの乱数で、保存するのはSHA-256 hashのみ。認証はtiming-safe比較。
 - `pair` のコードは192bitの乱数で、10分・single-use。CLIとHostはprivateなpairingファイルを共有し、atomic renameでコードを消費します。URL/QRを第三者に渡さないでください。発行済みtokenは取り消すまで有効です。
 - `/pair` はJSONのみ・4KB上限、WebSocketは1MB上限。HTTP pairingではOriginを拒否し、CORSを許可しません（ネイティブWS実装もOriginを付ける場合があるため、WSはtokenで認証）。認証は最初のフレーム・5秒以内。未知/不正なWSメッセージは4400、認証失敗4401、認証待ちtimeout4408、失効4403。低速クライアント（送信待ち8MB超）は切断します。

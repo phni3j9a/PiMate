@@ -1,4 +1,5 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { createServer, type Socket } from "node:net";
 import { type NetworkInterfaceInfo, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -171,7 +172,7 @@ async function setup(fake = false) {
 	return { dir, core, server, base, pair, connect, authed, snapshot, sockets, hooks, requests, event, emit };
 }
 
-it("selects only loopback and Tailscale IPv4/IPv6 addresses", () => {
+it("selects only loopback and addresses Tailscale reports as its own", () => {
 	const addresses = [
 		"100.63.255.255",
 		"100.64.0.1",
@@ -183,12 +184,12 @@ it("selects only loopback and Tailscale IPv4/IPv6 addresses", () => {
 		"127.0.0.1",
 		"::1",
 	];
-	expect(listenAddresses({ test: addresses.map((address) => ({ address }) as NetworkInterfaceInfo) })).toEqual([
-		"127.0.0.1",
-		"100.64.0.1",
-		"100.127.255.255",
-		"fd7a:115c:a1e0::1",
-	]);
+	const ifaces = { test: addresses.map((address) => ({ address }) as NetworkInterfaceInfo) };
+	// A CGNAT address that Tailscale does not own (e.g. a carrier interface) must not be selected.
+	expect(listenAddresses(ifaces, [])).toEqual(["127.0.0.1"]);
+	expect(
+		listenAddresses(ifaces, ["100.64.0.1", "100.127.255.255", "FD7A:115C:A1E0::1", "100.128.0.1", "192.168.1.3"]),
+	).toEqual(["127.0.0.1", "100.64.0.1", "100.127.255.255", "fd7a:115c:a1e0::1"]);
 });
 it("pairs exactly once, hashes tokens, rejects expired/invalid codes and keeps config private", async () => {
 	const t = await setup();
@@ -206,6 +207,26 @@ it("pairs exactly once, hashes tokens, rejects expired/invalid codes and keeps c
 	expect(other.host).toEqual(t.server.config.host);
 	chmodSync(join(t.dir, "config"), 0o755);
 	expect(() => new HostConfig(join(t.dir, "config"))).toThrow("not private");
+});
+it("decodes pairing bodies whose chunks split a multi-byte character", async () => {
+	const t = await setup();
+	const body = Buffer.from(JSON.stringify({ code: t.server.config.createCode(), deviceName: "日本の端末" }));
+	const cut = body.indexOf(Buffer.from("日")) + 1;
+	const status = await new Promise<number>((resolve, reject) => {
+		const req = httpRequest(
+			`${t.base}/pair`,
+			{ method: "POST", headers: { "content-type": "application/json" } },
+			(res) => {
+				res.resume();
+				resolve(res.statusCode ?? 0);
+			},
+		);
+		req.on("error", reject);
+		req.write(body.subarray(0, cut));
+		setTimeout(() => req.end(body.subarray(cut)), 20);
+	});
+	expect(status).toBe(200);
+	expect(t.server.config.devices().map((d) => d.name)).toEqual(["日本の端末"]);
 });
 it("rejects malformed/oversized pairing bodies, content types and browser origins; exposes health only", async () => {
 	const t = await setup();

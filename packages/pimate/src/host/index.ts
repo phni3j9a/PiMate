@@ -10,7 +10,7 @@ import { RcClient } from "./client.ts";
 export { resolveRunDir } from "../runtime.ts";
 export { RcClient } from "./client.ts";
 export { HostConfig, resolveConfigDir } from "./config.ts";
-export { HostServer, listenAddresses } from "./server.ts";
+export { defaultListenAddresses, HostServer, listenAddresses, tailscaleIps } from "./server.ts";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export function findExecutable(

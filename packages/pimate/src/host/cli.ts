@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-import { networkInterfaces } from "node:os";
 import { DEFAULT_HOST_PORT, formatPairingLink } from "@pimate/protocol";
 import QRCode from "qrcode";
 import { HostConfig } from "./config.ts";
 import { HostCore } from "./index.ts";
-import { HostServer, listenAddresses } from "./server.ts";
+import { defaultListenAddresses, HostServer } from "./server.ts";
 
 const usage =
 	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | spawn --cwd <dir> [-- pi args] | prompt <id> <text> [--steer|--follow-up] | abort <id> | history <id> | watch <id> | ui <id> <requestId> <value|--confirm|--cancel>";
@@ -41,7 +40,7 @@ async function main(): Promise<void> {
 			else throw new Error(usage);
 		}
 		if (command === "pair") {
-			address ??= `${listenAddresses(networkInterfaces()).find((ip) => ip.startsWith("100.")) ?? "127.0.0.1"}:${port}`;
+			address ??= `${(await defaultListenAddresses()).find((ip) => ip.startsWith("100.")) ?? "127.0.0.1"}:${port}`;
 			if (!/^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+):\d{1,5}$/.test(address))
 				throw new Error("Invalid pairing address (host:port required)");
 			const link = formatPairingLink({
