@@ -24,6 +24,7 @@ export class Hub {
 	abducoSession: string | null;
 	startedAt = Date.now();
 	seq = 0;
+	streaming = { text: "", thinking: "" };
 	status: InstanceStatus = "idle";
 	dir: string;
 	sockPath: string;
@@ -54,6 +55,10 @@ export class Hub {
 	emit = (event: InstanceEvent): void => {
 		// The server only runs in UI sessions; don't read ctx here, it may be stale during session switches.
 		if (!this.server) return;
+		if (event.type === "text_delta") this.streaming.text += event.delta;
+		else if (event.type === "thinking_delta") this.streaming.thinking += event.delta;
+		else if (event.type === "message_end" || event.type === "agent_settled" || event.type === "session_changed")
+			this.streaming = { text: "", thinking: "" };
 		const line = encodeLine({
 			type: "event",
 			instanceId: this.instanceId,
@@ -88,11 +93,12 @@ export class Hub {
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),
 			seq: this.seq,
+			streaming: { ...this.streaming },
 		};
 	}
 	writeMeta(): void {
 		if (!this.server) return;
-		const { model: _, thinking: __, pendingUI: ___, seq: ____, ...snapshot } = this.snapshot();
+		const { model: _, thinking: __, pendingUI: ___, seq: ____, streaming: _____, ...snapshot } = this.snapshot();
 		const meta: InstanceMeta = { ...snapshot, updatedAt: Date.now() };
 		const tmp = `${this.metaPath}.${randomUUID()}.tmp`;
 		// Best effort: a removed run dir or full disk must not break dialogs or status updates.

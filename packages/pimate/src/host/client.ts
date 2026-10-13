@@ -8,6 +8,7 @@ import type {
 	ParamsOf,
 	RcMethod,
 	Request,
+	Response,
 	ResultOf,
 	ServerMessage,
 } from "@pimate/protocol";
@@ -23,8 +24,9 @@ export class RcClient {
 	private socket?: Socket;
 	private pending = new Map<
 		string,
-		{ resolve: (value: any) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+		{ resolve: (value: Response) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
 	>();
+	private closeListeners = new Set<() => void>();
 	private listeners = new Set<(event: EventMessage) => void>();
 	constructor(runDir: string, instanceId: string, timeoutMs = 5000) {
 		if (!validInstanceId(instanceId)) throw new RcError("bad_request", "Invalid instance id");
@@ -50,6 +52,7 @@ export class RcClient {
 			if (this.socket !== sock) return;
 			this.socket = undefined;
 			this.fail(new Error("RC connection closed"));
+			for (const listener of this.closeListeners) listener();
 		});
 		try {
 			await new Promise<void>((resolve, reject) => {
@@ -61,12 +64,15 @@ export class RcClient {
 					clearTimeout(timer);
 					sock.off("connect", onConnect);
 					sock.off("error", onError);
+					sock.off("close", onClose);
 					error ? reject(error) : resolve();
 				};
 				const onConnect = () => finish();
 				const onError = (e: Error) => finish(e);
+				const onClose = () => finish(new Error("RC connection closed"));
 				sock.once("connect", onConnect);
 				sock.once("error", onError);
+				sock.once("close", onClose);
 			});
 			const { snapshot } = await this.request("hello", {});
 			if (snapshot.instanceId !== this.instanceId || snapshot.protocol !== 1)
@@ -84,22 +90,39 @@ export class RcClient {
 		guards: Pick<Request, "expectInstanceId" | "expectSessionId"> = {},
 		timeoutMs?: number,
 	): Promise<ResultOf<M>> {
-		// subagents_rpc waits on the RC side for params.timeoutMs; allow for that plus a margin.
-		const rpcTimeout = method === "subagents_rpc" ? (params as { timeoutMs?: number }).timeoutMs : undefined;
-		const wait =
-			timeoutMs ??
-			(method === "subagents_rpc" ? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000) : this.timeoutMs);
-		if (!this.socket || this.socket.destroyed) return Promise.reject(new Error("RC not connected"));
-		const id = randomUUID();
-		return new Promise((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.pending.delete(id);
-				reject(new RcError("timeout", `RC ${method} timed out`));
-			}, wait);
-			this.pending.set(id, { resolve, reject, timer });
-			this.socket!.write(encodeLine({ id, method, params, expectInstanceId: this.instanceId, ...guards }));
+		return this.send({ id: randomUUID(), method, params, ...guards }, timeoutMs).then((response) => {
+			if (!response.ok) throw new RcError(response.error.code, response.error.message, response.error.data);
+			return response.result as ResultOf<M>;
 		});
 	}
+	send(request: Request, timeoutMs?: number): Promise<Response> {
+		const rpcTimeout =
+			request.method === "subagents_rpc" ? (request.params as { timeoutMs?: number })?.timeoutMs : undefined;
+		const wait =
+			timeoutMs ??
+			(request.method === "subagents_rpc" ? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000) : this.timeoutMs);
+		if (!this.socket || this.socket.destroyed) return Promise.reject(new Error("RC not connected"));
+		if (this.pending.has(request.id))
+			return Promise.resolve({
+				type: "response",
+				id: request.id,
+				ok: false,
+				error: { code: "bad_request", message: "RC request id already in flight" },
+			});
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.pending.delete(request.id);
+				reject(new RcError("timeout", `RC ${request.method} timed out`));
+			}, wait);
+			this.pending.set(request.id, { resolve, reject, timer });
+			this.socket!.write(encodeLine({ ...request, expectInstanceId: request.expectInstanceId ?? this.instanceId }));
+		});
+	}
+	onClose(listener: () => void): () => void {
+		this.closeListeners.add(listener);
+		return () => this.closeListeners.delete(listener);
+	}
+
 	onEvent(listener: (event: EventMessage) => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
@@ -129,7 +152,6 @@ export class RcClient {
 		if (!p) return;
 		this.pending.delete(msg.id);
 		clearTimeout(p.timer);
-		if (msg.ok) p.resolve(msg.result);
-		else p.reject(new RcError(msg.error.code, msg.error.message, msg.error.data));
+		p.resolve(msg);
 	}
 }

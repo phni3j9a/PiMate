@@ -30,5 +30,8 @@
     "@earendil-works/pi-coding-agent": "1.2.0",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.2"
+  },
+  "bin": {
+    "pimate": "./src/host/cli.ts"
   }
 }

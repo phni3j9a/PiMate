@@ -1,7 +1,7 @@
-# @pimate/pimate — M0 Remote Control / Host
+# @pimate/pimate — Remote Control / M1 Host
 
 通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・開発用CLIです。
-Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。**M0 に HTTP/WebSocket・認証・スマホ接続はありません**（M1）。
+Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。M1 Host は Tailscale 上のスマホへ認証付き HTTP/WebSocket を提供します。
 
 ## 前提
 
@@ -40,6 +40,30 @@ node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> --cancel
 `HostCore` / `RcClient` は `@pimate/pimate/host` からインポートできます。`await client.connect()` は `hello` も実行します。`client.request(method, params, guards?)` は型付きで、既定の待ち時間は5秒です。長時間RPCには `new RcClient(runDir, id, timeoutMs)` を使用してください。`onEvent()` の返り値で購読解除、`close()` で切断します。
 
 runDir は `$PIMATE_RUN_DIR`、`$XDG_RUNTIME_DIR/pimate`、OSの一時ディレクトリ下の `pimate-<uid>`（通常 `/tmp/pimate-<uid>`）の順。所有者が自分で0700のディレクトリだけを使用し、socket/metaは0600です。メタはatomic renameで更新します。別Hostを試す際は異なるrunDirを指定できます。任意の外部パスをメタから信用せず、stale socketの掃除はメタのファイル名から導出します。
+
+## スマホとの接続（M1）
+
+```sh
+node packages/pimate/src/host/cli.ts serve                  # 既定ポート47800
+node packages/pimate/src/host/cli.ts pair                   # 別端末: URLとQR（10分・1回限り）
+node packages/pimate/src/host/cli.ts devices                # token/hashを表示しない
+node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末も約1.5秒で切断
+# 必要時のみ: serve --port 47801 --listen 127.0.0.1 --listen 100.x.y.z
+# pair --address my-host.tailnet-name.ts.net:47801 （または --port 47801）
+```
+
+`pimate` bin も同じCLIです。`HostServer` / `HostConfig` は `@pimate/pimate/host` から使用できます。
+`await server.start()` は実際のlistenアドレス/ポートを返します（テストはport:0）。`await server.close()` はPiを終了しません。
+
+### セキュリティと同期
+
+- **既定のbindは127.0.0.1とTailscaleアドレスのみ**（IPv4 100.64.0.0/10、IPv6 fd7a:115c:a1e0::/48）。Tailscaleがなければloopbackのみで警告。`--listen` は明示的な上書きで、公開IP/全インターフェースを指定すると外部公開になります。TLSはHostではなくTailscale/WireGuardに依存します。Tailscale ACLも別途設定してください。
+- 設定は `$PIMATE_CONFIG_DIR` → `$XDG_CONFIG_HOME/pimate` → `~/.config/pimate`。ディレクトリは自分所有の0700、host/device/codeファイルは0600。端末tokenは256bitの乱数で、保存するのはSHA-256 hashのみ。認証はtiming-safe比較。
+- `pair` のコードは192bitの乱数で、10分・single-use。CLIとHostはprivateなpairingファイルを共有し、atomic renameでコードを消費します。URL/QRを第三者に渡さないでください。発行済みtokenは取り消すまで有効です。
+- `/pair` はJSONのみ・4KB上限、WebSocketは1MB上限。HTTP pairingではOriginを拒否し、CORSを許可しません（ネイティブWS実装もOriginを付ける場合があるため、WSはtokenで認証）。認証は最初のフレーム・5秒以内。未知/不正なWSメッセージは4400、認証失敗4401、認証待ちtimeout4408、失効4403。低速クライアント（送信待ち8MB超）は切断します。
+- `devices.json` はatomic更新・排他lockでCLIとの更新競合を防ぎます。競合時は失敗するためコマンドを再実行してください。プロセスが書き込み中に強制終了した場合は、Host/CLIが停止していることを確認して残った`devices.lock`を削除してください。
+- subscribe/reconnectでsnapshot（途中のassistant text/thinkingを含む）+historyを送り、同期中のイベントは順序を保って後送します。通常の連続deltaは約50msで結合するため、WSのseqは増加しますが連番ではありません。history/liveの重複はentryIdで除去してください。RC再接続はbackoff付き、操作要求は**再送しません**。
+- `RcClient.send(request)` はid/guardsを保持してRCの成功/エラーResponseを返します。rejectはtransport/timeoutのみ。同じ共有link上でin-flight idを再利用しないでください（アプリはUUIDを使う）。
 
 ## 構成
 
@@ -88,7 +112,7 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 - select/confirm/input はremote回答でTUIもAbort。editorにはAbortSignalがなくPC側に残ります（`tuiStaysOpen:true`）。custom UIは発生通知のみでPC操作が必要。
 - `/new` 等のPi組み込みコマンドをprompt文字列として送るとLLMへ送られます。`session_op`（new/switch/fork/reload）や`compact`の専用メソッドを使ってください。Extensionコマンド・templates実行は `expandTemplates:true` を明示します。
 - subagents RPC/busは生の中継のみ。サブエージェントDTO正規化、問い合わせへの専用回答、capability依存UIはM4。第三者extension自身の実装・バージョンに依存します。
-- tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool details/他のメッセージは完全なサイズ制限をしません。大量deltaのbatching、history paging、ネットワークbackpressure設計は後続。極端に遅いsocketクライアントは切断します。
+- tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool details/他のメッセージは完全なサイズ制限をしません。Hostはdeltaをbatchingしbackpressureを制限しますが、history pagingは未対応。極端に遅いsocketクライアントは切断します。
 - snapshotを正とし、seqに欠落があればhello/historyを取り直します。要求を自動再送しません。Hostの生存probe失敗は `reachable:false` として返し、PIDが生きているインスタンスは掃除しません。
 - 通常PC起動のPiにはabduco attachはありません（`pcAttached:null`）。PC/remote同時操作は先着、排他制御はありません。
 - SIGWINCH時の全再描画はabducoインスタンスだけに適用。Windows非対応、macOS/arm64・detachキー衝突は未検証。OS再起動後の自動復元はありません。

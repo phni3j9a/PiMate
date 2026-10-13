@@ -129,6 +129,41 @@ describe("RcClient", () => {
 		expect(await event).toMatchObject({ seq: 1, event: { type: "agent_start" } });
 		expect(requests.every((r) => r.expectInstanceId === "live")).toBe(true);
 	});
+	it("raw send preserves caller ids/guards and resolves protocol errors without throwing", async () => {
+		const dir = temp();
+		const requests: Request[] = [];
+		await server(dir, (req, socket) => {
+			requests.push(req);
+			socket.write(
+				encodeLine({
+					type: "response",
+					id: req.id,
+					ok: false,
+					error: { code: "instance_mismatch", data: { instanceId: "live" } },
+				}),
+			);
+		});
+		const client = new RcClient(dir, "live");
+		clients.push(client);
+		await client.connect();
+		const request: Request = {
+			id: "caller-id",
+			method: "abort",
+			params: {},
+			expectInstanceId: "wrong",
+			expectSessionId: "old",
+		};
+		expect(await client.send(request)).toEqual({
+			type: "response",
+			id: "caller-id",
+			ok: false,
+			error: { code: "instance_mismatch", data: { instanceId: "live" } },
+		});
+		expect(requests[0]).toEqual(request);
+		await client.send({ id: "default", method: "abort" });
+		expect(requests[1].expectInstanceId).toBe("live");
+		await expect(client.request("abort", {})).rejects.toMatchObject({ code: "instance_mismatch" });
+	});
 	it("times out and rejects requests on disconnection", async () => {
 		const dir = temp();
 		await server(dir);
