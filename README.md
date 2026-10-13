@@ -12,10 +12,29 @@ Pi Coding Agentを、iOS/AndroidのネイティブUIから操作するための�
 
 ## 現在の段階
 
-Linuxでの技術検証（PoC）を完了し、SPECの構成が成立することを確認しました。次はMVP（Android優先、React Native + Expo）です。
+Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native + Expo）を作っています。進め方は [#4 MVPロードマップ](https://github.com/phni3j9a/PiMate/issues/4) にあります。
 
-- 検証結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)
-- 検証コードと再現手順: [poc/README.md](poc/README.md)
+- PoCの結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)（検証コードは [poc/](poc/README.md)）
 - 未検証: macOS、arm64 Linux
+
+## 構成
+
+npm workspacesのmonorepoです。
+
+| パス | 内容 |
+|---|---|
+| [packages/protocol](packages/protocol/src/index.ts) | RC Extension・Host・アプリが共有するプロトコル v1 の型 |
+| [packages/pimate](packages/pimate/README.md) | Piパッケージ。Remote Control Extension（Pi内で動く）とHost（別プロセス） |
+| [apps/mobile](apps/mobile/README.md) | Expoアプリ（Android優先） |
+
+## 開発
+
+Node 22.18以上が必要です（Hostは型の除去で `.ts` を直接実行します）。
+
+```bash
+npm install
+npm run lint && npm run typecheck && npm test
+npm run test:e2e -w @pimate/pimate   # 実Pi + abduco（LLMは使わない）
+```
 
 以前の詳細仕様書はGit履歴から参照できますが、**現在の設計方針の正本は [docs/SPEC.md](docs/SPEC.md)** です。
