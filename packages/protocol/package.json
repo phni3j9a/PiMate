@@ -1,0 +1,12 @@
+{
+  "name": "@pimate/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PiMate wire protocol types shared by the Remote Control Extension, Host and mobile app",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  }
+}

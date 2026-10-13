@@ -1,0 +1,36 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # abduco is not packaged in Ubuntu 24.04; build the same pinned static binary we ship.
+      - run: packages/pimate/scripts/build-abduco-linux.sh amd64
+      - run: npm install -g @earendil-works/pi-coding-agent@1.2.0
+      - run: npm ci
+      # Uses Pi's faux provider; no network LLM.
+      - run: npm run test:e2e -w @pimate/pimate
+        env:
+          PIMATE_E2E_REQUIRED: "1"
