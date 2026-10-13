@@ -43,6 +43,8 @@ interface Hub {
 	pendingUI: Map<string, PendingUI>;
 	patchedUI?: object;
 	seq: number;
+	origin: string;
+	abducoSession: string | null;
 }
 
 const G = globalThis as unknown as { __pimateHub?: Hub };
@@ -56,6 +58,13 @@ function runDir(): string {
 function hub(): Hub {
 	if (G.__pimateHub) return G.__pimateHub;
 	const instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
+	const origin = process.env.PIMATE_ORIGIN ?? "pc";
+	const abducoSession = process.env.PIMATE_ABDUCO_SESSION ?? null;
+	// 子孫プロセス（サブエージェントの子Pi、bashから起動したpi等）が同じIDを継承して
+	// 親のソケット・メタを上書き・削除しないよう、読んだら環境から消す
+	delete process.env.PIMATE_INSTANCE_ID;
+	delete process.env.PIMATE_ORIGIN;
+	delete process.env.PIMATE_ABDUCO_SESSION;
 	const dir = runDir();
 	G.__pimateHub = {
 		instanceId,
@@ -66,6 +75,8 @@ function hub(): Hub {
 		status: "idle",
 		pendingUI: new Map(),
 		seq: 0,
+		origin,
+		abducoSession,
 	};
 	return G.__pimateHub;
 }
@@ -87,8 +98,8 @@ function writeMeta() {
 		pid: process.pid,
 		cwd: h.ctx?.cwd ?? process.cwd(),
 		socket: h.sockPath,
-		origin: process.env.PIMATE_ORIGIN ?? "pc", // "pc" | "mobile"
-		abducoSession: process.env.PIMATE_ABDUCO_SESSION ?? null,
+		origin: h.origin, // "pc" | "mobile"
+		abducoSession: h.abducoSession,
 		startedAt: h.startedAt,
 		session: h.session ?? null,
 		status: h.status,
@@ -183,11 +194,12 @@ function patchUI(ctx: ExtensionContext) {
 			local(ac.signal).then(
 				(v) => finish(v, "tui"),
 				(e) => {
-					if (!done) {
-						done = true;
-						h.pendingUI.delete(requestId);
-						reject(e);
-					}
+					if (done) return;
+					done = true;
+					h.pendingUI.delete(requestId);
+					broadcast({ event: "ui_request_end", requestId, by: "error" });
+					if (h.pendingUI.size === 0 && h.status === "waiting_input") setStatus(h.ctx?.isIdle() ? "idle" : "running");
+					reject(e);
 				},
 			);
 		});
@@ -288,6 +300,12 @@ function ensureServer() {
 	const h = hub();
 	if (h.server) return;
 	fs.mkdirSync(path.dirname(h.sockPath), { recursive: true, mode: 0o700 });
+	const st = fs.lstatSync(path.dirname(h.sockPath));
+	// 他ユーザーが先に作ったディレクトリにソケットを置かない
+	if (!st.isDirectory() || st.uid !== process.getuid?.() || (st.mode & 0o077) !== 0) {
+		console.error(`[pimate] run dir is not private: ${path.dirname(h.sockPath)}`);
+		return;
+	}
 	try {
 		fs.unlinkSync(h.sockPath);
 	} catch {}
@@ -338,7 +356,7 @@ function shutdownServer() {
  * 何も再描画せず画面が空白になる。空のwidget経由でTUIを取得し、SIGWINCHで強制再描画する。
  */
 function installRedrawOnAttach(ctx: ExtensionContext) {
-	if (!process.env.PIMATE_ABDUCO_SESSION || !ctx.hasUI) return;
+	if (!hub().abducoSession || !ctx.hasUI) return;
 	const g = globalThis as unknown as { __pimateTui?: { requestRender(force?: boolean): void }; __pimateWinch?: boolean };
 	ctx.ui.setWidget("pimate-redraw", (tui) => {
 		g.__pimateTui = tui;
@@ -353,6 +371,8 @@ export default function (pi: ExtensionAPI) {
 	const h = hub();
 
 	pi.on("session_start", (event, ctx) => {
+		// サブエージェントの子Pi（json/print）などUIのないPiはインスタンスとして登録しない
+		if (!ctx.hasUI) return;
 		h.pi = pi;
 		h.ctx = ctx;
 		h.session = {

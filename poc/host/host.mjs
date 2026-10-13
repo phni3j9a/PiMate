@@ -59,21 +59,36 @@ function abducoSessions() {
 	});
 }
 
+function privateRunDir() {
+	try {
+		const st = fs.lstatSync(runDir);
+		return st.isDirectory() && st.uid === process.getuid() && (st.mode & 0o077) === 0;
+	} catch {
+		return false;
+	}
+}
+
 async function list() {
+	if (!fs.existsSync(runDir)) return [];
 	const out = [];
 	const sessions = abducoSessions();
-	for (const f of fs.existsSync(runDir) ? fs.readdirSync(runDir) : []) {
+	if (!privateRunDir()) throw new Error(`run dir is not private to this user: ${runDir}`);
+	for (const f of fs.readdirSync(runDir)) {
 		if (!f.endsWith(".json")) continue;
 		const p = path.join(runDir, f);
+		// ソケットのパスはメタの記載を信用せず、runDir内のファイル名から導く
+		const sock = path.join(runDir, `${path.basename(f, ".json")}.sock`);
 		let meta;
 		try { meta = JSON.parse(fs.readFileSync(p, "utf8")); } catch { continue; }
+		if (!Number.isInteger(meta?.pid)) continue;
 		if (!alive(meta.pid)) {
 			// 異常終了で残ったメタ・ソケットを掃除する
 			fs.rmSync(p, { force: true });
-			fs.rmSync(meta.socket, { force: true });
+			fs.rmSync(sock, { force: true });
 			continue;
 		}
-		const state = await probe(meta.socket);
+		meta.socket = sock;
+		const state = await probe(sock);
 		const ab = meta.abducoSession ? sessions.find((s) => s.name === meta.abducoSession) : undefined;
 		out.push({ ...meta, reachable: !!state, status: state?.status ?? meta.status, session: state?.session ?? meta.session, pcAttached: ab?.attached ?? null });
 	}
