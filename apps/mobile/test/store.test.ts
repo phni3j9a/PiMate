@@ -536,9 +536,10 @@ describe("AppStore M2", () => {
 		s.receive({
 			type: "spawn_result",
 			requestId: second.requestId,
-			ok: false,
-			code: "spawn_failed",
-			message: "Error: boom; Pi started: i9 (pimate attach pimate-i9); message outcome may be unknown, not resent",
+			ok: true,
+			instanceId: "i9",
+			abducoSession: "pimate-i9",
+			messageError: "Error: boom; not resent",
 		});
 		expect(await half).toMatchObject({
 			ok: false,

@@ -804,16 +804,13 @@ export class AppStore {
 				text: "接続が切れました。ドロワーの一覧を確認してから、必要ならもう一度起動してください（自動で再試行しません）。",
 			};
 		}
+		if (res.ok && res.messageError)
+			return {
+				ok: false,
+				title: "Pi は起動しましたが、最初のメッセージを送れませんでした",
+				text: `届いたか分からないため再送していません。一覧から開いて確認してください（pimate attach ${res.abducoSession}）。`,
+			};
 		if (!res.ok) {
-			// The Host reports "Pi started but the first message failed" only inside the message text.
-			const started = res.message?.match(/Pi started: (\S+) \(pimate attach (\S+)\)/);
-			if (started)
-				return {
-					ok: false,
-					code: res.code,
-					title: "Pi は起動しましたが、最初のメッセージを送れませんでした",
-					text: `届いたか分からないため再送していません。一覧から開いて確認してください（pimate attach ${started[2]}）。`,
-				};
 			const text = [SPAWN_ERRORS[res.code], res.message].filter(Boolean).join("\n") || res.code;
 			return { ok: false, code: res.code, title: "起動できませんでした", text };
 		}

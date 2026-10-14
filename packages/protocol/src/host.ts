@@ -143,7 +143,15 @@ export type HostMessage =
 	| { type: "instance_gone"; instanceId: string }
 	| { type: "pong"; t: number }
 	| { type: "folders_result"; requestId: string; home: string; folders: FolderInfo[] }
-	| { type: "spawn_result"; requestId: string; ok: true; instanceId: string; abducoSession: string }
+	| {
+			type: "spawn_result";
+			requestId: string;
+			ok: true;
+			instanceId: string;
+			abducoSession: string;
+			/** The Pi started but the first message could not be confirmed as sent. It is never resent. */
+			messageError?: string;
+	  }
 	| { type: "spawn_result"; requestId: string; ok: false; code: SpawnErrorCode; message?: string };
 
 /** WebSocket close codes used by the Host. */

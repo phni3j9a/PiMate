@@ -503,10 +503,10 @@ class Peer {
 			broadcastInstances();
 			if (cwd.includes("fail-message")) {
 				done({
-					ok: false,
-					code: "spawn_failed",
-					// Same shape as packages/pimate/src/host/server.ts.
-					message: `Error: prompt failed; Pi started: ${id} (pimate attach pimate-${id.slice(0, 8)}); message outcome may be unknown, not resent`,
+					ok: true,
+					instanceId: id,
+					abducoSession: `pimate-${id.slice(0, 8)}`,
+					messageError: "Error: prompt failed; not resent",
 				});
 				return;
 			}

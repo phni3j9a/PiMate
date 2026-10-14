@@ -347,41 +347,20 @@ export class HostServer {
 					...(p.thinking ? ["--thinking", p.thinking] : []),
 				],
 			});
-			if (p.message) {
-				// Only readiness is polled. The prompt is sent exactly once, never after transport failure.
-				const end = Date.now() + 30000;
-				let ready = false;
-				while (Date.now() < end && !this.stopped) {
-					const client = this.core.client(launched.instanceId);
-					let sessionId: string | undefined;
-					try {
-						try {
-							sessionId = (await client.connect()).session?.id;
-							ready = true;
-						} catch {
-							/* RC not registered yet */
-						}
-						if (ready) {
-							await client.request(
-								"prompt",
-								{ text: p.message, expandTemplates: false },
-								{ expectInstanceId: launched.instanceId, expectSessionId: sessionId },
-							);
-							break;
-						}
-					} finally {
-						client.close();
-					}
-					await delay(250);
+			let messageError: string | undefined;
+			if (p.message)
+				try {
+					await this.sendFirstMessage(launched.instanceId, p.message);
+				} catch (e) {
+					messageError = `${String(e)}; not resent`;
 				}
-				if (!ready) throw new Error("RC readiness timed out; initial message was not sent");
-			}
 			this.send(peer, {
 				type: "spawn_result",
 				requestId,
 				ok: true,
 				instanceId: launched.instanceId,
 				abducoSession: launched.abducoSession,
+				...(messageError ? { messageError } : {}),
 			});
 			// Discovery failure must not produce a second (contradictory) spawn result.
 			await this.refresh().catch(() => {});
@@ -391,10 +370,41 @@ export class HostServer {
 				requestId,
 				ok: false,
 				code: e instanceof SpawnError ? e.code : "spawn_failed",
-				message: `${String(e)}${launched ? `; Pi started: ${launched.instanceId} (pimate attach ${launched.abducoSession}); message outcome may be unknown, not resent` : "; not retried"}`,
+				message: `${String(e)}; not retried`,
 			});
 		} finally {
 			this.spawning = false;
+		}
+	}
+	/** Only readiness is polled. The prompt is sent exactly once, never after a transport failure. */
+	private async sendFirstMessage(instanceId: string, message: string): Promise<void> {
+		{
+			const end = Date.now() + 30000;
+			let ready = false;
+			while (Date.now() < end && !this.stopped) {
+				const client = this.core.client(instanceId);
+				let sessionId: string | undefined;
+				try {
+					try {
+						sessionId = (await client.connect()).session?.id;
+						ready = true;
+					} catch {
+						/* RC not registered yet */
+					}
+					if (ready) {
+						await client.request(
+							"prompt",
+							{ text: message, expandTemplates: false },
+							{ expectInstanceId: instanceId, expectSessionId: sessionId },
+						);
+						break;
+					}
+				} finally {
+					client.close();
+				}
+				await delay(250);
+			}
+			if (!ready) throw new Error("RC readiness timed out; initial message was not sent");
 		}
 	}
 	async refresh(): Promise<void> {

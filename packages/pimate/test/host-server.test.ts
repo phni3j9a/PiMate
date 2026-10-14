@@ -465,9 +465,9 @@ it("reports initial prompt uncertainty without retrying or launching a second Pi
 	const c = await s.authed();
 	c.send({ type: "spawn", requestId: "start", params: { cwd: s.dir, message: "first" } });
 	expect(await c.box.next("spawn_result")).toMatchObject({
-		ok: false,
-		code: "spawn_failed",
-		message: expect.stringContaining("Pi started: new"),
+		ok: true,
+		instanceId: "new",
+		messageError: expect.stringContaining("transport lost"),
 	});
 	expect(spawn).toHaveBeenCalledOnce();
 	expect(request).toHaveBeenCalledOnce();
