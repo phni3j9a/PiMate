@@ -208,7 +208,7 @@ export class HostCore {
 			const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: "ignore", detached: true });
 			child.once("error", reject);
 			child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Pi launcher exited ${code}`))));
-			child.unref();
+			// Keep the CLI alive until the launcher acknowledges success; abduco detaches Pi itself.
 		});
 		return {
 			instanceId,

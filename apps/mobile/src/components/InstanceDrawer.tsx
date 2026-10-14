@@ -33,12 +33,12 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 
 	const waitingTitle = (row: DrawerRow) => {
 		if (row.status !== "waiting_input") {
-			// A subagent asks; its question is known only for the open instance (the host list carries counts).
+			// Waiting includes idle attention, not only questions (the host list carries counts).
 			const asking =
 				row.key === selectedKey
 					? view?.subagents.runs.flatMap((r) => r.children).find((c) => c.state === "waiting" && c.question)
 					: undefined;
-			return asking?.question ? `質問: ${asking.question}` : "サブエージェントが質問しています";
+			return asking?.question ? `質問: ${asking.question}` : "サブエージェントの確認が必要です";
 		}
 		if (row.key === selectedKey && view?.pendingUI.length) return `入力待ち: ${view.pendingUI.at(-1)?.title}`;
 		return "入力待ち: Pi が回答を待っています";

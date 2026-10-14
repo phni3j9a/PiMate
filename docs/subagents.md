@@ -52,6 +52,7 @@ opaque cursor はファイル識別子とbyte offsetを持ち、縮小・inode�
 - backend不明・status artifactの未知versionは推測しない。RPC snapshotだけでは
   model/token/cost/pathが不足するため、観測前に開始されたrunは情報が限定される。
 - supervisor質問は未回答requestファイルからbest-effort取得する。回答ファイルの直接書込みはしない。
+  `waiting` には `needs_attention`（長い無出力toolなど）も含む。質問本文がない場合は質問中と断定せず「要対応」と表示する。
 - stoppedの再開はバックエンドが明示的にresumable、またはrunがpausedの場合のみ提供する。
 - チェーン表示はbackendの `currentStep` / `chainStepCount` に従う。
   workflow内部の多段グラフ全体や成果受入れ判定はこのDTOでは展開しない。
@@ -79,6 +80,23 @@ RCはworkflowの `steps[].runId` という明示的な参照で子を解決し�
 実Pi検証（1.2.0 / pi-subagents 0.78.0、openai/gpt-6-luna）では2子を1parallelに表示し、
 active=2、両子transcript、片方へのsteer（backend delivered=1）、
 片方stop→対象のみstopped・兄弟running、親stop→両子stopped・active=0を確認した。
+
+## 実アプリでの検証
+
+Android API 35エミュレーター + Expo Go SDK 57 + 実Host + Pi 1.2.0 / pi-subagents 0.78.0
+（openai/gpt-6-luna）で、バックグラウンド2子の一覧・記録の増加・idle親の件数、
+スマホsteerの子transcriptへの受信、1子だけの停止と実行全体の停止を確認した。
+RC interrupt → paused → スマホresumeの新runリンク、Piのreload、アプリ再起動とHost再接続、
+foregroundのtool行→詳細、隔離した公式exampleのreadonly詳細→親全体停止も確認した。
+これは開発環境での機能検証で、iOS・release性能・公式chain・実supervisor質問への応答は別途確認が必要。
+
+実Piをエージェントの子プロセスから起動する場合、`PI_SUBAGENT_CHILD`・
+`PI_SUBAGENT_PARENT_SESSION`・`PI_ASYNC_NATIVE_RUNNER` を継承しないこと。
+これらを継承すると通常の親Piでもpi-subagents RPCが有効にならない場合がある。
+長いsleep1回より短い独立したtool callを繰り返すタスクが制御確認に向く
+（長い無出力はbackendのidle-attentionと親の自動対応を誘発する）。
+RCからreloadするときは `session_op {op: "reload"}` を使う。通常の `prompt` に
+`/reload` を送るだけでは、モデルへのメッセージとして扱われる。
 
 ## `pimate_subagent` の保存とPiの画面・文脈
 

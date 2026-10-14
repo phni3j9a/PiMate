@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { Server, Socket } from "node:net";
 import { createServer } from "node:net";
@@ -58,6 +59,24 @@ afterEach(async () => {
 	for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 describe("HostCore", () => {
+	it("keeps the standalone CLI alive until the detached launcher exits", () => {
+		const dir = temp();
+		const launcher = join(dir, "launcher");
+		writeFileSync(launcher, "#!/bin/sh\n/bin/sleep 0.1\nexit 0\n", { mode: 0o700 });
+		const result = spawnSync(process.execPath, ["src/host/cli.ts", "spawn", "--cwd", dir], {
+			encoding: "utf8",
+			timeout: 10_000,
+			env: {
+				...process.env,
+				PATH: dir,
+				PIMATE_RUN_DIR: join(dir, "run"),
+				PIMATE_ABDUCO: launcher,
+				PIMATE_PI: launcher,
+			},
+		});
+		expect(result.status, result.stderr).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({ isolation: "detached" });
+	});
 	it("discovers reachable instances, skips malformed entries, and safely cleans stale paths", async () => {
 		const dir = temp();
 		const outside = join(temp(), "victim");

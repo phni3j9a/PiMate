@@ -13,6 +13,7 @@ import type { HostRuntime } from "../src/lib/store";
 import { mergeTranscript, subagentRows } from "../src/lib/subagentRows";
 import {
 	agentsText,
+	CONTROL_FEEDBACK,
 	chainSteps,
 	childControls,
 	childElapsed,
@@ -40,6 +41,15 @@ import {
 	watchRuns,
 } from "../src/lib/subagents";
 import { buildRows } from "../src/lib/transcriptRows";
+
+it("keeps accepted control feedback short without claiming steering is already delivered", () => {
+	expect(CONTROL_FEEDBACK.steer).toContain("作業の区切りで反映");
+	expect(CONTROL_FEEDBACK.resume).toBe("続きの実行を開始しました。");
+	for (const message of Object.values(CONTROL_FEEDBACK)) {
+		expect(message.length).toBeLessThan(50);
+		expect(message).not.toContain("\n");
+	}
+});
 
 const MIN = 60_000;
 const NOW = 1_000_000_000;
@@ -290,6 +300,7 @@ describe("sheet", () => {
 			text: "待ち · どちらの方式？",
 			tone: "waiting",
 		});
+		expect(childLine(child({ id: "w", state: "waiting" }), parallel).text).toBe("待ち · 要対応");
 		expect(childLine(child({ id: "p", state: "paused" }), parallel).text).toBe("一時停止");
 		const old = run({ id: "o", state: "complete", endedAt: NOW - 18 * MIN });
 		expect(childLine(child({ id: "o1", state: "complete" }), old, { previous: true, now: NOW }).text).toBe(

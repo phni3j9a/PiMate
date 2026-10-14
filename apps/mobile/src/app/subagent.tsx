@@ -21,6 +21,7 @@ import { appStore } from "@/lib/runtime";
 import { draftKey } from "@/lib/store";
 import { mergeTranscript, subagentRows } from "@/lib/subagentRows";
 import {
+	CONTROL_FEEDBACK,
 	chainSteps,
 	childControls,
 	childMark,
@@ -172,7 +173,7 @@ export default function SubagentScreen() {
 			setError({ title: res.title, text: res.text });
 			return null;
 		}
-		if (res.value.message) setInfo(res.value.message);
+		setInfo(CONTROL_FEEDBACK[action]);
 		return res.value;
 	};
 
@@ -410,15 +411,23 @@ export default function SubagentScreen() {
 						<View style={styles.question} accessibilityRole="summary">
 							<View style={styles.questionHead}>
 								<StatusMark kind="waiting" size={8} />
-								<Text style={styles.questionTitle}>親の Pi に質問しています</Text>
+								<Text style={styles.questionTitle}>
+									{child.question ? "親の Pi に質問しています" : "確認が必要です"}
+								</Text>
 							</View>
 							{child.question ? (
 								<Text style={styles.questionText} selectable>
 									{child.question}
 								</Text>
 							) : null}
-							<Text style={styles.questionNote}>回答は親の Pi を通して伝えます。</Text>
-							<TextButton label="チャットで回答" onPress={answerInChat} style={styles.answer} />
+							<Text style={styles.questionNote}>
+								{child.question ? "回答は親の Pi を通して伝えます。" : "親の Pi のチャットで状況を確認してください。"}
+							</Text>
+							<TextButton
+								label={child.question ? "チャットで回答" : "チャットで確認"}
+								onPress={answerInChat}
+								style={styles.answer}
+							/>
 						</View>
 					) : null}
 					{child.state === "failed" && (child.error || run.error) ? (

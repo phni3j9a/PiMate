@@ -20,6 +20,17 @@ import { formatCost, shortModelName } from "./sessionInfo";
 
 export type SubagentMark = "running" | "waiting" | "failed" | "done" | "idle";
 
+/** Backend success replies can contain a full task and internal paths; keep the composer feedback bounded. */
+export const CONTROL_FEEDBACK: Record<SubagentAction, string> = {
+	steer: "指示を送信しました。作業の区切りで反映されます。",
+	follow_up: "追加の依頼を送信しました。",
+	resume: "続きの実行を開始しました。",
+	interrupt: "一時停止を依頼しました。",
+	stop: "停止を依頼しました。",
+	stop_child: "このサブエージェントの停止を依頼しました。",
+	abort_parent: "親の Pi の停止を依頼しました。",
+};
+
 const STATES: ReadonlySet<string> = new Set([
 	"queued",
 	"running",
@@ -316,7 +327,7 @@ export function childLine(
 			return { text: "開始待ち", tone: "normal" };
 		case "waiting":
 			return {
-				text: child.question ? `待ち · ${oneLine(child.question)}` : "待ち · 親の Pi に質問中",
+				text: child.question ? `待ち · ${oneLine(child.question)}` : "待ち · 要対応",
 				tone: "waiting",
 			};
 		case "paused":
