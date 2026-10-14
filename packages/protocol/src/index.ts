@@ -49,11 +49,17 @@ export interface ToolCallRef {
 /**
  * Display-only diff the RC adds to a successful built-in `write` result (`details.pimate`), because Pi's write
  * tool records no details. `patch` is a standard unified diff against the content before the write
- * (`existed: false` = new file). Omitted when the file was too large or not text (`omitted` says why).
+ * (`existed: false` = new file). Omitted when the file was too large or not text, or when another write/edit to
+ * the same file ran in the same parallel tool batch so the prior content is not exact (`omitted` says why).
  * The edit tool already provides `details.patch` (unified diff) itself.
  */
 export interface PimateWriteDetails {
-	pimate: { kind: "write_diff"; existed: boolean; patch?: string; omitted?: "too_large" | "binary" | "unreadable" };
+	pimate: {
+		kind: "write_diff";
+		existed: boolean;
+		patch?: string;
+		omitted?: "too_large" | "binary" | "unreadable" | "concurrent";
+	};
 }
 
 /** One entry of the current session branch, normalized for display. */

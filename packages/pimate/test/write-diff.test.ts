@@ -107,6 +107,35 @@ it("uses independent snapshots for parallel tool calls", async () => {
 	expect(hooks.get("tool_result")!(other, { cwd: dir }).details.pimate.existed).toBe(true);
 	expect(result().details.pimate.existed).toBe(false);
 });
+it("omits the diff for same-path writes or edits in one parallel batch", async () => {
+	const { hooks, event, call, result } = setup();
+	const second = { ...event, toolCallId: "call-2", input: { path: "./file.txt", content: "two\n" } };
+	const edit = { ...event, toolName: "edit", toolCallId: "call-3", input: { path: "other.txt" } };
+	const write3 = { ...event, toolCallId: "call-4", input: { path: "other.txt", content: "x\n" } };
+	await Promise.all([
+		call(),
+		hooks.get("tool_call")!(second, { cwd: dir }),
+		hooks.get("tool_call")!(edit, { cwd: dir }),
+		hooks.get("tool_call")!(write3, { cwd: dir }),
+	]);
+	for (const e of [event, second, write3]) {
+		const pimate = hooks.get("tool_result")!(e, { cwd: dir }).details.pimate;
+		expect(pimate.omitted).toBe("concurrent");
+		expect(pimate.patch).toBeUndefined();
+	}
+	expect(hooks.get("tool_result")!(edit, { cwd: dir })).toBeUndefined();
+	// Once the batch has finished, a later write is diffed normally again.
+	await call();
+	expect(result().details.pimate.patch).toBeTypeOf("string");
+});
+it("leaves non-object details from another extension untouched", async () => {
+	for (const details of [["extension-state"], "text", null, 0]) {
+		const { event, call, result } = setup();
+		await call();
+		Object.assign(event, { details });
+		expect(result()).toBeUndefined();
+	}
+});
 it("leaves other tools unchanged", async () => {
 	const { event, call, result } = setup();
 	event.toolName = "edit";

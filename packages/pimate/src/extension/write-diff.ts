@@ -9,7 +9,11 @@ import { createPatch } from "diff";
 
 export const MAX_WRITE_BYTES = 256 * 1024;
 type Snapshot = {
+	tool: "write" | "edit";
 	path?: string;
+	/** Another write/edit to the same path was in flight: Pi runs a parallel batch's tool_call hooks before any
+	 * execution, so this snapshot may predate an earlier mutation of the same file. */
+	concurrent?: boolean;
 	existed: boolean;
 	text?: string;
 	omitted?: PimateWriteDetails["pimate"]["omitted"];
@@ -60,14 +64,17 @@ export function registerWriteDiff(pi: ExtensionAPI): (() => void)[] {
 	const clear = () => pending.clear();
 	return [
 		pi.on("tool_call", async (event, ctx) => {
-			if (event.toolName !== "write") return;
+			if (event.toolName !== "write" && event.toolName !== "edit") return;
 			// Unknown existence is conservatively true; false means confirmed ENOENT only.
-			const state: Snapshot = { existed: true, omitted: "unreadable" };
+			const state: Snapshot = { tool: event.toolName, existed: true, omitted: "unreadable" };
 			pending.set(event.toolCallId, state);
 			try {
 				if (typeof event.input.path !== "string") return;
 				state.path = resolveWritePath(event.input.path, ctx.cwd);
-				await capture(state);
+				// Synchronously, before any await: any same-path mutation still in flight makes the prior state inexact.
+				for (const other of pending.values())
+					if (other !== state && other.path === state.path) other.concurrent = state.concurrent = true;
+				if (state.tool === "write") await capture(state);
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
 					state.existed = false;
@@ -80,10 +87,13 @@ export function registerWriteDiff(pi: ExtensionAPI): (() => void)[] {
 			const state = pending.get(event.toolCallId);
 			pending.delete(event.toolCallId);
 			if (!state || event.toolName !== "write" || event.isError) return;
+			// Only a plain object can carry our field without destroying another extension's details.
+			const details = event.details;
+			if (details !== undefined && (details === null || typeof details !== "object" || Array.isArray(details))) return;
 			const pimate: PimateWriteDetails["pimate"] = {
 				kind: "write_diff",
 				existed: state.existed,
-				omitted: state.omitted,
+				omitted: state.concurrent ? "concurrent" : state.omitted,
 			};
 			try {
 				const { path, content } = event.input;
@@ -91,7 +101,7 @@ export function registerWriteDiff(pi: ExtensionAPI): (() => void)[] {
 					pimate.omitted = "unreadable";
 				else if (Buffer.byteLength(content, "utf8") > MAX_WRITE_BYTES) pimate.omitted = "too_large";
 				else if (content.includes("\0")) pimate.omitted = "binary";
-				else if (!pimate.omitted) {
+				else if (!pimate.omitted && !state.concurrent) {
 					// A pathological diff must not stall Pi for seconds despite the byte limit.
 					pimate.patch = createPatch(path, state.text!, content, undefined, undefined, { context: 3, timeout: 100 });
 					if (pimate.patch === undefined) pimate.omitted = "unreadable";
@@ -101,17 +111,10 @@ export function registerWriteDiff(pi: ExtensionAPI): (() => void)[] {
 				pimate.omitted = "unreadable";
 			}
 			try {
-				return {
-					details: {
-						...(event.details && typeof event.details === "object" && !Array.isArray(event.details)
-							? event.details
-							: {}),
-						pimate,
-					},
-				};
+				return { details: { ...details, pimate } };
 			} catch {
-				// A third-party details object may contain getters that throw during the merge.
-				return { details: { pimate: { kind: "write_diff", existed: state.existed, omitted: "unreadable" } } };
+				// A third-party details object may contain getters that throw during the merge: leave it untouched.
+				return;
 			}
 		}),
 		pi.on("session_start", clear),
