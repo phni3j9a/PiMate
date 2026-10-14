@@ -245,3 +245,185 @@ it("registry learns async-started id, watches atomic status replacements, gates 
 		registry.dispose();
 	}
 });
+
+it("folds workflow references, routes child controls/transcripts and restores the projected branch", async () => {
+	const { countSubagents } = await import("@pimate/protocol");
+	const { SubagentRegistry } = await import("../src/extension/subagents/registry.ts");
+	const listeners = new Map<string, (value: unknown) => void>();
+	const calls: { method: string; params: Record<string, unknown> }[] = [];
+	const branch: unknown[] = [];
+	const events: { type: string; run?: { id: string } }[] = [];
+	const hub = {
+		session: { id: "parent" },
+		writeMeta() {},
+		emit: (e: { type: string }) => events.push(e),
+		pi: {
+			appendEntry: (customType: string, data: unknown) => branch.push({ type: "custom", customType, data }),
+			events: {
+				on: (name: string, fn: (v: unknown) => void) => {
+					listeners.set(name, fn);
+					return () => listeners.delete(name);
+				},
+				emit: (_name: string, request: { requestId: string; method: string; params: Record<string, unknown> }) => {
+					calls.push(request);
+					queueMicrotask(() =>
+						listeners.get(`subagents:rpc:v1:reply:${request.requestId}`)?.({
+							success: true,
+							data: request.method === "resume" ? { details: { asyncId: "revived" } } : {},
+						}),
+					);
+				},
+			},
+		},
+	};
+	const registry = new SubagentRegistry(hub as unknown as import("../src/extension/hub.ts").Hub);
+	const wait = async (accept: () => boolean) => {
+		const end = Date.now() + 2000;
+		while (!accept()) {
+			if (Date.now() > end) throw Error("Registry did not fold");
+			await new Promise((r) => setTimeout(r, 10));
+		}
+	};
+	const artifact = async (value: unknown) => {
+		const dir = await mkdtemp(join(tmpdir(), "pimate-fold-"));
+		dirs.push(dir);
+		await writeFile(join(dir, "status.json"), JSON.stringify(value));
+		return dir;
+	};
+	const childDir = await artifact({
+		...status,
+		runId: "nested",
+		mode: "single",
+		totalTokens: { total: 30 },
+		steps: [{ ...status.steps[0], childId: "actual-child" }],
+	});
+	const transcript = join(childDir, "transcript.jsonl");
+	await writeFile(transcript, line({ role: "assistant", content: "nested answer" }));
+	const childStatus = {
+		...status,
+		runId: "nested",
+		mode: "single",
+		steps: [{ ...status.steps[0], childId: "actual-child", transcriptPath: transcript, model: "test/model" }],
+	};
+	await writeFile(join(childDir, "status.json"), JSON.stringify(childStatus));
+	const workflow = {
+		runId: "workflow",
+		mode: "workflow",
+		state: "running",
+		workflow: { resource: { name: "tasks", invocation: "named" } },
+		totalTokens: { total: 999 },
+		steps: [
+			{ agent: "unused", status: "complete", tokens: { input: 0, output: 0, total: 0 } },
+			{ agent: "scout", runId: "nested", status: "running" },
+		],
+	};
+	const parentDir = await artifact(workflow);
+	try {
+		registry.bus("subagent:async-started", { id: "nested", asyncDir: childDir });
+		await wait(() => registry.snapshot().runs.some((r) => r.id === "nested" && r.children.length === 1));
+		registry.bus("subagent:async-started", { id: "workflow", asyncDir: parentDir });
+		await wait(() => registry.snapshot().runs.length === 1 && registry.snapshot().runs[0]?.mode === "parallel");
+		const parent = registry.snapshot().runs[0]!;
+		expect(parent.children[1]).toMatchObject({
+			id: "step:1",
+			index: 1,
+			state: "running",
+			model: "test/model",
+			hasTranscript: true,
+			actions: ["steer", "follow_up", "stop_child"],
+		});
+		expect(countSubagents(registry.snapshot().runs).active).toBe(1);
+		expect(parent.usage?.total).toBe(30);
+		expect(events.some((e) => e.type === "subagents_reset")).toBe(true);
+		expect((await registry.transcript({ runId: "workflow", childId: "step:1" })).items[0]).toMatchObject({
+			text: "nested answer",
+		});
+		for (const action of ["steer", "follow_up"] as const)
+			await registry.control({ runId: "workflow", childId: "step:1", action, text: "hi" });
+		expect(calls.filter((c) => c.method === "steer").map((c) => c.params)).toEqual([
+			{ runId: "nested", index: 0, message: "hi", mode: "steer" },
+			{ runId: "nested", index: 0, message: "hi", mode: "follow_up" },
+		]);
+		await registry.control({ runId: "workflow", childId: "step:1", action: "stop_child" });
+		expect(calls.at(-1)).toMatchObject({ method: "stop", params: { runId: "nested" } });
+		expect(calls.at(-1)?.params).not.toHaveProperty("childId");
+		expect(registry.snapshot().runs[0]?.children[1]?.state).toBe("stopping");
+		await registry.control({ runId: "workflow", action: "interrupt" });
+		expect(calls.at(-1)).toMatchObject({ method: "interrupt", params: { runId: "workflow" } });
+		await writeFile(
+			join(childDir, "next"),
+			JSON.stringify({ ...childStatus, state: "paused", steps: [{ ...childStatus.steps[0], status: "paused" }] }),
+		);
+		await rename(join(childDir, "next"), join(childDir, "status.json"));
+		await wait(() => registry.snapshot().runs[0]?.children[1]?.state === "paused");
+		await registry.control({ runId: "workflow", childId: "step:1", action: "resume", text: "again" });
+		expect(calls.find((c) => c.method === "resume")).toMatchObject({
+			params: { runId: "nested", index: 0, message: "again" },
+		});
+		await writeFile(
+			join(parentDir, "next"),
+			JSON.stringify({ ...workflow, workflow: { resource: { name: "custom-workflow", invocation: "named" } } }),
+		);
+		await rename(join(parentDir, "next"), join(parentDir, "status.json"));
+		await wait(() => registry.snapshot().runs.find((r) => r.id === "workflow")?.mode === "workflow");
+		registry.dispose();
+		const restored = new SubagentRegistry(hub as unknown as import("../src/extension/hub.ts").Hub);
+		try {
+			await restored.start(branch);
+			await wait(() => restored.snapshot().runs.find((r) => r.id === "workflow")?.children[1]?.hasTranscript === true);
+			expect(restored.snapshot().runs.map((r) => r.id)).not.toContain("nested");
+		} finally {
+			restored.dispose();
+		}
+	} finally {
+		registry.dispose();
+	}
+});
+
+it("plain custom entries are absent from model context and default tree rendering, and preserve branches/forks", async () => {
+	const { SessionManager, TreeSelectorComponent, InteractiveMode, initTheme } = await import(
+		"@earendil-works/pi-coding-agent"
+	);
+	initTheme("dark");
+	const manager = SessionManager.inMemory();
+	const first = manager.appendMessage({ role: "user", content: "before launch", timestamp: 1 });
+	const custom = manager.appendCustomEntry("pimate_subagent", {
+		runId: "private-state",
+		asyncDir: "/private/artifacts",
+	});
+	const second = manager.appendMessage({ role: "user", content: "after launch", timestamp: 2 });
+	expect(JSON.stringify(manager.buildSessionContext())).not.toContain("private-state");
+	// Exercise Pi's actual transcript append path without starting a terminal or agent.
+	let rendered = false;
+	const renderEntry = Reflect.get(InteractiveMode.prototype, "addCustomEntryToChat") as (
+		this: unknown,
+		entry: unknown,
+	) => void;
+	renderEntry.call(
+		{
+			session: { extensionRunner: { getEntryRenderer: () => undefined } },
+			chatContainer: {
+				addChild: () => {
+					rendered = true;
+				},
+			},
+		},
+		manager.getEntry(custom),
+	);
+	expect(rendered).toBe(false);
+	const selector = new TreeSelectorComponent(
+		manager.getTree(),
+		manager.getLeafId(),
+		30,
+		() => {},
+		() => {},
+	);
+	expect(selector.render(100).join("\n")).not.toContain("pimate_subagent");
+	manager.branch(first);
+	expect(manager.getBranch().map((e) => e.id)).not.toContain(custom);
+	manager.branch(second);
+	expect(manager.getBranch().map((e) => e.id)).toContain(custom);
+	manager.createBranchedSession(second);
+	expect(manager.getBranch().map((e) => e.id)).toContain(custom);
+	expect(JSON.stringify(manager.buildSessionContext())).not.toContain("private-state");
+});

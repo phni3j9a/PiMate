@@ -3,7 +3,7 @@ import { type FSWatcher, watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { ParamsOf, SubagentRun, SubagentsState, SubagentTranscript } from "@pimate/protocol";
+import type { ParamsOf, SubagentAction, SubagentRun, SubagentsState, SubagentTranscript } from "@pimate/protocol";
 import { countSubagents, isSubagentActive } from "@pimate/protocol";
 import { RcError } from "../dispatch.ts";
 import type { Hub } from "../hub.ts";
@@ -40,6 +40,8 @@ interface Source {
 	dir?: string;
 	children: Record<string, any>[];
 	details?: unknown;
+	parentRunId?: string;
+	parallelTasks?: boolean;
 }
 export class SubagentRegistry {
 	private h: Hub;
@@ -59,6 +61,7 @@ export class SubagentRegistry {
 	private refreshAgain = false;
 	private disposed = false;
 	private counts = "";
+	private projected = new Map<string, SubagentRun>();
 	private sessionId?: string;
 	private sessionFile?: string;
 	constructor(h: Hub) {
@@ -67,8 +70,73 @@ export class SubagentRegistry {
 		this.sessionFile = h.session?.file;
 	}
 	snapshot(): SubagentsState {
-		return { runs: [...this.runs.values()], backends: this.backends };
+		return { runs: this.project(), backends: this.backends };
 	}
+	/** Resolve only explicit backend references; never infer a child run or transcript filename. */
+	private target(runId: string, index: number) {
+		const source = this.sources.get(runId)?.children.find((s, i) => (s.index ?? i) === index) ?? {};
+		const nested = typeof source.runId === "string" && source.runId !== runId ? this.runs.get(source.runId) : undefined;
+		if (nested?.mode === "single" && nested.children.length === 1) {
+			const child = nested.children[0]!;
+			return {
+				run: nested,
+				child,
+				source: this.sources.get(nested.id)?.children.find((s, i) => (s.index ?? i) === child.index) ?? {},
+				nested: true,
+			};
+		}
+		return {
+			run: this.runs.get(runId)!,
+			child: this.runs.get(runId)?.children.find((c) => c.index === index),
+			source,
+			nested: false,
+		};
+	}
+	private project(): SubagentRun[] {
+		const hidden = new Set<string>();
+		for (const [id, source] of this.sources) {
+			if (source.parentRunId && source.parentRunId !== id && this.runs.has(source.parentRunId)) hidden.add(id);
+			if (this.runs.get(id)?.mode === "workflow")
+				for (const child of source.children) {
+					if (typeof child.runId === "string" && child.runId !== id) hidden.add(child.runId);
+				}
+		}
+		return [...this.runs.values()]
+			.filter((r) => !hidden.has(r.id))
+			.map((run) => {
+				if (run.mode !== "workflow") return run;
+				const children = run.children.map((child) => {
+					const target = this.target(run.id, child.index);
+					if (!target.nested || !target.child)
+						return typeof target.source.runId === "string" ? { ...child, actions: [] } : child;
+					const actions: SubagentAction[] = [...target.child.actions];
+					if (target.run.actions.includes("stop") && isSubagentActive(target.child.state)) actions.push("stop_child");
+					return {
+						...target.child,
+						id: child.id,
+						index: child.index,
+						state:
+							run.state === "stopping" && isSubagentActive(target.child.state)
+								? ("stopping" as const)
+								: target.child.state,
+						actions: run.state === "stopping" ? [] : actions,
+					};
+				});
+				// Child totals replace the wrapper's totals, not add to them. Cost may arrive on the wrapper first.
+				const usage = { ...run.usage };
+				for (const key of ["input", "output", "total", "costUsd"] as const) {
+					if (children.length && children.every((c) => c.usage?.[key] !== undefined))
+						usage[key] = children.reduce((sum, c) => sum + c.usage![key]!, 0);
+				}
+				return {
+					...run,
+					mode: this.sources.get(run.id)?.parallelTasks ? ("parallel" as const) : ("workflow" as const),
+					children,
+					usage: Object.keys(usage).length ? usage : undefined,
+				};
+			});
+	}
+
 	private emitReset(): void {
 		this.h.emit({ type: "subagents_reset", state: this.snapshot() });
 	}
@@ -145,12 +213,14 @@ export class SubagentRegistry {
 		const dir = string(d.asyncDir) ?? this.sources.get(id)?.dir;
 		const source = this.sources.get(id) ?? { children: [] };
 		if (dir) source.dir = dir;
+		if (typeof d.parentWorkflowRunId === "string") source.parentRunId = d.parentWorkflowRunId;
 		this.sources.set(id, source);
 		if (persist && (!previous || (!previous.resumedFrom && d.resumedFrom)))
 			this.h.pi?.appendEntry("pimate_subagent", {
 				runId: id,
 				asyncDir: dir,
 				toolCallId: d.toolCallId,
+				parentWorkflowRunId: source.parentRunId,
 				resumedFrom: d.resumedFrom,
 				resumedAs: d.resumedAs,
 			});
@@ -224,7 +294,7 @@ export class SubagentRegistry {
 					{ ...node, runId: id, mode: previous?.mode, steps: sources, activityState: node.activity?.state },
 					previous,
 				);
-				this.sources.set(id, { children: sources });
+				this.sources.set(id, { ...this.sources.get(id), children: sources });
 				this.put(run);
 			}
 		} catch {
@@ -252,6 +322,8 @@ export class SubagentRegistry {
 			if (this.disposed || d.runId !== id) return;
 			if (d.lifecycleArtifactVersion !== undefined && d.lifecycleArtifactVersion !== 3) return;
 			source.children = list(d.steps);
+			source.parallelTasks =
+				d.mode === "workflow" && d.workflow?.resource?.name === "tasks" && d.workflow?.resource?.invocation === "named";
 			const run = normalizeStatus(d, this.runs.get(id));
 			for (const child of run.children) {
 				if (child.state === "waiting") child.question = await this.question(source.dir, id, child.agent, child.index);
@@ -313,48 +385,90 @@ export class SubagentRegistry {
 			if (!isSubagentActive(run.state)) this.stopping.delete(run.id);
 		}
 		const previous = this.runs.get(run.id);
-		if (JSON.stringify(previous) === JSON.stringify(run)) return;
-		this.runs.set(run.id, run);
-		// Preserve active runs even if many launches temporarily exceed the history cap.
-		if (this.runs.size > 30) {
-			for (const [id, old] of this.runs) {
-				if (this.runs.size <= 30) break;
-				if (id !== run.id && !isSubagentActive(old.state)) {
-					this.runs.delete(id);
-					this.sources.delete(id);
-					clearTimeout(this.pending.get(id));
-					this.pending.delete(id);
-					this.lastEmitted.delete(id);
-				}
-			}
-			this.emitReset();
+		if (JSON.stringify(previous) === JSON.stringify(run)) {
+			this.publish();
+			return;
 		}
-		const counts = JSON.stringify(countSubagents([...this.runs.values()]));
+		this.runs.set(run.id, run);
+		// Cap top-level history, retaining each wrapper and its referenced artifacts as one group.
+		const visible = this.project();
+		let excess = visible.length - 30;
+		for (const old of visible) {
+			if (excess <= 0) break;
+			const group = new Set([old.id]);
+			for (const id of group)
+				for (const ref of this.sources.get(id)?.children ?? [])
+					if (typeof ref.runId === "string" && this.runs.has(ref.runId)) group.add(ref.runId);
+			for (const [id, source] of this.sources) if (source.parentRunId && group.has(source.parentRunId)) group.add(id);
+			if (group.has(run.id) || [...group].some((id) => isSubagentActive(this.runs.get(id)!.state))) continue;
+			for (const id of group) {
+				this.runs.delete(id);
+				this.sources.delete(id);
+				clearTimeout(this.pending.get(id));
+				this.pending.delete(id);
+				this.lastEmitted.delete(id);
+				this.watchers.get(id)?.close();
+				this.watchers.delete(id);
+			}
+			excess--;
+		}
+		this.watchActive();
+		this.publish();
+	}
+	private publish(): void {
+		const visible = this.project();
+		const next = new Map(visible.map((r) => [r.id, r]));
+		const removed = [...this.projected.keys()].some((id) => !next.has(id));
+		const changed = visible.filter((r) => JSON.stringify(this.projected.get(r.id)) !== JSON.stringify(r));
+		const finalChanges = new Set(
+			changed
+				.filter(
+					(r) =>
+						!isSubagentActive(r.state) ||
+						r.children.some(
+							(c) =>
+								!isSubagentActive(c.state) &&
+								this.projected.get(r.id)?.children.find((old) => old.id === c.id)?.state !== c.state,
+						),
+				)
+				.map((r) => r.id),
+		);
+		this.projected = next;
+		for (const [id, timer] of this.pending)
+			if (!next.has(id)) {
+				clearTimeout(timer);
+				this.pending.delete(id);
+			}
+		const counts = JSON.stringify(countSubagents(visible));
 		if (counts !== this.counts) {
 			this.counts = counts;
 			this.h.writeMeta();
 		}
-		this.watchActive();
-		const send = () => {
-			this.pending.delete(run.id);
-			const latest = this.runs.get(run.id);
-			if (!latest || this.disposed) return;
-			this.lastEmitted.set(run.id, Date.now());
-			this.h.emit({ type: "subagent_run", run: latest });
-		};
-		if (!isSubagentActive(run.state)) {
-			clearTimeout(this.pending.get(run.id));
-			send();
-		} else if (!this.pending.has(run.id)) {
-			const wait = Math.max(0, 250 - (Date.now() - (this.lastEmitted.get(run.id) ?? 0)));
-			if (!wait) send();
-			else {
-				const timer = setTimeout(send, wait);
-				timer.unref();
-				this.pending.set(run.id, timer);
+		// A reset removes children that may have been observed before the workflow learned their runIds.
+		if (removed) this.emitReset();
+		for (const run of changed) {
+			const send = () => {
+				this.pending.delete(run.id);
+				const latest = this.projected.get(run.id);
+				if (!latest || this.disposed) return;
+				this.lastEmitted.set(run.id, Date.now());
+				this.h.emit({ type: "subagent_run", run: latest });
+			};
+			if (finalChanges.has(run.id)) {
+				clearTimeout(this.pending.get(run.id));
+				send();
+			} else if (!this.pending.has(run.id)) {
+				const wait = Math.max(0, 250 - (Date.now() - (this.lastEmitted.get(run.id) ?? 0)));
+				if (!wait) send();
+				else {
+					const timer = setTimeout(send, wait);
+					timer.unref();
+					this.pending.set(run.id, timer);
+				}
 			}
 		}
 	}
+
 	private watchActive(): void {
 		let active = false;
 		for (const [id, run] of this.runs) {
@@ -392,10 +506,10 @@ export class SubagentRegistry {
 		}
 	}
 	async transcript(p: ParamsOf<"subagent_transcript">): Promise<SubagentTranscript> {
-		const run = this.runs.get(p.runId);
+		const run = this.project().find((r) => r.id === p.runId);
 		const child = run?.children.find((c) => c.id === p.childId);
 		if (!run || !child) throw new RcError("not_found", "Subagent child not found in this session");
-		const source = this.sources.get(run.id)?.children.find((s, i) => (s.index ?? i) === child.index) ?? {};
+		const { source } = this.target(run.id, child.index);
 		if (run.backend === "example")
 			return exampleTranscript(Array.isArray(source.messages) ? source.messages : [], string(source.task), p.cursor);
 		const path = string(source.transcriptPath ?? record(source.artifactPaths).transcriptPath);
@@ -411,7 +525,7 @@ export class SubagentRegistry {
 		}
 	}
 	async control(p: ParamsOf<"subagent_control">): Promise<{ message?: string; newRunId?: string }> {
-		const run = this.runs.get(p.runId);
+		const run = this.project().find((r) => r.id === p.runId);
 		const child = p.childId === undefined ? undefined : run?.children.find((c) => c.id === p.childId);
 		if (!run || (p.childId !== undefined && !child))
 			throw new RcError("not_found", "Subagent not found in this session");
@@ -425,26 +539,29 @@ export class SubagentRegistry {
 			this.h.ctx?.abort();
 			return {};
 		}
-		const params: Record<string, unknown> = { runId: run.id };
+		const target = child ? this.target(run.id, child.index) : undefined;
+		const targetId = target?.nested ? target.run.id : run.id;
+		const params: Record<string, unknown> = { runId: targetId };
 		let method: string = p.action;
 		if (p.action === "steer" || p.action === "follow_up") {
 			method = "steer";
-			Object.assign(params, { index: child!.index, message: p.text, mode: p.action });
+			Object.assign(params, { index: target?.child?.index ?? child!.index, message: p.text, mode: p.action });
 		}
-		if (p.action === "resume") Object.assign(params, { index: child!.index, message: p.text });
+		if (p.action === "resume") Object.assign(params, { index: target?.child?.index ?? child!.index, message: p.text });
 		if (p.action === "stop_child") {
 			method = "stop";
-			const source = this.sources.get(run.id)?.children.find((s, i) => (s.index ?? i) === child!.index);
-			if (!source?.childId) throw new RcError("unsupported", "Backend child identity is unavailable");
-			params.childId = source.childId;
+			if (!target?.nested) {
+				if (!target?.source.childId) throw new RcError("unsupported", "Backend child identity is unavailable");
+				params.childId = target.source.childId;
+			}
 		}
 		const data = await this.call(method, params);
 		if (method === "stop") {
-			const targets = this.stopping.get(run.id) ?? new Set<string>();
-			targets.add(child?.id ?? "*");
-			this.stopping.set(run.id, targets);
+			const targets = this.stopping.get(targetId) ?? new Set<string>();
+			targets.add(target?.nested ? "*" : (child?.id ?? "*"));
+			this.stopping.set(targetId, targets);
 			// Do not mutate an object already held by snapshot/event consumers.
-			const latest = this.runs.get(run.id)!;
+			const latest = this.runs.get(targetId)!;
 			this.put({ ...latest, children: latest.children.map((c) => ({ ...c })) });
 		}
 		let newRunId: string | undefined;
