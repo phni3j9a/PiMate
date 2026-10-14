@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+import { spawn, spawnSync } from "node:child_process";
 import { DEFAULT_HOST_PORT, formatPairingLink } from "@pimate/protocol";
 import QRCode from "qrcode";
 import { HostConfig } from "./config.ts";
-import { HostCore } from "./index.ts";
+import { HostCore, parseAbducoList } from "./index.ts";
 import { defaultListenAddresses, HostServer } from "./server.ts";
 
 const usage =
-	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | spawn --cwd <dir> [-- pi args] | prompt <id> <text> [--steer|--follow-up] | abort <id> | history <id> | watch <id> | ui <id> <requestId> <value|--confirm|--cancel>";
+	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text> [--steer|--follow-up] | abort <id> | history <id> | watch <id> | ui <id> <requestId> <value|--confirm|--cancel>";
 async function main(): Promise<void> {
 	const [command, ...args] = process.argv.slice(2);
 	if (["serve", "pair", "devices", "revoke"].includes(command)) {
@@ -71,6 +72,24 @@ async function main(): Promise<void> {
 	const print = (value: unknown) => console.log(JSON.stringify(value, null, 2));
 	if (command === "list") {
 		print(await host.list());
+		return;
+	}
+	if (command === "attach") {
+		if (!host.abduco) throw new Error("abduco not found; set PIMATE_ABDUCO or build the bundled binary");
+		if (args.length > 1) throw new Error(usage);
+		console.log("Detach: Ctrl+\\ (Pi keeps running)");
+		const sessions = parseAbducoList(spawnSync(host.abduco, [], { encoding: "utf8", env: host.env }).stdout ?? "");
+		if (!args[0]) {
+			print(sessions);
+			return;
+		}
+		if (!sessions.some((s) => s.name === args[0])) throw new Error("Unknown abduco session");
+		const code = await new Promise<number>((resolve, reject) => {
+			const child = spawn(host.abduco!, ["-a", args[0]], { env: host.env, stdio: "inherit" });
+			child.once("error", reject);
+			child.once("exit", (code) => resolve(code ?? 1));
+		});
+		process.exitCode = code;
 		return;
 	}
 	if (command === "spawn") {

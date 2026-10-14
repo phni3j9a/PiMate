@@ -141,7 +141,7 @@ export class HostCore {
 		}
 		return instances;
 	}
-	async spawn(options: { cwd: string; args?: string[] }): Promise<{
+	async spawn(options: { cwd: string; args?: string[]; trust?: boolean }): Promise<{
 		instanceId: string;
 		abducoSession: string;
 		attachCommand: string;
@@ -151,7 +151,7 @@ export class HostCore {
 		const cwd = resolve(options.cwd);
 		if (!statSync(cwd).isDirectory()) throw new Error(`Not a directory: ${cwd}`);
 		if (!this.abduco) throw new Error("abduco not found; set PIMATE_ABDUCO or build the bundled binary");
-		const pi = findExecutable("pi", this.env.PATH);
+		const pi = findExecutable(this.env.PIMATE_PI || "pi", this.env.PATH);
 		if (!pi) throw new Error("pi not found on PATH");
 		const instanceId = randomUUID();
 		const name = `pimate-${instanceId.slice(0, 8)}`;
@@ -160,6 +160,7 @@ export class HostCore {
 			PIMATE_RUN_DIR: this.runDir,
 			PIMATE_INSTANCE_ID: instanceId,
 			PIMATE_ORIGIN: "mobile",
+			PIMATE_TRUST: options.trust === true ? "yes" : "no",
 			PIMATE_ABDUCO_SESSION: name,
 		};
 		const command = [
@@ -167,8 +168,9 @@ export class HostCore {
 			"-n",
 			name,
 			pi,
-			"-e",
-			join(packageDir, "src/extension/index.ts"),
+			...(this.env.PIMATE_EXTENSION === "none"
+				? []
+				: ["-e", this.env.PIMATE_EXTENSION || join(packageDir, "src/extension/index.ts")]),
 			...(options.args ?? []),
 		];
 		const systemd = findExecutable("systemd-run", env.PATH);
@@ -186,7 +188,7 @@ export class HostCore {
 		return {
 			instanceId,
 			abducoSession: name,
-			attachCommand: `${JSON.stringify(this.abduco)} -a ${name}`,
+			attachCommand: `pimate attach ${name}`,
 			isolation: scoped ? "systemd-scope" : "detached",
 		};
 	}
