@@ -1,4 +1,4 @@
-/** One row of the chat transcript (docs/design/html/Main.html, Chat-Edge.html). */
+/** One row of the chat transcript (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -9,12 +9,19 @@ import { useNow } from "@/lib/hooks";
 import type { SpacedRow } from "@/lib/transcriptRows";
 import { colors, fontFamily, radii, sizes, typography } from "@/theme/tokens";
 
+import { DialogCard, PcPromptCard } from "./DialogCard";
 import { RichText } from "./RichText";
 
 const SESSION_REASON: Record<string, string> = {
 	new: "/new",
 	resume: "/resume",
 	fork: "/fork",
+};
+
+const BY_PHONE: Record<string, string> = {
+	new: "新しいセッションを始めました",
+	resume: "過去のセッションを開きました",
+	fork: "分岐しました",
 };
 
 type Props = { row: SpacedRow; expanded: boolean; onToggle: (key: string, open: boolean) => void };
@@ -48,27 +55,21 @@ export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onTogg
 			return <Text style={[styles.error, margin]}>エラー: {row.text}</Text>;
 		case "note":
 			return <Text style={[styles.note, margin]}>{row.text}</Text>;
-		case "waiting":
-			// Chat-Waiting.html question card, read-only in M1: answering from the phone comes later.
-			return (
-				<View style={[styles.waiting, margin]} accessibilityRole="text">
-					<View style={styles.waitingHead}>
-						<StatusMark kind="waiting" />
-						<Text style={styles.waitingLabel}>PC 側で入力待ちです</Text>
-					</View>
-					{row.title ? <Text style={styles.waitingTitle}>{row.title}</Text> : null}
-					<Text style={styles.waitingText}>PC のターミナルで回答してください（スマホからの回答は今後対応します）</Text>
-				</View>
-			);
+		case "dialog":
+			return <DialogCard request={row.request} marginTop={row.marginTop} />;
+		case "pcPrompt":
+			return <PcPromptCard title={row.title} marginTop={row.marginTop} />;
 		case "sessionNotice": {
 			const command = SESSION_REASON[row.reason];
 			return (
 				<View style={[styles.notice, margin]} accessibilityRole="text">
 					<View style={styles.noticeHead}>
 						<SwapIcon color={colors.textSecondary} />
-						{command ? (
+						{row.byPhone ? (
+							<Text style={styles.noticeText}>{BY_PHONE[row.reason] ?? "会話を切り替えました"}</Text>
+						) : command ? (
 							<Text style={styles.noticeText}>
-								PC で <Text style={styles.noticeCode}>{command}</Text> されました
+								PC のターミナルで <Text style={styles.noticeCode}>{command}</Text> されました
 							</Text>
 						) : (
 							<Text style={styles.noticeText}>会話が切り替わりました</Text>
@@ -217,11 +218,6 @@ const styles = StyleSheet.create({
 	meta: { ...typography.meta, color: colors.textSecondary },
 	error: { ...typography.caption, color: colors.statusFailedText },
 	note: { ...typography.caption, color: colors.textSecondary },
-	waiting: { padding: 16, paddingBottom: 14, borderRadius: radii.cardMin, backgroundColor: colors.surface },
-	waitingHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-	waitingLabel: { ...typography.caption, fontWeight: "600", color: colors.statusWaitingText },
-	waitingTitle: { ...typography.body, fontWeight: "600", color: colors.text, marginTop: 8 },
-	waitingText: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
 	notice: { alignItems: "center", gap: 4, marginBottom: 0 },
 	noticeHead: { flexDirection: "row", alignItems: "center", gap: 6 },
 	noticeText: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },

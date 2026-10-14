@@ -12,9 +12,9 @@ import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
 import { colors, fontFamily, typography } from "@/theme/tokens";
 
-import { BellIcon, GearIcon, LaptopIcon, SearchIcon, ServerIcon } from "./icons";
+import { BellIcon, GearIcon, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
-import { TextButton } from "./ui";
+import { IconButton, TextButton } from "./ui";
 
 export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
@@ -33,7 +33,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 
 	const waitingTitle = (row: DrawerRow) => {
 		if (row.key === selectedKey && view?.pendingUI.length) return `入力待ち: ${view.pendingUI.at(-1)?.title}`;
-		return "入力待ち: PC 側で回答を待っています";
+		return "入力待ち: Pi が回答を待っています";
 	};
 
 	return (
@@ -51,6 +51,15 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 						returnKeyType="search"
 					/>
 				</View>
+				<IconButton
+					label="新しい Pi を起動"
+					onPress={() => {
+						navigation.closeDrawer();
+						router.push("/new");
+					}}
+				>
+					<PencilIcon />
+				</IconButton>
 			</View>
 
 			<ScrollView style={styles.list} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">

@@ -5,7 +5,22 @@
  * Sending rules (docs/SPEC.md §3): a prompt carries expectInstanceId / expectSessionId, is never inserted
  * optimistically and never re-sent. The draft stays until the Host confirms delivery.
  */
-import type { InstanceSummary, PairingLink, PairResponse, Request, Response } from "@pimate/protocol";
+import type {
+	FolderInfo,
+	InstanceSummary,
+	ModelInfo,
+	ModelRef,
+	PairingLink,
+	PairResponse,
+	ParamsOf,
+	RcMethod,
+	Request,
+	Response,
+	SessionListItem,
+	SessionOp,
+	SpawnParams,
+	ThinkingLevel,
+} from "@pimate/protocol";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
 import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
 import { createView, findDeliveredUserItem, type InstanceView, reduceView, userEntryIds } from "./instanceView";
@@ -38,9 +53,11 @@ export interface OutboxEntry {
 }
 
 export interface ChatNotice {
-	kind: "error" | "unconfirmed";
+	kind: "error" | "unconfirmed" | "info";
 	title?: string;
 	text: string;
+	/** Still in progress (shown with a spinner instead of a check). */
+	busy?: boolean;
 }
 
 export interface AppState {
@@ -55,9 +72,52 @@ export interface AppState {
 	/** The conversation behind the draft changed; sending needs an explicit confirmation. */
 	targetChanged: { to?: string } | null;
 	aborting: boolean;
+	/** Models of the selected instance (RC `models`), loaded once per selection. */
+	models: ModelsState | null;
+	/** A session/model operation started from the phone and not finished yet. */
+	op: PendingOp | null;
+	/** requestId of the dialog answer in flight. */
+	answering: string | null;
 }
 
+export interface ModelsState {
+	key: string;
+	list: ModelInfo[] | null;
+	error?: string;
+}
+
+export type OpKind = SessionOp | "compact" | "shutdown" | "model" | "thinking";
+
+export interface PendingOp {
+	kind: OpKind;
+	key: string;
+	/** fork: the text of the message the new branch starts from (offered as the draft). */
+	forkText?: string;
+}
+
+export interface UIAnswer {
+	value?: string;
+	confirmed?: boolean;
+	cancelled?: boolean;
+}
+
+export type Result<T> = { ok: true; value: T } | { ok: false; title: string; text: string; code?: string };
+
+/** Wait for a spawned instance to show up in the Host's list. */
+export const SPAWN_APPEAR_TIMEOUT_MS = 20_000;
+
 type FetchLike = Parameters<typeof pairWithHost>[2];
+
+export type SendBlocker =
+	| "no_instance"
+	| "offline"
+	| "loading"
+	| "gone"
+	| "sending"
+	| "target_changed"
+	| "dialog"
+	| "pc_prompt"
+	| "empty";
 
 export interface StoreDeps {
 	storage: KeyValueStorage;
@@ -74,36 +134,69 @@ export const draftKey = (s: Selection) => `${s.hostId}/${s.instanceId}`;
 /** The draft still holds the text that was sent (trailing whitespace is not sent). */
 const sameText = (draft: string | undefined, sent: string) => (draft ?? "").replace(/\s+$/, "") === sent;
 
+const OP_LABEL: Record<OpKind, string> = {
+	new: "新しいセッション",
+	switch: "セッションの切り替え",
+	fork: "分岐",
+	reload: "再読み込み",
+	compact: "圧縮",
+	shutdown: "終了",
+	model: "モデルの変更",
+	thinking: "Thinking の変更",
+};
+
+const SPAWN_ERRORS: Record<string, string> = {
+	bad_request: "入力内容を確認してください。",
+	not_found: "フォルダが見つかりません。",
+	not_directory: "フォルダではありません。",
+	unsupported: "この PC では起動できません（abduco が必要です）。",
+};
+
 const UNCONFIRMED_AFTER_SYNC =
 	"届いたか確認できませんでした。履歴を確かめてから、必要なら送り直してください（自動で再送しません）";
 
-function rcErrorText(code: string, message?: string): ChatNotice {
+function offlineText() {
+	return { title: "接続していません", text: "PC に接続してから操作してください。" };
+}
+
+function rcErrorText(code: string, message?: string, notDone = "送信しませんでした"): ChatNotice {
+	const send = notDone === "送信しませんでした";
 	switch (code) {
 		case "session_changed":
 			return {
 				kind: "error",
-				title: "送信しませんでした",
-				text: "PC で会話が切り替わりました。宛先を確認してから送信してください。",
+				title: notDone,
+				text: send
+					? "PC で会話が切り替わりました。宛先を確認してから送信してください。"
+					: "PC で会話が切り替わりました。確認してからもう一度操作してください。",
 			};
 		case "instance_mismatch":
-			return { kind: "error", title: "送信しませんでした", text: "別の Pi に切り替わっていました。" };
+			return { kind: "error", title: notDone, text: "別の Pi に切り替わっていました。" };
 		case "not_found":
-			return { kind: "error", title: "送信しませんでした", text: "この Pi は終了しています。" };
+			return { kind: "error", title: notDone, text: "この Pi は終了しています。" };
+		case "no_such_request":
+			return { kind: "error", title: notDone, text: "この質問はすでに終わっています。" };
 		case "offline":
 			return {
 				kind: "error",
-				title: "送信していません",
-				text: "PC に接続していません。再接続してから送信してください。",
+				title: send ? "送信していません" : notDone,
+				text: send ? "PC に接続していません。再接続してから送信してください。" : "PC に接続していません。",
 			};
 		case "busy":
 		case "not_ready":
 			return {
 				kind: "error",
-				title: "送信しませんでした",
+				title: notDone,
 				text: "Pi が受け付けられない状態でした。少し待ってからお試しください。",
 			};
+		case "unsupported":
+			return { kind: "error", title: notDone, text: "この Pi（Remote Control）はこの操作に対応していません。" };
 		default:
-			return { kind: "error", title: "送信できませんでした", text: message ? `${code}: ${message}` : code };
+			return {
+				kind: "error",
+				title: send ? "送信できませんでした" : "操作できませんでした",
+				text: message ? `${code}: ${message}` : code,
+			};
 	}
 }
 
@@ -118,6 +211,9 @@ export class AppStore {
 		notice: null,
 		targetChanged: null,
 		aborting: false,
+		models: null,
+		op: null,
+		answering: null,
 	};
 	private readonly listeners = new Set<() => void>();
 	private readonly deps: StoreDeps;
@@ -327,6 +423,9 @@ export class AppStore {
 			notice: null,
 			targetChanged: null,
 			aborting: false,
+			models: null,
+			op: null,
+			answering: null,
 		});
 		this.connections.get(hostId)?.setSubscription(instanceId);
 		void this.registry.saveSelection(selection).catch(() => {});
@@ -341,24 +440,71 @@ export class AppStore {
 	private onHostMessage(hostId: string, msg: Parameters<typeof reduceView>[1]): void {
 		const { selection, view } = this.state;
 		if (!selection || !view || selection.hostId !== hostId) return;
-		const next = reduceView(view, msg, this.now());
-		if (next === view) return;
-		const patch: Partial<AppState> = { view: next };
+		let next = reduceView(view, msg, this.now());
+		const key = draftKey(selection);
+		// Operation results can arrive while the view resyncs after a session switch (the view drops those
+		// events and waits for the snapshot), so they are matched here on the raw sequence instead.
+		const opPatch =
+			msg.type === "event" && msg.instanceId === selection.instanceId && msg.seq > view.seq
+				? this.opEvent(key, msg.event)
+				: {};
+		if (next === view) {
+			if (Object.keys(opPatch).length) this.set(opPatch);
+			return;
+		}
+		const patch: Partial<AppState> = { ...opPatch };
 
 		const sessionChanged =
 			(view.phase === "ready" && next.phase === "resyncing") ||
 			(msg.type === "subscribed" && !!view.session && !!next.session && view.session.id !== next.session.id);
 		if (sessionChanged) {
-			const draft = this.state.drafts[draftKey(selection)]?.trim();
-			if (draft) patch.targetChanged = { to: next.session?.name || undefined };
+			const op = this.state.op;
+			// The phone switched on purpose: the draft simply follows, and the divider says who did it.
+			const byPhone = !!op && op.key === key && (op.kind === "new" || op.kind === "switch" || op.kind === "fork");
+			const draft = this.state.drafts[key]?.trim();
+			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
+			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
+		patch.view = next;
+		if (msg.type === "subscribed" && this.state.models?.key !== key) void this.loadModels();
 		if (view.phase === "ready" && next.phase === "resyncing") this.connections.get(hostId)?.resubscribe();
 		if (msg.type === "event" && msg.event.type === "agent_settled")
 			patch.outbox = (patch.outbox ?? this.state.outbox).filter((e) => e.state !== "queued");
 
 		this.set(patch);
 		this.reconcileOutbox(msg.type === "subscribed");
+	}
+
+	/** Finishes phone-started operations from their result events. */
+	private opEvent(key: string, event: Extract<Parameters<typeof reduceView>[1], { type: "event" }>["event"]) {
+		const op = this.state.op?.key === key ? this.state.op : null;
+		switch (event.type) {
+			case "session_op_done": {
+				if (!op || op.kind !== event.op) return {};
+				const patch: Partial<AppState> = { op: null };
+				if (event.error)
+					patch.notice = { kind: "error", title: `${OP_LABEL[op.kind]}に失敗しました`, text: event.error };
+				else if (event.cancelled)
+					patch.notice = {
+						kind: "info",
+						text: `${OP_LABEL[op.kind]}は取り消されました（Pi の拡張機能などが止めました）`,
+					};
+				else if (op.forkText && !this.state.drafts[key]?.trim())
+					patch.drafts = { ...this.state.drafts, [key]: op.forkText };
+				return patch;
+			}
+			case "compact_done":
+				return op?.kind === "compact"
+					? { op: null, notice: { kind: "info" as const, text: "コンテキストを圧縮しました" } }
+					: {};
+			case "compact_error":
+				return op?.kind === "compact"
+					? { op: null, notice: { kind: "error" as const, title: "圧縮できませんでした", text: event.error } }
+					: {};
+			default:
+				return {};
+		}
 	}
 
 	/** Removes outbox entries that now appear in the transcript. */
@@ -406,7 +552,7 @@ export class AppStore {
 	}
 
 	/** Why the composer cannot send right now (null = it can). */
-	sendBlocker(): "no_instance" | "offline" | "loading" | "gone" | "sending" | "target_changed" | "empty" | null {
+	sendBlocker(): SendBlocker | null {
 		const { selection, view, outbox, targetChanged, drafts } = this.state;
 		if (!selection || !view) return "no_instance";
 		if (this.connections.get(selection.hostId)?.state !== "connected") return "offline";
@@ -414,6 +560,9 @@ export class AppStore {
 		if (view.phase !== "ready") return "loading";
 		if (outbox.some((e) => e.state === "sending")) return "sending";
 		if (targetChanged) return "target_changed";
+		// Pi is waiting on a question: answer it first (in the chat, or on the PC).
+		if (view.pendingUI.length) return "dialog";
+		if (view.uiPrompt) return "pc_prompt";
 		if (!drafts[draftKey(selection)]?.trim()) return "empty";
 		return null;
 	}
@@ -550,5 +699,224 @@ export class AppStore {
 		} finally {
 			this.set({ aborting: false });
 		}
+	}
+
+	// ------------------------------------------------------------ operations (M2)
+
+	/** Sends one RC request to the selected instance, guarded by its instance and session ids. */
+	private async guardedRc<M extends RcMethod>(
+		method: M,
+		params: ParamsOf<M>,
+		opts: { session?: boolean } = {},
+	): Promise<Result<Response & { ok: true }>> {
+		const { selection, view } = this.state;
+		const conn = selection && this.connections.get(selection.hostId);
+		if (!selection || !view || !conn || conn.state !== "connected") return { ok: false, ...offlineText() };
+		const sessionId = view.session?.id;
+		if (opts.session !== false && !sessionId)
+			return { ok: false, title: "まだ準備中です", text: "会話を読み込んでから操作してください。" };
+		const request: Request = {
+			id: this.deps.randomUUID(),
+			method,
+			params: params as Request["params"],
+			expectInstanceId: selection.instanceId,
+			...(opts.session !== false && sessionId ? { expectSessionId: sessionId } : {}),
+		};
+		try {
+			const res = await conn.rc(selection.instanceId, request);
+			if (res.ok) return { ok: true, value: res };
+			const n = rcErrorText(res.error.code, res.error.message, "操作しませんでした");
+			return { ok: false, title: n.title ?? "操作できませんでした", text: n.text, code: res.error.code };
+		} catch (error) {
+			if (error instanceof RcError && error.code === "not_connected") return { ok: false, ...offlineText() };
+			return {
+				ok: false,
+				title: "結果を確認できません",
+				text: "接続が切れました。状態を確認してください（自動で再送しません）。",
+			};
+		}
+	}
+
+	/** Loads the selected instance's models (for the composer label and the model sheet). */
+	async loadModels(): Promise<void> {
+		const sel = this.state.selection;
+		if (!sel) return;
+		const key = draftKey(sel);
+		this.set({ models: { key, list: this.state.models?.key === key ? this.state.models.list : null } });
+		const res = await this.guardedRc("models", {}, { session: false });
+		if (!this.isCurrent(key)) return;
+		if (res.ok) {
+			const list = (res.value.result as { models?: ModelInfo[] }).models ?? [];
+			this.set({ models: { key, list } });
+		} else this.set({ models: { key, list: this.state.models?.list ?? null, error: res.text } });
+	}
+
+	/** Models offered on a host (asked from any of its Pi instances; null when none answers). */
+	async hostModels(hostId: string): Promise<{ models: ModelInfo[]; current: ModelRef | null } | null> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected") return null;
+		const instances = [...conn.instances].sort((a, b) => b.updatedAt - a.updatedAt);
+		for (const instance of instances.slice(0, 3)) {
+			try {
+				const res = await conn.rc(instance.instanceId, {
+					id: this.deps.randomUUID(),
+					method: "models",
+					params: {},
+					expectInstanceId: instance.instanceId,
+				});
+				if (res.ok) {
+					const r = res.result as { models?: ModelInfo[]; current?: ModelRef | null };
+					return { models: r.models ?? [], current: r.current ?? null };
+				}
+			} catch {
+				return null;
+			}
+		}
+		return null;
+	}
+
+	async folders(hostId: string): Promise<Result<{ home: string; folders: FolderInfo[] }>> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
+		try {
+			const res = await conn.folders(this.deps.randomUUID());
+			return { ok: true, value: { home: res.home, folders: res.folders } };
+		} catch {
+			return { ok: false, title: "フォルダの一覧を取得できませんでした", text: "接続を確認してください。" };
+		}
+	}
+
+	/**
+	 * Starts a new Pi and opens it once it appears in the Host's list. Never retried: if the outcome is unknown,
+	 * the user is told to check the list instead.
+	 */
+	async spawn(hostId: string, params: SpawnParams): Promise<Result<{ instanceId: string }>> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
+		let res: Awaited<ReturnType<HostConnection["spawn"]>>;
+		try {
+			res = await conn.spawn(this.deps.randomUUID(), params);
+		} catch (error) {
+			if (error instanceof RcError && error.code === "not_connected") return { ok: false, ...offlineText() };
+			return {
+				ok: false,
+				title: "起動したか確認できません",
+				text: "接続が切れました。ドロワーの一覧を確認してから、必要ならもう一度起動してください（自動で再試行しません）。",
+			};
+		}
+		if (!res.ok) {
+			// The Host reports "Pi started but the first message failed" only inside the message text.
+			const started = res.message?.match(/Pi started: (\S+) \(pimate attach (\S+)\)/);
+			if (started)
+				return {
+					ok: false,
+					code: res.code,
+					title: "Pi は起動しましたが、最初のメッセージを送れませんでした",
+					text: `届いたか分からないため再送していません。一覧から開いて確認してください（pimate attach ${started[2]}）。`,
+				};
+			const text = [SPAWN_ERRORS[res.code], res.message].filter(Boolean).join("\n") || res.code;
+			return { ok: false, code: res.code, title: "起動できませんでした", text };
+		}
+		const appeared = await this.waitForInstance(hostId, res.instanceId);
+		if (!appeared)
+			return {
+				ok: false,
+				title: "起動しましたが、まだ一覧にありません",
+				text: "少し待ってからドロワーの一覧を確認してください。",
+			};
+		this.select(hostId, res.instanceId);
+		return { ok: true, value: { instanceId: res.instanceId } };
+	}
+
+	private waitForInstance(hostId: string, instanceId: string): Promise<boolean> {
+		const conn = this.connections.get(hostId);
+		const present = () => !!conn?.instances.some((i) => i.instanceId === instanceId);
+		if (!conn || present()) return Promise.resolve(!!conn);
+		return new Promise((resolve) => {
+			const done = (ok: boolean) => {
+				off();
+				clearTimeout(timer);
+				resolve(ok);
+			};
+			const off = conn.onChange(() => {
+				if (present()) done(true);
+				else if (this.connections.get(hostId) !== conn) done(false);
+			});
+			const timer = setTimeout(() => done(false), SPAWN_APPEAR_TIMEOUT_MS);
+		});
+	}
+
+	async listSessions(): Promise<Result<SessionListItem[]>> {
+		const res = await this.guardedRc("sessions", { limit: 50 }, { session: false });
+		if (!res.ok) return res;
+		return { ok: true, value: (res.value.result as { sessions?: SessionListItem[] }).sessions ?? [] };
+	}
+
+	/** Answers a dialog shown in the chat. Only for a request that is still pending in the open conversation. */
+	async answerUI(requestId: string, answer: UIAnswer): Promise<void> {
+		const { view, answering, selection } = this.state;
+		if (!view || !selection || answering || !view.pendingUI.some((r) => r.requestId === requestId)) return;
+		const key = draftKey(selection);
+		this.set({ answering: requestId });
+		const res = await this.guardedRc("ui_respond", { requestId, ...answer });
+		if (!this.isCurrent(key)) return;
+		const patch: Partial<AppState> = { answering: null };
+		if (!res.ok) {
+			const code = res.code;
+			patch.notice = { kind: "error", title: "回答できませんでした", text: res.text };
+			if (code === "no_such_request" && this.state.view)
+				patch.view = {
+					...this.state.view,
+					pendingUI: this.state.view.pendingUI.filter((r) => r.requestId !== requestId),
+				};
+		}
+		this.set(patch);
+	}
+
+	/** Session operations (new / switch / fork); the result arrives as `session_op_done`. */
+	async sessionOp(op: "new" | "switch" | "fork", arg?: string, forkText?: string): Promise<Result<null>> {
+		return this.startOp({ kind: op, forkText }, "session_op", { op, ...(arg ? { arg } : {}) });
+	}
+
+	async compact(): Promise<Result<null>> {
+		const res = await this.startOp({ kind: "compact" }, "compact", {});
+		if (res.ok && this.state.op?.kind === "compact")
+			this.set({ notice: { kind: "info", text: "コンテキストを圧縮しています…", busy: true } });
+		return res;
+	}
+
+	async setModel(model: ModelRef): Promise<Result<null>> {
+		return this.startOp({ kind: "model" }, "set_model", model, true);
+	}
+
+	async setThinking(level: ThinkingLevel): Promise<Result<null>> {
+		return this.startOp({ kind: "thinking" }, "set_thinking", { level }, true);
+	}
+
+	/** Ends this Pi (RC `shutdown`). The instance then disappears from the list. */
+	async shutdown(): Promise<Result<null>> {
+		return this.startOp({ kind: "shutdown" }, "shutdown", {}, true);
+	}
+
+	private async startOp<M extends RcMethod>(
+		op: Omit<PendingOp, "key">,
+		method: M,
+		params: ParamsOf<M>,
+		finishOnResponse = false,
+	): Promise<Result<null>> {
+		const sel = this.state.selection;
+		if (!sel) return { ok: false, title: "Pi が選ばれていません", text: "" };
+		if (this.state.op) return { ok: false, title: "ほかの操作の途中です", text: "終わるまでお待ちください。" };
+		const key = draftKey(sel);
+		this.set({ op: { ...op, key } });
+		const res = await this.guardedRc(method, params);
+		if (!this.isCurrent(key)) return res.ok ? { ok: true, value: null } : res;
+		if (!res.ok) {
+			this.set({ op: null, notice: { kind: "error", title: res.title, text: res.text } });
+			return res;
+		}
+		const current = this.state.op as PendingOp | null;
+		if (finishOnResponse && current?.key === key && current.kind === op.kind) this.set({ op: null });
+		return { ok: true, value: null };
 	}
 }

@@ -138,7 +138,7 @@ describe("transcript rows", () => {
 		expect(buildRows(viewWith(pending, "idle"))[0]).toMatchObject({ state: "done" });
 	});
 
-	it("appends live tools, streaming text and the waiting notice", () => {
+	it("appends live tools, streaming text and the dialog card", () => {
 		let v = viewWith([{ kind: "user", entryId: "u", text: "go" }], "running");
 		const ev = (seq: number, event: Extract<HostMessage, { type: "event" }>["event"]): HostMessage => ({
 			type: "event",
@@ -161,10 +161,10 @@ describe("transcript rows", () => {
 			500,
 		);
 		const rows = buildRows(v);
-		expect(rows.map((r) => r.kind)).toEqual(["user", "tool", "thinking", "text", "waiting"]);
+		expect(rows.map((r) => r.kind)).toEqual(["user", "tool", "thinking", "text", "dialog"]);
 		expect(rows[1]).toMatchObject({ state: "running", startedAt: 500, subject: "ls" });
 		expect(rows[3]).toMatchObject({ text: "Hel", live: true });
-		expect(rows[4]).toMatchObject({ title: "Proceed?" });
+		expect(rows[4]).toMatchObject({ request: { requestId: "r", title: "Proceed?" } });
 	});
 
 	it("spaces turns by 32 and packs tool rows", () => {

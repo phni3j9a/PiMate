@@ -138,3 +138,9 @@ export function tailLines(text: string, max: number): string {
 	if (lines.length <= max) return lines.join("\n");
 	return ["…", ...lines.slice(-max)].join("\n");
 }
+
+/** relativeTime with "前" where it reads naturally: "5分前", "2日前", "今", "昨日", "3/14". */
+export function ago(timestamp: number, now: number): string {
+	const t = relativeTime(timestamp, now);
+	return /^\d+(分|時間|日)$/.test(t) ? `${t}前` : t;
+}

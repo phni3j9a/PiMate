@@ -1,7 +1,7 @@
 import type { InstanceSummary, TranscriptItem } from "@pimate/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostRegistry, MemoryStorage } from "../src/lib/hostRegistry";
-import { AppStore } from "../src/lib/store";
+import { AppStore, SPAWN_APPEAR_TIMEOUT_MS } from "../src/lib/store";
 import { authenticate, FakeSocket, hostInfo } from "./fakes";
 
 const instance = (id: string, updatedAt = 1): InstanceSummary => ({
@@ -17,6 +17,9 @@ const instance = (id: string, updatedAt = 1): InstanceSummary => ({
 });
 
 let uuid = 0;
+
+/** rc requests other than the automatic `models` lookup. */
+const opRcs = (s: FakeSocket) => s.sentOfType("rc").filter((m) => m.request.method !== "models");
 
 async function setup(opts: { paired?: boolean } = {}) {
 	const storage = new MemoryStorage();
@@ -44,7 +47,12 @@ async function setup(opts: { paired?: boolean } = {}) {
 	return { store, storage };
 }
 
-function subscribedMsg(items: TranscriptItem[], sessionId = "s1", status: "idle" | "running" = "idle") {
+function subscribedMsg(
+	items: TranscriptItem[],
+	sessionId = "s1",
+	status: "idle" | "running" = "idle",
+	extra: Record<string, unknown> = {},
+) {
 	return {
 		type: "subscribed",
 		instanceId: "i1",
@@ -62,6 +70,7 @@ function subscribedMsg(items: TranscriptItem[], sessionId = "s1", status: "idle"
 			thinking: null,
 			pendingUI: [],
 			seq: 5,
+			...extra,
 		},
 		history: { session: { id: sessionId, name: sessionId }, items },
 	};
@@ -113,7 +122,7 @@ describe("AppStore", () => {
 		const s = connect();
 		store.setDraft("hello  ");
 		const sending = store.send();
-		const rc = s.sentOfType("rc")[0];
+		const rc = opRcs(s)[0];
 		expect(rc).toMatchObject({
 			instanceId: "i1",
 			request: { method: "prompt", params: { text: "hello" }, expectInstanceId: "i1", expectSessionId: "s1" },
@@ -146,7 +155,7 @@ describe("AppStore", () => {
 		const s = connect();
 		store.setDraft("later");
 		const p = store.send();
-		const id = s.sentOfType("rc")[0].request.id;
+		const id = opRcs(s)[0].request.id;
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",
@@ -169,7 +178,7 @@ describe("AppStore", () => {
 		const s = connect();
 		store.setDraft("fix it");
 		const p = store.send();
-		const id = s.sentOfType("rc")[0].request.id;
+		const id = opRcs(s)[0].request.id;
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",
@@ -183,7 +192,7 @@ describe("AppStore", () => {
 		expect(store.sendBlocker()).toBe("target_changed");
 		store.confirmTarget();
 		expect(store.sendBlocker()).toBeNull();
-		expect(s.sentOfType("rc")).toHaveLength(1);
+		expect(opRcs(s)).toHaveLength(1);
 	});
 
 	it("marks a send unconfirmed when the connection drops and resolves it after the resync", async () => {
@@ -204,7 +213,7 @@ describe("AppStore", () => {
 		const s2 = FakeSocket.last();
 		authenticate(s2, [instance("i1", 5)]);
 		expect(s2.sentOfType("subscribe")).toEqual([{ type: "subscribe", instanceId: "i1" }]);
-		expect(s2.sentOfType("rc")).toEqual([]);
+		expect(opRcs(s2)).toEqual([]);
 		s2.receive(
 			subscribedMsg([
 				{ kind: "user", entryId: "u1", text: "old" },
@@ -232,7 +241,7 @@ describe("AppStore", () => {
 		const st = store.getState();
 		expect(st.notice?.kind).toBe("unconfirmed");
 		expect(st.drafts["h1/i1"]).toBe("lost");
-		expect(s2.sentOfType("rc")).toEqual([]);
+		expect(opRcs(s2)).toEqual([]);
 	});
 
 	it("does not treat the same text in another session as delivered", async () => {
@@ -338,14 +347,14 @@ describe("AppStore", () => {
 		const { store } = await setup();
 		authenticate(FakeSocket.last(), [instance("i1", 5)]);
 		await store.abort();
-		expect(FakeSocket.last().sentOfType("rc")).toEqual([]);
+		expect(opRcs(FakeSocket.last())).toEqual([]);
 	});
 
 	it("aborts with an instance guard", async () => {
 		const { store } = await setup();
 		const s = connect();
 		const p = store.abort();
-		const rc = s.sentOfType("rc")[0];
+		const rc = opRcs(s)[0];
 		expect(rc.request).toMatchObject({ method: "abort", expectInstanceId: "i1", expectSessionId: "s1" });
 		s.receive({
 			type: "rc_result",
@@ -354,5 +363,204 @@ describe("AppStore", () => {
 		});
 		await p;
 		expect(store.getState().aborting).toBe(false);
+	});
+});
+
+const ASK = { requestId: "q1", kind: "select" as const, title: "方式は？", options: ["A", "B"] };
+
+/** Replies to an rc request (by its request id). */
+function rcReply(s: FakeSocket, id: string, ok: true, result?: unknown): void;
+function rcReply(s: FakeSocket, id: string, ok: false, error: { code: string; message?: string }): void;
+function rcReply(s: FakeSocket, id: string, ok: boolean, payload: unknown = {}) {
+	s.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: ok ? { type: "response", id, ok, result: payload } : { type: "response", id, ok, error: payload },
+	});
+}
+
+const event = (seq: number, ev: Record<string, unknown>, sessionId = "s1") => ({
+	type: "event",
+	instanceId: "i1",
+	sessionId,
+	seq,
+	event: ev,
+});
+
+describe("AppStore M2", () => {
+	it("answers a dialog with both guards and only once while in flight", async () => {
+		const { store } = await setup();
+		const s = FakeSocket.last();
+		authenticate(s, [instance("i1", 5)]);
+		s.receive(subscribedMsg([], "s1", "idle", { pendingUI: [ASK] }));
+		expect(store.sendBlocker()).toBe("dialog");
+
+		const first = store.answerUI("q1", { value: "B" });
+		void store.answerUI("q1", { value: "A" });
+		void store.answerUI("unknown", { cancelled: true });
+		const sent = opRcs(s);
+		expect(sent).toHaveLength(1);
+		expect(sent[0].request).toMatchObject({
+			method: "ui_respond",
+			params: { requestId: "q1", value: "B" },
+			expectInstanceId: "i1",
+			expectSessionId: "s1",
+		});
+		expect(store.getState().answering).toBe("q1");
+		rcReply(s, sent[0].request.id, true);
+		await first;
+		expect(store.getState().answering).toBeNull();
+		s.receive(event(6, { type: "ui_request_end", requestId: "q1", by: "remote" }));
+		expect(store.getState().view?.pendingUI).toEqual([]);
+		expect(store.getState().view?.uiNotes).toEqual([]);
+	});
+
+	it("drops a dialog that was already answered elsewhere and says so", async () => {
+		const { store } = await setup();
+		const s = FakeSocket.last();
+		authenticate(s, [instance("i1", 5)]);
+		s.receive(subscribedMsg([], "s1", "idle", { pendingUI: [ASK] }));
+		const p = store.answerUI("q1", { confirmed: true });
+		rcReply(s, opRcs(s)[0].request.id, false, { code: "no_such_request" });
+		await p;
+		expect(store.getState().view?.pendingUI).toEqual([]);
+		expect(store.getState().notice).toMatchObject({ kind: "error", title: "回答できませんでした" });
+	});
+
+	it("notes a question answered on the PC and shows a PC-only prompt", async () => {
+		const { store } = await setup();
+		const s = FakeSocket.last();
+		authenticate(s, [instance("i1", 5)]);
+		s.receive(
+			subscribedMsg([{ kind: "user", entryId: "u1", text: "hi" }], "s1", "idle", {
+				pendingUI: [ASK],
+				pcPrompt: { kind: "custom", title: "git-graph" },
+			}),
+		);
+		expect(store.getState().view?.uiPrompt).toEqual({ kind: "custom", title: "git-graph" });
+		s.receive(event(6, { type: "ui_request_end", requestId: "q1", by: "tui" }));
+		expect(store.getState().view?.uiNotes).toEqual([
+			{ requestId: "q1", afterEntryId: "u1", text: "PC で回答されました：方式は？" },
+		]);
+		expect(store.sendBlocker()).toBe("pc_prompt");
+		s.receive(event(7, { type: "ui_prompt", phase: "end", kind: "custom" }));
+		expect(store.getState().view?.uiPrompt).toBeNull();
+	});
+
+	it("does not ask to confirm the draft target after a session change started on the phone", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
+		store.setDraft("next question");
+		const op = store.sessionOp("new");
+		const rc = opRcs(s)[0];
+		expect(rc.request).toMatchObject({ method: "session_op", params: { op: "new" }, expectSessionId: "s1" });
+		rcReply(s, rc.request.id, true);
+		await op;
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }));
+		expect(store.getState().targetChanged).toBeNull();
+		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "new", byPhone: true });
+		s.receive(event(7, { type: "session_op_done", op: "new", cancelled: false }, "s2"));
+		expect(store.getState().op).toBeNull();
+	});
+
+	it("requires confirmation before a draft goes to a session switched on the PC", async () => {
+		const { store } = await setup();
+		const s = connect();
+		store.setDraft("draft");
+		s.receive(event(6, { type: "session_changed", reason: "resume", session: { id: "s2", name: "別の会話" } }));
+		expect(store.getState().targetChanged).toEqual({ to: "別の会話" });
+		s.receive(subscribedMsg([], "s2"));
+		expect(store.sendBlocker()).toBe("target_changed");
+		await store.send();
+		expect(opRcs(s).filter((m) => m.request.method === "prompt")).toEqual([]);
+		store.confirmTarget();
+		expect(store.sendBlocker()).toBeNull();
+	});
+
+	it("offers the forked message as the draft and reports a cancelled op", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);
+		const fork = store.sessionOp("fork", "u1", "最初の質問");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await fork;
+		s.receive(event(6, { type: "session_changed", reason: "fork", session: { id: "s2" } }));
+		s.receive(subscribedMsg([], "s2"));
+		s.receive(event(7, { type: "session_op_done", op: "fork", cancelled: false }, "s2"));
+		expect(store.getState().drafts["h1/i1"]).toBe("最初の質問");
+
+		const again = store.sessionOp("new");
+		rcReply(s, opRcs(s)[1].request.id, true);
+		await again;
+		s.receive(event(8, { type: "session_op_done", op: "new", cancelled: true }, "s2"));
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice?.kind).toBe("info");
+		expect(store.getState().notice?.text).toContain("新しいセッションは取り消されました");
+	});
+
+	it("allows one op at a time and surfaces RC errors", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const compact = store.compact();
+		expect((await store.setThinking("high")).ok).toBe(false);
+		rcReply(s, opRcs(s)[0].request.id, false, { code: "busy" });
+		const res = await compact;
+		expect(res.ok).toBe(false);
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice?.kind).toBe("error");
+	});
+
+	it("spawns a Pi, waits for it in the list and opens it", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const p = store.spawn("h1", { cwd: "~/code/x", trust: true, message: "hello" });
+		const [msg] = s.sentOfType("spawn");
+		expect(msg.params).toEqual({ cwd: "~/code/x", trust: true, message: "hello" });
+		s.receive({ type: "spawn_result", requestId: msg.requestId, ok: true, instanceId: "i9", abducoSession: "a9" });
+		await flush();
+		expect(store.getState().selection?.instanceId).toBe("i1");
+		s.receive({ type: "instances", instances: [instance("i1", 5), { ...instance("i9", 9), origin: "mobile" }] });
+		expect(await p).toEqual({ ok: true, value: { instanceId: "i9" } });
+		expect(store.getState().selection).toEqual({ hostId: "h1", instanceId: "i9" });
+	});
+
+	it("reports spawn errors and never retries", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const p = store.spawn("h1", { cwd: "/nope" });
+		const [msg] = s.sentOfType("spawn");
+		s.receive({ type: "spawn_result", requestId: msg.requestId, ok: false, code: "not_found", message: "/nope" });
+		expect(await p).toMatchObject({ ok: false, title: "起動できませんでした" });
+
+		const half = store.spawn("h1", { cwd: "/y", message: "hi" });
+		const second = s.sentOfType("spawn")[1];
+		s.receive({
+			type: "spawn_result",
+			requestId: second.requestId,
+			ok: false,
+			code: "spawn_failed",
+			message: "Error: boom; Pi started: i9 (pimate attach pimate-i9); message outcome may be unknown, not resent",
+		});
+		expect(await half).toMatchObject({
+			ok: false,
+			title: "Pi は起動しましたが、最初のメッセージを送れませんでした",
+			text: expect.stringContaining("pimate attach pimate-i9"),
+		});
+
+		const lost = store.spawn("h1", { cwd: "/x" });
+		s.drop();
+		expect(await lost).toMatchObject({ ok: false, title: "起動したか確認できません" });
+		expect(s.sentOfType("spawn")).toHaveLength(3);
+	});
+
+	it("gives up waiting for a spawned Pi that never appears", async () => {
+		vi.useFakeTimers();
+		const { store } = await setup();
+		const s = connect();
+		const p = store.spawn("h1", { cwd: "/x" });
+		const [msg] = s.sentOfType("spawn");
+		s.receive({ type: "spawn_result", requestId: msg.requestId, ok: true, instanceId: "i9", abducoSession: "a9" });
+		await vi.advanceTimersByTimeAsync(SPAWN_APPEAR_TIMEOUT_MS + 10);
+		expect(await p).toMatchObject({ ok: false, title: "起動しましたが、まだ一覧にありません" });
+		expect(store.getState().selection?.instanceId).toBe("i1");
 	});
 });

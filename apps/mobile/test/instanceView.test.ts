@@ -179,6 +179,38 @@ describe("instance view reducer", () => {
 		expect(v.uiPrompt).toBeNull();
 	});
 
+	it("notes questions answered elsewhere and dedupes the TUI prompt of a mirrored dialog", () => {
+		let v = ready([user("u1", "go")], {
+			pendingUI: [
+				{ requestId: "r0", kind: "confirm", title: "Old?" },
+				{ requestId: "r1", kind: "input", title: "Name" },
+			],
+			pcPrompt: { kind: "custom", title: "graph" },
+			context: { tokens: 1000, contextWindow: 10_000, percent: 10 },
+		});
+		expect(v.uiPrompt).toEqual({ kind: "custom", title: "graph" });
+		expect(v.context?.percent).toBe(10);
+		v = apply(
+			v,
+			ev({ type: "ui_request_end", requestId: "r0", by: "tui" }),
+			ev({ type: "ui_request_end", requestId: "r1", by: "remote" }),
+		);
+		expect(v.pendingUI).toEqual([]);
+		expect(v.uiNotes).toEqual([{ requestId: "r0", afterEntryId: "u1", text: "PC で回答されました：Old?" }]);
+		// The TUI side of a dialog the phone also shows is not a separate "PC only" prompt.
+		v = apply(
+			v,
+			ev({ type: "ui_prompt", phase: "end", kind: "custom" }),
+			ev({ type: "ui_request", request: { requestId: "r2", kind: "select", title: "Pick", options: ["a"] } }),
+			ev({ type: "ui_prompt", phase: "start", kind: "select", title: "Pick" }),
+		);
+		expect(v.uiPrompt).toBeNull();
+		v = apply(v, ev({ type: "context", context: null }));
+		expect(v.context).toBeNull();
+		v = reduceView(v, { type: "instance_gone", instanceId: ID }, 0);
+		expect(v.pendingUI).toEqual([]);
+	});
+
 	it("handles status, model, session name and instance_gone", () => {
 		let v = ready();
 		v = apply(

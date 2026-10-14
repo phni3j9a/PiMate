@@ -31,6 +31,7 @@ export default function RootLayout() {
 				<Stack.Screen name="(main)" />
 				<Stack.Screen name="pair" />
 				<Stack.Screen name="settings" />
+				<Stack.Screen name="new" />
 			</Stack>
 		</GestureHandlerRootView>
 	);

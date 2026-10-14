@@ -8,6 +8,7 @@
  * Pure: no React Native imports, the caller passes `now`.
  */
 import type {
+	ContextInfo,
 	HostMessage,
 	InstanceSnapshot,
 	InstanceStatus,
@@ -36,8 +37,17 @@ export interface ToolState {
 
 export interface SessionNotice {
 	reason: string;
+	/** The phone started the switch (session sheet), not the PC. */
+	byPhone?: boolean;
 	from?: string;
 	to?: string;
+}
+
+/** A dialog that ended without the phone's answer, shown after the transcript item it followed. */
+export interface UINote {
+	requestId: string;
+	afterEntryId: string | null;
+	text: string;
 }
 
 export interface InstanceView {
@@ -57,6 +67,8 @@ export interface InstanceView {
 	pendingUI: UIRequest[];
 	/** A TUI prompt the phone cannot render (ctx.ui.custom etc.). */
 	uiPrompt: { kind: string; title?: string } | null;
+	uiNotes: UINote[];
+	context: ContextInfo | null;
 	seq: number;
 	/** Shown at the top of the transcript after the PC switched the conversation. */
 	sessionNotice: SessionNotice | null;
@@ -81,6 +93,8 @@ export function createView(instanceId: string): InstanceView {
 		toolOrder: [],
 		pendingUI: [],
 		uiPrompt: null,
+		uiNotes: [],
+		context: null,
 		seq: -1,
 		sessionNotice: null,
 		runningSince: null,
@@ -145,7 +159,9 @@ function applySubscribed(
 		tools: {},
 		toolOrder: [],
 		pendingUI: snapshot.pendingUI ?? [],
-		uiPrompt: null,
+		uiPrompt: snapshot.pcPrompt ? { kind: snapshot.pcPrompt.kind, title: snapshot.pcPrompt.title } : null,
+		uiNotes: [],
+		context: snapshot.context ?? null,
 		seq: snapshot.seq,
 		sessionNotice,
 		runningSince: snapshot.status === "idle" ? null : (prev.runningSince ?? now),
@@ -175,7 +191,15 @@ export function reduceView(view: InstanceView, msg: HostMessage, now: number): I
 			return { ...view, phase: "error", error: { code: msg.code, message: msg.message } };
 		case "instance_gone":
 			if (msg.instanceId !== view.instanceId) return view;
-			return { ...view, phase: "gone", streaming: EMPTY_STREAMING, tools: finishRunningTools(view.tools) };
+			// Its questions can no longer be answered anywhere.
+			return {
+				...view,
+				phase: "gone",
+				streaming: EMPTY_STREAMING,
+				tools: finishRunningTools(view.tools),
+				pendingUI: [],
+				uiPrompt: null,
+			};
 		case "event":
 			if (msg.instanceId !== view.instanceId) return view;
 			if (view.phase !== "ready") return view;
@@ -202,6 +226,7 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 				toolOrder: [],
 				pendingUI: [],
 				uiPrompt: null,
+				uiNotes: [],
 				sessionNotice: showNotice
 					? { reason: event.reason, from: sessionLabel(view.session), to: sessionLabel(event.session) }
 					: null,
@@ -271,19 +296,43 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 			return { ...view, model: event.model };
 		case "thinking":
 			return { ...view, thinking: event.level };
-		case "ui_request":
+		case "ui_request": {
+			const req = event.request;
+			// The TUI shows the same dialog; the phone can answer it, so it is not a "PC only" prompt.
+			const mirrored = view.uiPrompt && matchesPrompt(req, view.uiPrompt);
 			return {
 				...view,
-				pendingUI: [...view.pendingUI.filter((r) => r.requestId !== event.request.requestId), event.request],
+				pendingUI: [...view.pendingUI.filter((r) => r.requestId !== req.requestId), req],
+				uiPrompt: mirrored ? null : view.uiPrompt,
 			};
-		case "ui_request_end":
-			return { ...view, pendingUI: view.pendingUI.filter((r) => r.requestId !== event.requestId) };
+		}
+		case "ui_request_end": {
+			const req = view.pendingUI.find((r) => r.requestId === event.requestId);
+			if (!req) return view;
+			const text = event.by === "tui" ? "PC で回答されました" : event.by === "error" ? "質問は取り消されました" : null;
+			const note: UINote | null = text
+				? { requestId: req.requestId, afterEntryId: view.items.at(-1)?.entryId ?? null, text: `${text}：${req.title}` }
+				: null;
+			return {
+				...view,
+				pendingUI: view.pendingUI.filter((r) => r !== req),
+				uiNotes: note ? [...view.uiNotes, note].slice(-5) : view.uiNotes,
+			};
+		}
 		case "ui_prompt":
-			return { ...view, uiPrompt: event.phase === "start" ? { kind: event.kind, title: event.title } : null };
+			if (event.phase === "end") return view.uiPrompt ? { ...view, uiPrompt: null } : view;
+			if (view.pendingUI.some((r) => matchesPrompt(r, event))) return view;
+			return { ...view, uiPrompt: { kind: event.kind, title: event.title } };
+		case "context":
+			return { ...view, context: event.context };
 		default:
-			// user_input, notify, session_op_done, compact_*, bus and unknown events: not shown in M1.
+			// user_input, notify, session_op_done, compact_* (handled by the store), bus and unknown events.
 			return view;
 	}
+}
+
+function matchesPrompt(req: UIRequest, prompt: { kind: string; title?: string }): boolean {
+	return req.kind === prompt.kind && (prompt.title === undefined || req.title === prompt.title);
 }
 
 /** User entryIds currently in the view (used to recognise a newly delivered message). */
