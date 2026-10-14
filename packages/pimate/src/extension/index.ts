@@ -6,13 +6,14 @@ import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { patchUI } from "./ui.ts";
+import { registerWriteDiff } from "./write-diff.ts";
 
 export default function pimate(pi: ExtensionAPI): void {
 	const h = getHub();
 	// Pi recreates extension runtimes on /new, /resume and /reload. The process hub survives,
 	// but old bus and lifecycle subscriptions must not.
 	for (const off of h.subscriptions) off();
-	h.subscriptions = [];
+	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
 	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
 	const messages: { message: unknown; ctx: ExtensionContext; sessionId: string }[] = [];
@@ -31,6 +32,8 @@ export default function pimate(pi: ExtensionAPI): void {
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
 			h.pcPrompt = null;
+			// An earlier extension's session_start may already have started a run (agent_start seen before ours).
+			h.agentActive = !ctx.isIdle();
 			h.ctx = ctx;
 			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {
@@ -91,10 +94,12 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "session_info", name: e.name });
 		}),
 		pi.on("agent_start", () => {
+			h.agentActive = true;
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "running");
 			h.emit({ type: "agent_start" });
 		}),
 		pi.on("agent_settled", (e) => {
+			h.agentActive = false;
 			flushMessages();
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "idle");
 			h.emit({ type: "agent_settled", aborted: e.aborted });

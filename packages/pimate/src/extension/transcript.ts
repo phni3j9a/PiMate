@@ -1,6 +1,19 @@
 import type { TranscriptItem } from "@pimate/protocol";
 
 export const MAX_TOOL_TEXT = 32 * 1024;
+export const MAX_TOOL_DETAILS_BYTES = 256 * 1024;
+
+/** Bound display transport only; the original Pi session and model-facing content are untouched. */
+export function boundToolDetails(details: unknown): { details: unknown; detailsOmitted?: true } {
+	try {
+		const json = JSON.stringify(details);
+		if (json === undefined || Buffer.byteLength(json, "utf8") <= MAX_TOOL_DETAILS_BYTES) return { details };
+	} catch {
+		// Unserializable extension data must not break the entire history/event stream.
+	}
+	return { details: undefined, detailsOmitted: true };
+}
+
 function record(value: unknown): Record<string, any> {
 	return value && typeof value === "object" ? (value as Record<string, any>) : {};
 }
@@ -69,7 +82,7 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 			text: body.slice(0, MAX_TOOL_TEXT),
 			...(body.length > MAX_TOOL_TEXT ? { truncated: true } : {}),
 			isError: !!m.isError,
-			details: m.details,
+			...boundToolDetails(m.details),
 		};
 	return { ...base, kind: "other", label: m.customType ?? m.role ?? "message", text: body };
 }

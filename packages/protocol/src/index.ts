@@ -46,6 +46,22 @@ export interface ToolCallRef {
 	args: unknown;
 }
 
+/**
+ * Display-only diff the RC adds to a successful built-in `write` result (`details.pimate`), because Pi's write
+ * tool records no details. `patch` is a standard unified diff against the content before the write
+ * (`existed: false` = new file). Omitted when the file was too large or not text, or when another write/edit to
+ * the same file ran in the same parallel tool batch so the prior content is not exact (`omitted` says why).
+ * The edit tool already provides `details.patch` (unified diff) itself.
+ */
+export interface PimateWriteDetails {
+	pimate: {
+		kind: "write_diff";
+		existed: boolean;
+		patch?: string;
+		omitted?: "too_large" | "binary" | "unreadable" | "concurrent";
+	};
+}
+
 /** One entry of the current session branch, normalized for display. */
 export type TranscriptItem =
 	| { kind: "user"; entryId: string; text: string; timestamp?: number }
@@ -72,6 +88,8 @@ export type TranscriptItem =
 			truncated?: boolean;
 			isError: boolean;
 			details?: unknown;
+			/** RC omitted details because their serialized JSON exceeds 256 KiB or cannot be serialized. */
+			detailsOmitted?: boolean;
 			timestamp?: number;
 	  }
 	/** Compaction summaries, branch summaries, custom messages etc. shown as a single line. */
@@ -139,6 +157,8 @@ export interface InstanceSnapshot {
 	startedAt: number;
 	session: SessionRef | null;
 	status: InstanceStatus;
+	/** A Pi run is between agent_start and agent_settled, including extension dialogs after agent_end. */
+	agentActive?: boolean;
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];

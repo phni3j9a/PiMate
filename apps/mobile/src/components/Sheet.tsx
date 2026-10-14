@@ -1,6 +1,6 @@
 /** Bottom sheet for user-opened settings (docs/design Sheet-Model, Sheet-Session). Agent requests never use this. */
-import { type ReactNode, useEffect, useRef } from "react";
-import { Animated, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Animated, Keyboard, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, radii } from "@/theme/tokens";
@@ -18,6 +18,7 @@ export function Sheet({
 	children: ReactNode;
 }) {
 	const insets = useSafeAreaInsets();
+	const keyboard = useKeyboardHeight(visible);
 	const offset = useRef(new Animated.Value(600)).current;
 	useEffect(() => {
 		if (!visible) return;
@@ -34,22 +35,50 @@ export function Sheet({
 			navigationBarTranslucent
 			onRequestClose={onClose}
 		>
-			<KeyboardAvoidingView style={styles.root} behavior="padding">
+			<View style={styles.root}>
 				<Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="閉じる" />
 				<Animated.View
 					accessibilityViewIsModal
 					accessibilityLabel={label}
 					style={[
 						styles.panel,
-						{ paddingBottom: Math.max(insets.bottom, 16) + 14, maxHeight: "92%", transform: [{ translateY: offset }] },
+						{
+							// Above the keyboard when it is open (a search field); the safe-area inset is under it then.
+							paddingBottom: (keyboard > 0 ? keyboard : Math.max(insets.bottom, 16)) + 14,
+							maxHeight: keyboard > 0 ? "100%" : "92%",
+							marginTop: keyboard > 0 ? insets.top + 8 : 0,
+							transform: [{ translateY: offset }],
+						},
 					]}
 				>
 					<View style={styles.grabber} />
 					{children}
 				</Animated.View>
-			</KeyboardAvoidingView>
+			</View>
 		</Modal>
 	);
+}
+
+/**
+ * Keyboard height while the sheet is shown. KeyboardAvoidingView does not move a translucent (edge-to-edge) Modal on
+ * Android, so the panel is padded by the keyboard's height instead.
+ */
+function useKeyboardHeight(active: boolean): number {
+	const [height, setHeight] = useState(0);
+	useEffect(() => {
+		if (!active) return;
+		const ios = Platform.OS === "ios";
+		const show = Keyboard.addListener(ios ? "keyboardWillShow" : "keyboardDidShow", (e) =>
+			setHeight(e.endCoordinates.height),
+		);
+		const hide = Keyboard.addListener(ios ? "keyboardWillHide" : "keyboardDidHide", () => setHeight(0));
+		return () => {
+			show.remove();
+			hide.remove();
+			setHeight(0);
+		};
+	}, [active]);
+	return height;
 }
 
 const styles = StyleSheet.create({

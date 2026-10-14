@@ -74,6 +74,21 @@ export interface InstanceView {
 	sessionNotice: SessionNotice | null;
 	/** Local time the current run was first seen (for the header timer). */
 	runningSince: number | null;
+	/**
+	 * An agent run (turn) is in progress. Unlike `status`, a dialog opened by an extension command outside a turn
+	 * ("waiting_input") does not count: there is nothing to stop and the last turn is complete.
+	 */
+	agentActive: boolean;
+	/**
+	 * How long the model thought, per assistant entryId. Only measurable while watching live (the session file
+	 * has no timing), so history shows "考えた" without seconds.
+	 */
+	thinkingMs: Record<string, number>;
+	/** Per-user-entry elapsed time, only for turns observed live through agent_settled. */
+	turnMs: Record<string, number>;
+	turnClock: { since: number; userEntryId: string | null } | null;
+	/** Live thinking of the message being streamed: first thinking delta, and the first output after it. */
+	thinkingClock: { since: number; until: number | null } | null;
 }
 
 const EMPTY_STREAMING = { text: "", thinking: "" };
@@ -98,6 +113,11 @@ export function createView(instanceId: string): InstanceView {
 		seq: -1,
 		sessionNotice: null,
 		runningSince: null,
+		agentActive: false,
+		thinkingMs: {},
+		turnMs: {},
+		turnClock: null,
+		thinkingClock: null,
 	};
 }
 
@@ -145,6 +165,21 @@ function runningSince(prev: InstanceView, status: InstanceStatus, now: number): 
 	return prev.runningSince ?? now;
 }
 
+/**
+ * Prefer the explicit run flag. For older RCs only, infer an open turn from the transcript.
+ */
+function activeFromSnapshot(snapshot: InstanceSnapshot, items: readonly TranscriptItem[]): boolean {
+	if (snapshot.agentActive !== undefined) return snapshot.agentActive;
+	if (snapshot.status !== "waiting_input") return snapshot.status === "running";
+	if (snapshot.streaming?.text || snapshot.streaming?.thinking) return true;
+	for (let i = items.length - 1; i >= 0; i--) {
+		const item = items[i]!;
+		if (item.kind === "other") continue;
+		return item.kind !== "assistant" || item.stopReason === "toolUse";
+	}
+	return false;
+}
+
 function applySubscribed(
 	prev: InstanceView,
 	snapshot: InstanceSnapshot,
@@ -179,7 +214,17 @@ function applySubscribed(
 		seq: snapshot.seq,
 		sessionNotice,
 		runningSince: snapshot.status === "idle" ? null : (prev.runningSince ?? now),
+		agentActive: activeFromSnapshot(snapshot, history.items),
+		// Measured durations stay valid for the same conversation (reconnects); a joined stream is not measured.
+		thinkingMs: prev.session?.id === session?.id ? prev.thinkingMs : {},
+		turnMs: prev.session?.id === session?.id ? prev.turnMs : {},
+		turnClock: null,
+		thinkingClock: null,
 	};
+}
+
+function stopClock(clock: InstanceView["thinkingClock"], now: number): InstanceView["thinkingClock"] {
+	return clock && clock.until === null ? { ...clock, until: now } : clock;
 }
 
 function finishRunningTools(tools: Record<string, ToolState>): Record<string, ToolState> {
@@ -227,7 +272,12 @@ export function reduceView(view: InstanceView, msg: HostMessage, now: number): I
 function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "event" }>["event"], now: number) {
 	switch (event.type) {
 		case "status":
-			return { ...view, status: event.status, runningSince: runningSince(view, event.status, now) };
+			return {
+				...view,
+				status: event.status,
+				runningSince: runningSince(view, event.status, now),
+				agentActive: event.status === "waiting_input" ? view.agentActive : event.status === "running",
+			};
 		case "session_changed": {
 			const showNotice = event.reason !== "startup" && event.reason !== "reload";
 			return {
@@ -241,6 +291,10 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 				pendingUI: [],
 				uiPrompt: null,
 				uiNotes: [],
+				thinkingMs: {},
+				turnMs: {},
+				turnClock: null,
+				thinkingClock: null,
 				sessionNotice: showNotice
 					? { reason: event.reason, from: conversationLabel(view.session, view.items), to: sessionLabel(event.session) }
 					: null,
@@ -249,19 +303,51 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 		case "session_info":
 			return view.session ? { ...view, session: { ...view.session, name: event.name } } : view;
 		case "agent_start":
-			return view.status === "idle"
-				? { ...view, status: "running" as const, runningSince: runningSince(view, "running", now) }
-				: view;
+			return {
+				...view,
+				status: view.status === "idle" ? ("running" as const) : view.status,
+				runningSince: runningSince(view, "running", now),
+				agentActive: true,
+				turnClock: view.turnClock ?? { since: now, userEntryId: null },
+			};
 		case "agent_settled":
-			return { ...view, streaming: EMPTY_STREAMING, tools: finishRunningTools(view.tools) };
+			return {
+				...view,
+				turnMs: view.turnClock?.userEntryId
+					? { ...view.turnMs, [view.turnClock.userEntryId]: Math.max(0, now - view.turnClock.since) }
+					: view.turnMs,
+				turnClock: null,
+				streaming: EMPTY_STREAMING,
+				tools: finishRunningTools(view.tools),
+				agentActive: false,
+				thinkingClock: null,
+			};
 		case "text_delta":
-			return { ...view, streaming: { ...view.streaming, text: view.streaming.text + event.delta } };
+			return {
+				...view,
+				streaming: { ...view.streaming, text: view.streaming.text + event.delta },
+				thinkingClock: stopClock(view.thinkingClock, now),
+			};
 		case "thinking_delta":
-			return { ...view, streaming: { ...view.streaming, thinking: view.streaming.thinking + event.delta } };
+			return {
+				...view,
+				streaming: { ...view.streaming, thinking: view.streaming.thinking + event.delta },
+				// Only a stream seen from its start is timed.
+				thinkingClock:
+					view.thinkingClock ?? (view.streaming.thinking || view.streaming.text ? null : { since: now, until: null }),
+			};
 		case "message_end": {
 			const item = event.item;
 			const next = { ...view, items: upsertItem(view.items, item) };
-			if (item.kind === "assistant") next.streaming = EMPTY_STREAMING;
+			// Use one local clock, not the server's request-start timestamps. A queued user starts a new scope.
+			if (item.kind === "user" && view.turnClock) next.turnClock = { since: now, userEntryId: item.entryId };
+			if (item.kind === "assistant") {
+				next.streaming = EMPTY_STREAMING;
+				const clock = view.thinkingClock;
+				if (clock && item.thinking?.trim())
+					next.thinkingMs = { ...view.thinkingMs, [item.entryId]: (clock.until ?? now) - clock.since };
+				next.thinkingClock = null;
+			}
 			if (item.kind === "tool_result") {
 				const tool = view.tools[item.toolCallId];
 				if (tool) {

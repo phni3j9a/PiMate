@@ -27,6 +27,7 @@ export class Hub {
 	seq = 0;
 	streaming = { text: "", thinking: "" };
 	status: InstanceStatus = "idle";
+	agentActive = false;
 	dir: string;
 	sockPath: string;
 	metaPath: string;
@@ -98,6 +99,7 @@ export class Hub {
 			startedAt: this.startedAt,
 			session: this.session,
 			status: this.status,
+			agentActive: this.agentActive,
 			model: this.ctx?.model ? { provider: this.ctx.model.provider, id: this.ctx.model.id } : null,
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),
@@ -117,6 +119,7 @@ export class Hub {
 			streaming: _____,
 			context: ______,
 			pcPrompt: _______,
+			agentActive: ________,
 			...snapshot
 		} = this.snapshot();
 		const meta: InstanceMeta = { ...snapshot, updatedAt: Date.now() };

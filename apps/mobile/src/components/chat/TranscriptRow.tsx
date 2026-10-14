@@ -2,7 +2,8 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { BulbIcon, ChevronDownIcon, ChevronUpIcon, SwapIcon } from "@/components/icons";
+import { ChangeDiff } from "@/components/diff/DiffView";
+import { BulbIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, SwapIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { seconds, tailLines } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
@@ -24,9 +25,15 @@ const BY_PHONE: Record<string, string> = {
 	fork: "分岐しました",
 };
 
-type Props = { row: SpacedRow; expanded: boolean; onToggle: (key: string, open: boolean) => void };
+type Props = {
+	row: SpacedRow;
+	expanded: boolean;
+	onToggle: (key: string, open: boolean) => void;
+	/** Opens the Review screen for a turn (user entryId). */
+	onOpenReview: (turnId: string) => void;
+};
 
-export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onToggle }: Props) {
+export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onToggle, onOpenReview }: Props) {
 	const margin = { marginTop: row.marginTop };
 	switch (row.kind) {
 		case "user":
@@ -49,6 +56,8 @@ export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onTogg
 			return <ThinkingRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
 		case "tool":
 			return <ToolRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
+		case "turnSummary":
+			return <TurnSummaryRow row={row} expanded={expanded} onToggle={onToggle} onOpenReview={onOpenReview} />;
 		case "meta":
 			return <Text style={[styles.meta, margin]}>{row.text}</Text>;
 		case "error":
@@ -108,7 +117,13 @@ function ThinkingRow({
 				style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
 			>
 				<View style={styles.markCol}>{row.live ? <Spinner /> : <BulbIcon color={colors.textSecondary} />}</View>
-				<Text style={styles.thinkingLabel}>{row.live ? "考えています…" : "考えた"}</Text>
+				<Text style={styles.thinkingLabel}>
+					{row.live
+						? "考えています…"
+						: row.durationMs !== undefined && row.durationMs >= 1000
+							? `${seconds(row.durationMs)} 考えた`
+							: "考えた"}
+				</Text>
 				{expanded ? <ChevronUpIcon color={colors.textSecondary} /> : <ChevronDownIcon color={colors.textSecondary} />}
 			</Pressable>
 			{expanded ? (
@@ -136,7 +151,9 @@ function ToolRow({
 	onToggle: (key: string, open: boolean) => void;
 	margin: number;
 }) {
-	const hasOutput = !!row.output.trim();
+	// A finished edit/write opens its diff (or why it is missing) instead of the raw tool text.
+	const change = row.change;
+	const hasOutput = !!change || !!row.output.trim();
 	const stateLabel = row.state === "running" ? "実行中" : row.state === "error" ? "エラー" : "完了";
 	return (
 		<View style={{ marginTop: margin }}>
@@ -156,7 +173,9 @@ function ToolRow({
 					{row.subject}
 				</Text>
 				{row.state === "running" && row.startedAt ? <RunningTime since={row.startedAt} /> : null}
-				{row.meta ? (
+				{change?.kind === "patch" ? (
+					<ChangeCounts add={change.add} del={change.del} />
+				) : row.meta ? (
 					<Text style={[styles.toolMeta, row.state === "error" && { color: colors.statusFailedText }]}>{row.meta}</Text>
 				) : null}
 				{hasOutput ? (
@@ -169,7 +188,11 @@ function ToolRow({
 					<View style={{ width: 14 }} />
 				)}
 			</Pressable>
-			{expanded && hasOutput ? (
+			{expanded && change ? (
+				<View style={styles.diff}>
+					<ChangeDiff piece={change} variant="compact" />
+				</View>
+			) : expanded && hasOutput ? (
 				<View style={styles.output}>
 					<Text style={styles.outputText} selectable>
 						{tailLines(row.output, 14)}
@@ -181,11 +204,69 @@ function ToolRow({
 	);
 }
 
+/** `+6 −2` in the diff colors (`+18` when nothing was removed). */
+export function ChangeCounts({ add, del, size = 11 }: { add: number; del: number; size?: number }) {
+	return (
+		<Text style={[styles.counts, { fontSize: size }]} accessibilityLabel={`追加 ${add} 行、削除 ${del} 行`}>
+			<Text style={{ color: colors.diffAddText }}>+{add}</Text>
+			{del ? <Text style={{ color: colors.diffDelText }}> −{del}</Text> : null}
+		</Text>
+	);
+}
+
+/** A completed turn folded into "18秒 作業 · ツール 4 回 ⌄"; its changes open the Review screen. */
+function TurnSummaryRow({
+	row,
+	expanded,
+	onToggle,
+	onOpenReview,
+}: {
+	row: Extract<SpacedRow, { kind: "turnSummary" }>;
+	expanded: boolean;
+	onToggle: (key: string, open: boolean) => void;
+	onOpenReview: (turnId: string) => void;
+}) {
+	const work = row.durationMs ? `${seconds(row.durationMs)} 作業 · ` : "";
+	const label = `${work}ツール ${row.tools} 回`;
+	return (
+		<View style={[styles.summary, { marginTop: row.marginTop }]}>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel={label}
+				accessibilityHint={expanded ? "作業の詳細を閉じます" : "作業の詳細を表示します"}
+				accessibilityState={{ expanded }}
+				onPress={() => onToggle(row.key, !expanded)}
+				hitSlop={{ top: 6, bottom: 6 }}
+				style={({ pressed }) => [styles.summaryButton, pressed && styles.pressed]}
+			>
+				<Text style={styles.summaryText}>{label}</Text>
+				{expanded ? <ChevronUpIcon color={colors.textSecondary} /> : <ChevronDownIcon color={colors.textSecondary} />}
+			</Pressable>
+			{row.files > 0 ? (
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel={`このターンの変更を見る（${row.files} ファイル）`}
+					onPress={() => onOpenReview(row.turnId)}
+					hitSlop={{ top: 6, bottom: 6, right: 8 }}
+					style={({ pressed }) => [styles.summaryButton, styles.summaryChanges, pressed && styles.pressed]}
+				>
+					{row.counted ? (
+						<ChangeCounts add={row.add} del={row.del} size={12} />
+					) : (
+						<Text style={styles.summaryText}>{row.files} ファイル</Text>
+					)}
+					<ChevronRightIcon size={14} color={colors.textSecondary} />
+				</Pressable>
+			) : null}
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	pressed: { opacity: 0.6 },
 	userWrap: { flexDirection: "row", justifyContent: "flex-end", paddingLeft: 48 },
 	bubble: {
-		maxWidth: 300,
+		maxWidth: 280,
 		backgroundColor: colors.selected,
 		borderRadius: radii.bubble,
 		paddingVertical: 10,
@@ -215,6 +296,12 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.surface,
 	},
 	outputText: { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 18, color: colors.textCode },
+	diff: { marginTop: 4, marginLeft: 22, marginBottom: 4 },
+	counts: { fontFamily: fontFamily.mono, lineHeight: 16 },
+	summary: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4 },
+	summaryButton: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
+	summaryChanges: { paddingLeft: 10, gap: 2 },
+	summaryText: { ...typography.caption, color: colors.textSecondary },
 	meta: { ...typography.meta, color: colors.textSecondary },
 	error: { ...typography.caption, color: colors.statusFailedText },
 	note: { ...typography.caption, color: colors.textSecondary },

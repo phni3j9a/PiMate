@@ -61,6 +61,8 @@ export function tokens(n: number): string {
 
 /** `gpt-6-luna · 6.2k in · 210 out · $0.04` — the meta line under a finished assistant message. */
 export function usageLine(model: ModelRef | undefined, usage: Usage | undefined): string | null {
+	// All-zero usage (an aborted or failed request) is not a measurement; the model name alone says nothing.
+	if (usage && !(usage.input || usage.output || usage.cacheRead || usage.cacheWrite)) return null;
 	const parts: string[] = [];
 	if (model) parts.push(model.id);
 	if (usage) {

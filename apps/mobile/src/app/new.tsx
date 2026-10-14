@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { CheckIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
+import { CheckIcon, ChevronRightIcon, CloseIcon, SearchIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton, PrimaryButton, TextButton } from "@/components/ui";
@@ -321,18 +321,41 @@ function ModelPicker({
 	onClose: () => void;
 }) {
 	const list = models && models !== "loading" ? models.models : null;
-	const groups = useMemo(() => (list ? groupModels(list) : []), [list]);
+	const [query, setQuery] = useState("");
+	const groups = useMemo(() => (list ? groupModels(list, query) : []), [list, query]);
 	const info = findModel(list, model);
 	const levels = info?.thinkingLevels ?? [];
 	return (
-		<ScrollView showsVerticalScrollIndicator={false}>
+		<ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 			<View style={styles.sheetTitleRow}>
 				<Text style={styles.sheetTitle} accessibilityRole="header">
 					モデル
 				</Text>
 				<TextButton label="完了" onPress={onClose} />
 			</View>
-			<PickRow title="Pi の既定" sub="PC の Pi の設定に従います" selected={!model} onPress={() => onPick(null, null)} />
+			{list && list.length > 6 ? (
+				<View style={styles.search}>
+					<SearchIcon />
+					<TextInput
+						value={query}
+						onChangeText={setQuery}
+						placeholder="モデルを検索"
+						placeholderTextColor={colors.textSecondary}
+						style={styles.searchInput}
+						autoCapitalize="none"
+						autoCorrect={false}
+						accessibilityLabel="モデルを検索"
+					/>
+				</View>
+			) : null}
+			{query.trim() ? null : (
+				<PickRow
+					title="Pi の既定"
+					sub="PC の Pi の設定に従います"
+					selected={!model}
+					onPress={() => onPick(null, null)}
+				/>
+			)}
 			{models === "loading" ? (
 				<View style={styles.loading}>
 					<Spinner />
@@ -342,6 +365,8 @@ function ModelPicker({
 				<Text style={[styles.muted, { marginTop: 12 }]}>
 					このマシンで動いている Pi がないため、モデルの一覧を取得できません。Pi の既定で起動します。
 				</Text>
+			) : groups.length === 0 ? (
+				<Text style={[styles.muted, { marginTop: 12 }]}>一致するモデルはありません</Text>
 			) : (
 				groups.map((g) => (
 					<View key={g.provider}>
@@ -477,6 +502,17 @@ const styles = StyleSheet.create({
 	pickRow: { minHeight: 56, flexDirection: "row", alignItems: "center", paddingHorizontal: 4, paddingVertical: 6 },
 	pickTitle: { fontSize: 15, lineHeight: 21, color: colors.text },
 	pickSub: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginTop: 1 },
+	search: {
+		height: 40,
+		borderRadius: radii.capsule,
+		backgroundColor: colors.surface,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		paddingHorizontal: 14,
+		marginBottom: 6,
+	},
+	searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
 	segment: { flexDirection: "row", backgroundColor: colors.surfaceStrong, borderRadius: 10, padding: 3 },
 	segItem: { flex: 1, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
 	segOn: { backgroundColor: colors.background },

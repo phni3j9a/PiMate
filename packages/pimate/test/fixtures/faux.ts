@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Local, deterministic provider. Never opens a network connection or reads API credentials. */
@@ -11,6 +11,15 @@ export default function fixture(pi: ExtensionAPI): void {
 	});
 	faux.setResponses([
 		fauxAssistantMessage("Hello from the PiMate faux model."),
+		...(process.env.PIMATE_E2E_WRITE_DIFF
+			? [
+					fauxAssistantMessage(fauxToolCall("write", { path: "diff.txt", content: "before edit\n" })),
+					fauxAssistantMessage(
+						fauxToolCall("edit", { path: "diff.txt", edits: [{ oldText: "before edit", newText: "after edit" }] }),
+					),
+					fauxAssistantMessage("Files updated."),
+				]
+			: []),
 		fauxAssistantMessage("slow response ".repeat(1000)),
 	]);
 	pi.registerProvider(faux.provider);
