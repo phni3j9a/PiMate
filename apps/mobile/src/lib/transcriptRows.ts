@@ -2,7 +2,7 @@
  * Flattens an InstanceView into display rows for the chat list (pure, no React Native imports).
  * Tool calls are joined with their results and live state; spacing follows docs/design/html/Main.html.
  */
-import type { TranscriptItem } from "@pimate/protocol";
+import type { TranscriptItem, UIRequest } from "@pimate/protocol";
 import { lineCount, seconds, toolSubject, usageLine } from "./format";
 import type { InstanceView, SessionNotice, ToolState } from "./instanceView";
 
@@ -30,7 +30,10 @@ export type Row =
 	| { kind: "meta"; key: string; text: string }
 	| { kind: "error"; key: string; text: string }
 	| { kind: "note"; key: string; text: string }
-	| { kind: "waiting"; key: string; title: string | null };
+	/** A question from Pi, answered inline (docs/design Chat-Waiting). */
+	| { kind: "dialog"; key: string; request: UIRequest }
+	/** A TUI screen the phone cannot show (docs/design Chat-Attach). */
+	| { kind: "pcPrompt"; key: string; promptKind: string; title: string | null };
 
 export type SpacedRow = Row & { marginTop: number };
 
@@ -78,6 +81,13 @@ export function buildRows(view: InstanceView): Row[] {
 	for (const item of view.items) if (item.kind === "tool_result") results.set(item.toolCallId, item);
 	const shownTools = new Set<string>();
 	const viewRunning = view.status !== "idle" && view.phase === "ready";
+	const entryIds = new Set(view.items.map((i) => i.entryId));
+	const notesAfter = (entryId: string | null) => {
+		for (const note of view.uiNotes)
+			if (note.afterEntryId === entryId || (entryId === "" && note.afterEntryId && !entryIds.has(note.afterEntryId)))
+				rows.push({ kind: "note", key: `ui-note:${note.requestId}`, text: note.text });
+	};
+	notesAfter(null);
 
 	for (const item of view.items) {
 		switch (item.kind) {
@@ -115,7 +125,9 @@ export function buildRows(view: InstanceView): Row[] {
 				break;
 			}
 		}
+		if (view.uiNotes.length) notesAfter(item.entryId);
 	}
+	if (view.uiNotes.length) notesAfter("");
 
 	// Live tools whose assistant message has not been seen (e.g. joined mid-turn). Nested subagent tools are skipped.
 	for (const id of view.toolOrder) {
@@ -129,10 +141,14 @@ export function buildRows(view: InstanceView): Row[] {
 		rows.push({ kind: "thinking", key: "live:thinking", text: streaming.thinking, live: true });
 	if (streaming.text) rows.push({ kind: "text", key: "live:text", text: streaming.text, live: true });
 
-	if (view.pendingUI.length || view.uiPrompt) {
-		const title = view.pendingUI.at(-1)?.title ?? view.uiPrompt?.title ?? null;
-		rows.push({ kind: "waiting", key: "waiting", title });
-	}
+	for (const request of view.pendingUI) rows.push({ kind: "dialog", key: `ui:${request.requestId}`, request });
+	if (view.uiPrompt)
+		rows.push({
+			kind: "pcPrompt",
+			key: "pc-prompt",
+			promptKind: view.uiPrompt.kind,
+			title: view.uiPrompt.title ?? null,
+		});
 	return rows;
 }
 
@@ -142,7 +158,8 @@ function gap(prev: Row | undefined, row: Row): number {
 	if (row.kind === "user") return prev.kind === "user" ? 12 : 32;
 	if (prev.kind === "user") return row.kind === "text" ? 10 : 12;
 	if (row.kind === "meta") return 6;
-	if (row.kind === "waiting") return 24;
+	if (row.kind === "dialog" || row.kind === "pcPrompt") return 24;
+	if (prev.kind === "dialog" || prev.kind === "pcPrompt") return 16;
 	const compact = (r: Row) => r.kind === "tool" || r.kind === "thinking";
 	if (compact(row)) return compact(prev) ? 0 : 8;
 	if (row.kind === "text") return prev.kind === "text" ? 12 : 8;

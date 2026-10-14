@@ -1,7 +1,7 @@
-# @pimate/pimate — Remote Control / M1 Host
+# @pimate/pimate — Remote Control / M2 Host
 
 通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・開発用CLIです。
-Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。M1 Host は Tailscale 上のスマホへ認証付き HTTP/WebSocket を提供します。
+Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。Host は Tailscale 上のスマホへ認証付き HTTP/WebSocket を提供します。
 
 ## 前提
 
@@ -65,6 +65,37 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 - subscribe/reconnectでsnapshot（途中のassistant text/thinkingを含む）+historyを送り、同期中のイベントは順序を保って後送します。通常の連続deltaは約50msで結合するため、WSのseqは増加しますが連番ではありません。history/liveの重複はentryIdで除去してください。RC再接続はbackoff付き、操作要求は**再送しません**。
 - `RcClient.send(request)` はid/guardsを保持してRCの成功/エラーResponseを返します。rejectはtransport/timeoutのみ。同じ共有link上でin-flight idを再利用しないでください（アプリはUUIDを使う）。
 
+## 日常操作とスマホからの起動（M2）
+
+- RC `models`: Piの認証済みモデル一覧。thinkingLevelsはPi 1.2.0と同じ `getSupportedThinkingLevels()` で求め、非reasoningモデルはoffのみ、xhigh/maxはモデルの対応表に従います。
+- RC `sessions`: 現在のcwdと **Piが実際に使用中のsessionDir** から保存会話を更新日時降順で返します。`limit` は任意の正整数、日時はミリ秒、`current` で現在の会話を識別。切替は `session_op` のswitchへpathを渡します。
+- RC `shutdown`: `ctx.shutdown()` による正常終了。Host終了と異なり対象Piが終了します。
+- snapshotに `context` と `pcPrompt`。contextイベントはassistant終了・compaction・モデル/セッション変更後。回答できないTUI promptはPCで操作し、再接続でも開いたpromptが分かります。中断assistantはlive/history共通で `stopReason:"aborted"` に正規化し、通常のAPIエラーはerrorのままです。
+- 認証済みWSの `folders` はhome、保存セッションのcwd、稼働中cwd/台数、最寄り親を含む保存trust判断を返します。既存ディレクトリのみ、最大200件、5秒キャッシュ。`$PI_CODING_AGENT_DIR/sessions`（既定 `~/.pi/agent/sessions`）の更新が新しい200フォルダを対象に、各最大2000ファイルのmtimeと最新ヘッダ先頭16KiBだけを読みます。全履歴は解析しません。独自sessionDirの会話は稼働中cwdには出ますが、停止後の候補探索対象外です。
+- WS `spawn` は絶対パス/`~/...` の既存ディレクトリ、model、thinking、trust、任意の初回messageのみ受け付けます。リモート任意CLI引数やOSコマンドは公開しません。Host全体で同時起動1件、起動間隔3秒。自動retry/resendはありません。
+- 初回messageをPiのCLI引数には渡しません。RCがreadyになるまで最大30秒待ち、`prompt` をsession/instance guard付き・template展開なしで **1回だけ** 送ります。message指定時のspawn_resultはその応答まで待ちます。起動後に送信できなかった場合は `ok:true` のまま `messageError` を付けて返し、再送しません（届いたかは一覧・履歴で確認）。
+- Host起動Piへ `PIMATE_TRUST=yes|no` を渡し、RCの `project_trust` handlerが**今回のみ**決定します。trust省略はnoで、保存判断にかかわらず自動承認しません。環境変数はRCロード時に消し、ツールの子プロセスへ引き継ぎません。PCから通常起動したPiのtrustフローは変更せず、trust.jsonも書き換えません。Piのtrustはsandboxではありません。PiのCLI `--approve/--no-approve` や先に決定する別のuser extensionは優先されるため、起動コマンド/拡張設定は信頼できるものにしてください。
+
+### 起動コマンド設定とPCへのattach
+
+Hostの環境変数で起動設定を変更できます（shell評価なし）。
+
+| 変数 | 既定 / 用途 |
+| --- | --- |
+| `PIMATE_PI` | PATH上の `pi`。別バイナリ/ローカルwrapperのパスも可。引数を混ぜない |
+| `PIMATE_EXTENSION` | このpackageの絶対パス `src/extension/index.ts` を `-e` で追加。別パスへ変更可能。`none` は追加しない（ユーザー設定でRC登録済みの場合のみ） |
+| `PIMATE_ABDUCO` | 使用するabduco実行ファイル（既存解決順は前述） |
+
+開発時の既定は `pi -e <repo>/packages/pimate/src/extension/index.ts` です。二重ロードしないようRCのglobal登録と `-e` はどちらか一方にしてください。
+
+```sh
+pimate attach                         # abducoセッション一覧
+pimate attach pimate-01234567          # スマホが表示するコマンドで接続
+# 開発用: node packages/pimate/src/host/cli.ts attach pimate-01234567
+```
+
+detachキーは **Ctrl+\**（CLIにも表示）。attachはPCターミナルのstdin/outをabducoへ直接接続するだけで、リモート制御にTTYキー注入は使用しません。
+
 ## 構成
 
 - `src/extension/index.ts`: Pi lifecycle・イベント・session command trampoline
@@ -85,7 +116,7 @@ npm run test:e2e -w @pimate/pimate
 npx biome check packages
 ```
 
-E2Eは実Piをabduco内に起動し、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
+E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
 `test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答で、**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
@@ -114,5 +145,14 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 - subagents RPC/busは生の中継のみ。サブエージェントDTO正規化、問い合わせへの専用回答、capability依存UIはM4。第三者extension自身の実装・バージョンに依存します。
 - tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool details/他のメッセージは完全なサイズ制限をしません。Hostはdeltaをbatchingしbackpressureを制限しますが、history pagingは未対応。極端に遅いsocketクライアントは切断します。
 - snapshotを正とし、seqに欠落があればhello/historyを取り直します。要求を自動再送しません。Hostの生存probe失敗は `reachable:false` として返し、PIDが生きているインスタンスは掃除しません。
+- スマホから起動したPiが終了すると（アプリからの終了を含む）、abducoはattachされるまでサーバー・ソケット・systemd scopeを残します。Hostは一覧更新のたびに、終了済み（`abduco` 一覧の `+`）でHostが命名した `pimate-xxxxxxxx` のセッションだけをSIGTERMで片付けます（終了コードは確認できなくなります）。
 - 通常PC起動のPiにはabduco attachはありません（`pcAttached:null`）。PC/remote同時操作は先着、排他制御はありません。
 - SIGWINCH時の全再描画はabducoインスタンスだけに適用。Windows非対応、macOS/arm64・detachキー衝突は未検証。OS再起動後の自動復元はありません。
+
+### 実プロバイダーを使うM2スモークテスト（任意・課金あり）
+
+```sh
+PIMATE_E2E_REAL_MODEL=1 PIMATE_E2E_REQUIRED=1 npm run test:e2e -w @pimate/pimate -- test/m2.e2e.test.ts
+```
+
+`openai/gpt-6-luna --thinking off` を使い、一時agentDirから既存auth.jsonを参照して短い1応答を検証します。通常のE2E/CIは引き続きfaux providerで無課金です。実モデル用認証が必要です。テストで起動したPi/abducoと一時ディレクトリはfinallyで清掃します。

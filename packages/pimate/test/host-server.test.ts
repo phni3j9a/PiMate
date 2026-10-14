@@ -12,7 +12,7 @@ import {
 	type PairResponse,
 	type Request,
 } from "@pimate/protocol";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { Hub } from "../src/extension/hub.ts";
 import { HostConfig } from "../src/host/config.ts";
@@ -316,6 +316,36 @@ it("buffers resync events, filters snapshot seq, coalesces consecutive deltas an
 	t.emit(9, { type: "text_delta", delta: "timer" });
 	expect(await client.box.next("event")).toMatchObject({ seq: 9 });
 });
+it("delivers one-shot results emitted while the snapshot was built, before subscribed", async () => {
+	const t = await setup(true);
+	t.snapshot.seq = 3;
+	t.hooks.history = (request, socket) => {
+		socket.write(encodeLine(t.event(2, { type: "session_op_done", op: "new", cancelled: false })));
+		socket.write(encodeLine(t.event(3, { type: "text_delta", delta: "already in snapshot" })));
+		socket.write(encodeLine(t.event(4, { type: "text_delta", delta: "new" })));
+		setTimeout(
+			() =>
+				socket.write(
+					encodeLine({
+						type: "response",
+						id: request.id,
+						ok: true,
+						result: { session: t.snapshot.session, items: [] },
+					}),
+				),
+			20,
+		);
+	};
+	const client = await t.authed();
+	client.send({ type: "subscribe", instanceId: "live" });
+	await client.box.next("subscribed");
+	await client.box.next("event");
+	await client.box.next("event");
+	const seen = client.box.received
+		.filter((m) => m.type === "subscribed" || m.type === "event")
+		.map((m) => (m.type === "event" ? `${m.seq}:${m.event.type}` : m.type));
+	expect(seen).toEqual(["2:session_op_done", "subscribed", "4:text_delta"]);
+});
 it("shares subscriptions, forwards guard errors unchanged, reconnects/resyncs and broadcasts disappearance", async () => {
 	const t = await setup(true);
 	const a = await t.authed();
@@ -398,4 +428,77 @@ it("broadcasts changed instance summaries and reports existing but unreachable R
 	});
 	client.send({ type: "subscribe", instanceId: "live" });
 	expect(await client.box.next("subscribe_error")).toMatchObject({ code: "unreachable" });
+});
+
+it("supports authenticated folders and rejects invalid spawn without invoking the launcher", async () => {
+	const s = await setup();
+	const spawn = vi.spyOn(s.core, "spawn");
+	const c = await s.authed();
+	c.send({ type: "folders", requestId: "folders" });
+	expect(await c.box.next("folders_result")).toMatchObject({
+		requestId: "folders",
+		home: expect.any(String),
+		folders: expect.any(Array),
+	});
+	c.send({ type: "spawn", requestId: "bad", params: { cwd: "relative" } });
+	expect(await c.box.next("spawn_result")).toMatchObject({ requestId: "bad", ok: false, code: "bad_request" });
+	expect(spawn).not.toHaveBeenCalled();
+});
+it("spawns with only typed CLI flags, sends initial prompt once and rate limits", async () => {
+	const s = await setup(true);
+	const spawn = vi.spyOn(s.core, "spawn").mockResolvedValue({
+		instanceId: "live",
+		abducoSession: "pimate-test",
+		attachCommand: "pimate attach pimate-test",
+		isolation: "detached",
+	});
+	const c = await s.authed();
+	c.send({
+		type: "spawn",
+		requestId: "start",
+		params: {
+			cwd: s.dir,
+			trust: true,
+			model: { provider: "openai", id: "gpt-6-luna" },
+			thinking: "off",
+			message: "first",
+			command: "not-executed",
+		},
+	});
+	expect(await c.box.next("spawn_result")).toMatchObject({ requestId: "start", ok: true, instanceId: "live" });
+	expect(spawn).toHaveBeenCalledWith({
+		cwd: s.dir,
+		trust: true,
+		args: ["--model", "openai/gpt-6-luna", "--thinking", "off"],
+	});
+	expect(s.requests.filter((r) => r.method === "prompt")).toEqual([
+		expect.objectContaining({ params: { text: "first", expandTemplates: false } }),
+	]);
+	c.send({ type: "spawn", requestId: "again", params: { cwd: s.dir } });
+	expect(await c.box.next("spawn_result")).toMatchObject({ requestId: "again", ok: false, code: "spawn_failed" });
+	expect(spawn).toHaveBeenCalledOnce();
+});
+it("reports initial prompt uncertainty without retrying or launching a second Pi", async () => {
+	const s = await setup();
+	const spawn = vi.spyOn(s.core, "spawn").mockResolvedValue({
+		instanceId: "new",
+		abducoSession: "pimate-new",
+		attachCommand: "pimate attach pimate-new",
+		isolation: "detached",
+	});
+	const request = vi.fn().mockRejectedValue(new Error("transport lost"));
+	vi.spyOn(s.core, "client").mockReturnValue({
+		connect: async () => ({}),
+		request,
+		close: () => {},
+	} as unknown as ReturnType<HostCore["client"]>);
+	const c = await s.authed();
+	c.send({ type: "spawn", requestId: "start", params: { cwd: s.dir, message: "first" } });
+	expect(await c.box.next("spawn_result")).toMatchObject({
+		ok: true,
+		instanceId: "new",
+		messageError: expect.stringContaining("transport lost"),
+	});
+	expect(spawn).toHaveBeenCalledOnce();
+	expect(request).toHaveBeenCalledOnce();
 });

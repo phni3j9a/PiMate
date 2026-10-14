@@ -2,7 +2,18 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { ArrowUpIcon, ClockIcon, CloseIcon, QueuedIcon, StopIcon, SwapIcon, WifiOffIcon } from "@/components/icons";
+import {
+	ArrowUpIcon,
+	CheckIcon,
+	ChevronDownIcon,
+	ClockIcon,
+	CloseIcon,
+	QueuedIcon,
+	RingIcon,
+	StopIcon,
+	SwapIcon,
+	WifiOffIcon,
+} from "@/components/icons";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton } from "@/components/ui";
 import type { OutboxEntry } from "@/lib/store";
@@ -13,7 +24,7 @@ export type BannerTone = "normal" | "waiting" | "failed";
 export interface Banner {
 	key: string;
 	tone: BannerTone;
-	icon: "offline" | "swap" | "clock" | "error";
+	icon: "offline" | "swap" | "clock" | "error" | "check" | "busy";
 	title: string;
 	text?: string;
 	action?: { label: string; onPress: () => void };
@@ -30,6 +41,8 @@ function BannerIcon({ icon, color }: { icon: Banner["icon"]; color: string }) {
 	if (icon === "offline") return <WifiOffIcon color={color} />;
 	if (icon === "swap") return <SwapIcon color={color} size={15} />;
 	if (icon === "clock") return <ClockIcon color={color} size={14} />;
+	if (icon === "check") return <CheckIcon color={color} size={15} strokeWidth={2.2} />;
+	if (icon === "busy") return <Spinner color={color} />;
 	return <CloseIcon color={color} size={15} />;
 }
 
@@ -41,7 +54,7 @@ function BannerView({ banner }: { banner: Banner }) {
 				<BannerIcon icon={banner.icon} color={color} />
 			</View>
 			<View style={styles.bannerBody}>
-				<Text style={[styles.bannerTitle, { color }]}>{banner.title}</Text>
+				{banner.title ? <Text style={[styles.bannerTitle, { color }]}>{banner.title}</Text> : null}
 				{banner.text ? <Text style={[styles.bannerText, { color }]}>{banner.text}</Text> : null}
 			</View>
 			{banner.action ? (
@@ -93,6 +106,9 @@ export function Composer({
 	onStop,
 	banners,
 	children,
+	model,
+	contextPercent,
+	onOpenModel,
 }: {
 	draft: string;
 	onChangeDraft: (text: string) => void;
@@ -106,6 +122,10 @@ export function Composer({
 	onStop: () => void;
 	banners: Banner[];
 	children?: ReactNode;
+	/** "Opus 5.5 · high"; opens the model sheet (Sheet-Model). */
+	model?: string | null;
+	contextPercent?: number | null;
+	onOpenModel?: () => void;
 }) {
 	return (
 		<View>
@@ -125,6 +145,27 @@ export function Composer({
 					multiline
 				/>
 				<View style={styles.actions}>
+					{model && onOpenModel ? (
+						<Pressable
+							accessibilityRole="button"
+							accessibilityLabel={`モデル: ${model}${contextPercent != null ? `、コンテキスト ${Math.round(contextPercent)}%` : ""}`}
+							accessibilityHint="モデルと Thinking を変更します"
+							onPress={onOpenModel}
+							hitSlop={6}
+							style={({ pressed }) => [styles.model, pressed && styles.pressed]}
+						>
+							<Text style={styles.modelText} numberOfLines={1}>
+								{model}
+							</Text>
+							<ChevronDownIcon size={12} strokeWidth={2.2} color={colors.textSecondary} />
+							{contextPercent != null ? (
+								<View style={styles.context}>
+									<RingIcon percent={contextPercent} />
+									<Text style={styles.contextText}>{Math.round(contextPercent)}%</Text>
+								</View>
+							) : null}
+						</Pressable>
+					) : null}
 					<View style={styles.spacer} />
 					{showStop ? (
 						<IconButton label="停止" onPress={onStop} size={sizes.composerControl} disabled={stopping}>
@@ -169,6 +210,10 @@ const styles = StyleSheet.create({
 	},
 	actions: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 2 },
 	spacer: { flex: 1 },
+	model: { flexShrink: 1, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 4 },
+	modelText: { flexShrink: 1, fontSize: 13, color: colors.textSecondary },
+	context: { flexDirection: "row", alignItems: "center", gap: 5, marginLeft: 14 },
+	contextText: { ...typography.meta, color: colors.textSecondary },
 	send: {
 		width: sizes.composerControl,
 		height: sizes.composerControl,

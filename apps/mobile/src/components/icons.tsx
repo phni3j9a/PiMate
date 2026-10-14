@@ -89,3 +89,58 @@ export const LaptopIcon = ({ size = 15, color = colors.textSecondary }: IconProp
 		<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
 	</Svg>
 );
+
+export const MoreIcon = ({ size = 20, color = colors.text }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+		<Circle cx={5} cy={12} r={1.6} />
+		<Circle cx={12} cy={12} r={1.6} />
+		<Circle cx={19} cy={12} r={1.6} />
+	</Svg>
+);
+export const CopyIcon = ({ size = 18, color = colors.text }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
+		<Rect x={9} y={9} width={11} height={11} rx={2} strokeLinejoin="round" />
+		<Path d="M5 15V6a2 2 0 0 1 2-2h9" strokeLinecap="round" strokeLinejoin="round" />
+	</Svg>
+);
+export const TerminalIcon = ({ size = 16, color = colors.text }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
+		<Rect x={3} y={4} width={18} height={13} rx={2} strokeLinejoin="round" />
+		<Path d="M8 21h8M7 9l3 2-3 2M12 13h4" strokeLinecap="round" strokeLinejoin="round" />
+	</Svg>
+);
+export const CheckIcon = (p: IconProps) => (
+	<Line d="M5 12.5l4.5 4.5L19 7.5" size={18} strokeWidth={2.4} color={colors.accent} {...p} />
+);
+export const FolderIcon = (p: IconProps) => (
+	<Line
+		d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"
+		size={18}
+		strokeWidth={1.9}
+		{...p}
+	/>
+);
+export const PencilIcon = (p: IconProps) => (
+	<Line d="M12 20h8M4 20l1-4L16 5l3 3L8 19z" size={22} strokeWidth={1.9} {...p} />
+);
+
+/** Context usage ring (Chat-Waiting composer). */
+export function RingIcon({ percent, size = 14 }: { percent: number; size?: number }) {
+	const c = 2 * Math.PI * 6;
+	const filled = (Math.max(0, Math.min(100, percent)) / 100) * c;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+			<Circle cx={8} cy={8} r={6} stroke={colors.surfaceStrong} strokeWidth={2} />
+			<Circle
+				cx={8}
+				cy={8}
+				r={6}
+				stroke={percent >= 85 ? colors.statusWaiting : colors.textSecondary}
+				strokeWidth={2}
+				strokeDasharray={`${filled} ${c}`}
+				strokeLinecap="round"
+				transform="rotate(-90 8 8)"
+			/>
+		</Svg>
+	);
+}

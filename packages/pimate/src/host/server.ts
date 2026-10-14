@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, isIP } from "node:net";
 import { type NetworkInterfaceInfo, networkInterfaces } from "node:os";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import {
 	DEFAULT_HOST_PORT,
@@ -17,6 +18,7 @@ import { validInstanceId } from "../runtime.ts";
 import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
 import { HostCore } from "./index.ts";
+import { hostHome, listFolders, SpawnError, validateSpawn } from "./operations.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,6 +60,8 @@ export async function tailscaleIps(): Promise<string[]> {
 export async function defaultListenAddresses(): Promise<string[]> {
 	return listenAddresses(networkInterfaces(), await tailscaleIps());
 }
+/** One-shot outcomes that a snapshot cannot reflect. */
+const RESULT_EVENTS: ReadonlySet<string> = new Set(["session_op_done", "compact_done", "compact_error", "notify"]);
 const MAX_BUFFER = 8 * 1024 * 1024;
 type Peer = { ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
 type Subscription = { ready: boolean; buffer: EventMessage[]; bytes: number; generation: number; seq: number };
@@ -94,6 +98,10 @@ export class HostServer {
 	private pollTimer?: NodeJS.Timeout;
 	private polling = false;
 	private stopped = false;
+	private spawning = false;
+	private lastSpawn = 0;
+	private foldersPending?: ReturnType<typeof listFolders>;
+	private foldersCached?: { at: number; folders: Awaited<ReturnType<typeof listFolders>> };
 	constructor(options: HostServerOptions = {}) {
 		this.options = options;
 		this.core = options.core ?? new HostCore();
@@ -257,6 +265,13 @@ export class HostServer {
 					this.send(peer, { type: "pong", t: message.t });
 					return;
 				}
+				if (message.type === "folders" || message.type === "spawn") {
+					if (typeof message.requestId !== "string" || !message.requestId || message.requestId.length > 200)
+						throw new Error("Invalid requestId");
+					if (message.type === "folders") void this.folders(peer, message.requestId);
+					else void this.spawn(peer, message.requestId, message.params);
+					return;
+				}
 				if (typeof message.instanceId !== "string" || !validInstanceId(message.instanceId))
 					throw new Error("Invalid instance");
 				if (message.type === "subscribe") {
@@ -293,6 +308,106 @@ export class HostServer {
 				ws.close(HostCloseCode.protocol);
 			}
 		});
+	}
+	private async folders(peer: Peer, requestId: string): Promise<void> {
+		if (!this.foldersCached || Date.now() - this.foldersCached.at > 5000) {
+			this.foldersPending ??= listFolders(this.core.env, this.instances);
+			try {
+				this.foldersCached = { at: Date.now(), folders: await this.foldersPending };
+			} finally {
+				this.foldersPending = undefined;
+			}
+		}
+		this.send(peer, {
+			type: "folders_result",
+			requestId,
+			home: hostHome(this.core.env),
+			folders: this.foldersCached.folders,
+		});
+	}
+	private async spawn(peer: Peer, requestId: string, params: unknown): Promise<void> {
+		if (this.spawning || Date.now() - this.lastSpawn < 3000) {
+			this.send(peer, {
+				type: "spawn_result",
+				requestId,
+				ok: false,
+				code: "spawn_failed",
+				message: "Another spawn is active or too recent; not retried",
+			});
+			return;
+		}
+		this.spawning = true;
+		let launched: Awaited<ReturnType<HostCore["spawn"]>> | undefined;
+		try {
+			const p = await validateSpawn(params, hostHome(this.core.env));
+			this.lastSpawn = Date.now();
+			launched = await this.core.spawn({
+				cwd: p.cwd,
+				trust: p.trust,
+				args: [
+					...(p.model ? ["--model", `${p.model.provider}/${p.model.id}`] : []),
+					...(p.thinking ? ["--thinking", p.thinking] : []),
+				],
+			});
+			let messageError: string | undefined;
+			if (p.message)
+				try {
+					await this.sendFirstMessage(launched.instanceId, p.message);
+				} catch (e) {
+					messageError = `${String(e)}; not resent`;
+				}
+			this.send(peer, {
+				type: "spawn_result",
+				requestId,
+				ok: true,
+				instanceId: launched.instanceId,
+				abducoSession: launched.abducoSession,
+				...(messageError ? { messageError } : {}),
+			});
+			// Discovery failure must not produce a second (contradictory) spawn result.
+			await this.refresh().catch(() => {});
+		} catch (e) {
+			this.send(peer, {
+				type: "spawn_result",
+				requestId,
+				ok: false,
+				code: e instanceof SpawnError ? e.code : "spawn_failed",
+				message: `${String(e)}; not retried`,
+			});
+		} finally {
+			this.spawning = false;
+		}
+	}
+	/** Only readiness is polled. The prompt is sent exactly once, never after a transport failure. */
+	private async sendFirstMessage(instanceId: string, message: string): Promise<void> {
+		{
+			const end = Date.now() + 30000;
+			let ready = false;
+			while (Date.now() < end && !this.stopped) {
+				const client = this.core.client(instanceId);
+				let sessionId: string | undefined;
+				try {
+					try {
+						sessionId = (await client.connect()).session?.id;
+						ready = true;
+					} catch {
+						/* RC not registered yet */
+					}
+					if (ready) {
+						await client.request(
+							"prompt",
+							{ text: message, expandTemplates: false },
+							{ expectInstanceId: instanceId, expectSessionId: sessionId },
+						);
+						break;
+					}
+				} finally {
+					client.close();
+				}
+				await delay(250);
+			}
+			if (!ready) throw new Error("RC readiness timed out; initial message was not sent");
+		}
 	}
 	async refresh(): Promise<void> {
 		if (this.polling || this.stopped) return;
@@ -422,6 +537,13 @@ export class HostServer {
 		if (link.subs.get(peer) !== sub || sub.generation !== generation || link.client !== client) return;
 		// A pending coalesced delta may straddle snapshot.seq: replay this subscriber's raw buffer instead.
 		this.flush(link);
+		// Result events are not part of the snapshot. Those emitted while it was built would be dropped as
+		// older than snapshot.seq, so deliver them first, in order (the app reads them by seq).
+		for (const event of sub.buffer)
+			if (event.seq > sub.seq && event.seq <= snapshot.seq && RESULT_EVENTS.has(event.event.type)) {
+				this.send(peer, event);
+				sub.seq = event.seq;
+			}
 		this.send(peer, { type: "subscribed", instanceId: link.id, snapshot, history });
 		sub.seq = snapshot.seq;
 		for (const event of sub.buffer)

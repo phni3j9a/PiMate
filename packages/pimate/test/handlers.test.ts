@@ -1,3 +1,4 @@
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, it, vi } from "vitest";
 import { createHandlers } from "../src/extension/handlers.ts";
 import type { Hub } from "../src/extension/hub.ts";
@@ -20,7 +21,10 @@ function setup(idle = true) {
 	const h = { ctx, pi, pendingUI: new Map() };
 	return { ctx, pi, h, handlers: createHandlers(h as unknown as Hub) };
 }
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+	vi.useRealTimers();
+	vi.restoreAllMocks();
+});
 it("chooses prompt vs followUp vs steer and controls template expansion", async () => {
 	const { handlers, pi } = setup(false);
 	expect(await handlers.prompt({ text: "hello" })).toEqual({ deliveredAs: "followUp" });
@@ -72,4 +76,75 @@ it("subagents RPC reply removes listener and timer", async () => {
 	expect(await pending).toEqual({ reply: { ok: true } });
 	expect(off).toHaveBeenCalledOnce();
 	expect(vi.getTimerCount()).toBe(0);
+});
+
+it("lists authenticated models with Pi-compatible reasoning levels and current model", async () => {
+	const h = {
+		ctx: {
+			hasUI: true,
+			model: { provider: "faux", id: "reasoning" },
+			modelRegistry: {
+				getAvailable: () => [
+					{ provider: "faux", id: "plain", name: "Plain", reasoning: false },
+					{
+						provider: "faux",
+						id: "reasoning",
+						name: "Reasoning",
+						reasoning: true,
+						thinkingLevelMap: { xhigh: "xhigh", max: null, minimal: null },
+					},
+				],
+			},
+		},
+		pi: {},
+	} as unknown as Hub;
+	const result = await createHandlers(h).models({});
+	expect(result.current).toEqual({ provider: "faux", id: "reasoning" });
+	expect(result.models[0].thinkingLevels).toEqual(["off"]);
+	expect(result.models[1].thinkingLevels).toEqual(["off", "low", "medium", "high", "xhigh"]);
+});
+it("lists sessions from Pi's actual session dir, sorts dates and marks current; shutdown delegates", async () => {
+	const list = vi.spyOn(SessionManager, "list").mockResolvedValue([
+		{
+			id: "old",
+			path: "/old",
+			firstMessage: "old",
+			messageCount: 1,
+			created: new Date(1),
+			modified: new Date(2),
+			cwd: "/cwd",
+			allMessagesText: "test",
+		},
+		{
+			id: "current",
+			path: "/current",
+			firstMessage: "new",
+			messageCount: 2,
+			created: new Date(3),
+			modified: new Date(4),
+			cwd: "/cwd",
+			allMessagesText: "test",
+		},
+	]);
+	const shutdown = vi.fn();
+	const h = {
+		ctx: {
+			hasUI: true,
+			cwd: "/cwd",
+			allMessagesText: "test",
+			shutdown,
+			sessionManager: { getSessionDir: () => "/custom", getSessionId: () => "current" },
+		},
+		pi: {},
+	} as unknown as Hub;
+	const handlers = createHandlers(h);
+	expect(await handlers.sessions({ limit: 1 })).toEqual({
+		sessions: [
+			{ id: "current", path: "/current", firstMessage: "new", messageCount: 2, created: 3, modified: 4, current: true },
+		],
+	});
+	expect(list).toHaveBeenCalledWith("/cwd", "/custom");
+	expect((await handlers.sessions({})).sessions).toHaveLength(2);
+	await handlers.shutdown({});
+	expect(shutdown).toHaveBeenCalledOnce();
 });

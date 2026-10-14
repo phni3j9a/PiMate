@@ -174,3 +174,35 @@ describe("UI race", () => {
 		expect(s.pendingUI.size).toBe(0);
 	});
 });
+
+it("normalizes known abort errors in live/history without hiding genuine failures", () => {
+	for (const errorMessage of [
+		"This operation was aborted",
+		"AbortError: The operation was aborted.",
+		"Request aborted",
+	]) {
+		const message = {
+			role: "assistant",
+			content: [],
+			stopReason: "error",
+			errorMessage,
+			usage: { input: 0, output: 0 },
+		};
+		expect(normalizeMessage(message, "a")).toMatchObject({ stopReason: "aborted" });
+		expect(normalizeBranch([{ type: "message", id: "a", message }])[0]).toMatchObject({ stopReason: "aborted" });
+	}
+	expect(normalizeMessage({ role: "assistant", stopReason: "error", errorMessage: "Bad API key" }, "a")).toMatchObject({
+		stopReason: "error",
+	});
+	expect(
+		normalizeMessage({ role: "assistant", stopReason: "error", errorMessage: "Provider cancelled" }, "a"),
+	).toMatchObject({ stopReason: "error" });
+	expect(normalizeMessage({ role: "assistant", stopReason: "stop" }, "a")).toMatchObject({ stopReason: "stop" });
+});
+it("validates M2 methods and bounded positive session limits", () => {
+	for (const method of ["models", "sessions", "shutdown"])
+		expect(validateRequest({ id: "m2", method }).method).toBe(method);
+	for (const limit of [0, -1, 1.2, NaN, Infinity, "10"])
+		expect(() => validateRequest({ id: "m2", method: "sessions", params: { limit } })).toThrow("Invalid params");
+	expect(validateRequest({ id: "m2", method: "sessions", params: { limit: 10 } }).params).toEqual({ limit: 10 });
+});

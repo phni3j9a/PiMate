@@ -42,12 +42,23 @@ function alive(pid: number): boolean {
 		return (e as NodeJS.ErrnoException).code === "EPERM";
 	}
 }
-export function parseAbducoList(output: string): { name: string; attached: boolean }[] {
+export interface AbducoSession {
+	name: string;
+	pid: number;
+	attached: boolean;
+	/** The command exited while no client was attached; abduco keeps the server until someone attaches. */
+	terminated: boolean;
+}
+export function parseAbducoList(output: string): AbducoSession[] {
 	return output.split("\n").flatMap((line) => {
 		const cols = line.split("\t");
-		return cols.length >= 4 ? [{ name: cols[3].trim(), attached: line.trimStart().startsWith("*") }] : [];
+		if (cols.length < 4) return [];
+		const mark = line.trimStart()[0];
+		return [{ name: cols[3].trim(), pid: Number(cols[2]), attached: mark === "*", terminated: mark === "+" }];
 	});
 }
+/** Session names created by {@link HostCore.spawn}; only these are reaped. */
+const SPAWNED_SESSION = /^pimate-[0-9a-f]{8}$/;
 function isMeta(value: unknown, id: string): value is InstanceMeta {
 	if (!value || typeof value !== "object") return false;
 	const m = value as InstanceMeta;
@@ -94,6 +105,15 @@ export class HostCore {
 		const sessions = this.abduco
 			? parseAbducoList(spawnSync(this.abduco, [], { encoding: "utf8", env: this.env, timeout: 2000 }).stdout ?? "")
 			: [];
+		// A phone-spawned Pi that exited (e.g. shut down from the app) leaves its abduco server, socket and
+		// systemd scope behind until a client attaches. Nobody is attached, so release them here.
+		for (const s of sessions)
+			if (s.terminated && SPAWNED_SESSION.test(s.name) && Number.isInteger(s.pid) && s.pid > 0)
+				try {
+					process.kill(s.pid, "SIGTERM"); // abduco's atexit handler removes the socket
+				} catch {
+					/* already gone */
+				}
 		const instances: DiscoveredInstance[] = [];
 		for (const file of readdirSync(this.runDir)) {
 			if (!file.endsWith(".json")) continue;
@@ -141,7 +161,7 @@ export class HostCore {
 		}
 		return instances;
 	}
-	async spawn(options: { cwd: string; args?: string[] }): Promise<{
+	async spawn(options: { cwd: string; args?: string[]; trust?: boolean }): Promise<{
 		instanceId: string;
 		abducoSession: string;
 		attachCommand: string;
@@ -151,7 +171,7 @@ export class HostCore {
 		const cwd = resolve(options.cwd);
 		if (!statSync(cwd).isDirectory()) throw new Error(`Not a directory: ${cwd}`);
 		if (!this.abduco) throw new Error("abduco not found; set PIMATE_ABDUCO or build the bundled binary");
-		const pi = findExecutable("pi", this.env.PATH);
+		const pi = findExecutable(this.env.PIMATE_PI || "pi", this.env.PATH);
 		if (!pi) throw new Error("pi not found on PATH");
 		const instanceId = randomUUID();
 		const name = `pimate-${instanceId.slice(0, 8)}`;
@@ -160,6 +180,7 @@ export class HostCore {
 			PIMATE_RUN_DIR: this.runDir,
 			PIMATE_INSTANCE_ID: instanceId,
 			PIMATE_ORIGIN: "mobile",
+			PIMATE_TRUST: options.trust === true ? "yes" : "no",
 			PIMATE_ABDUCO_SESSION: name,
 		};
 		const command = [
@@ -167,8 +188,9 @@ export class HostCore {
 			"-n",
 			name,
 			pi,
-			"-e",
-			join(packageDir, "src/extension/index.ts"),
+			...(this.env.PIMATE_EXTENSION === "none"
+				? []
+				: ["-e", this.env.PIMATE_EXTENSION || join(packageDir, "src/extension/index.ts")]),
 			...(options.args ?? []),
 		];
 		const systemd = findExecutable("systemd-run", env.PATH);
@@ -186,7 +208,7 @@ export class HostCore {
 		return {
 			instanceId,
 			abducoSession: name,
-			attachCommand: `${JSON.stringify(this.abduco)} -a ${name}`,
+			attachCommand: `pimate attach ${name}`,
 			isolation: scoped ? "systemd-scope" : "detached",
 		};
 	}

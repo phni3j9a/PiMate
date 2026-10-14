@@ -7,6 +7,7 @@
  * - Holds at most one desired subscription and re-sends it after every (re)connect.
  * - `rc()` forwards one request and resolves with the matching `rc_result`. A request that was sent but not answered
  *   when the socket drops rejects with `outcome_unknown`; it is never re-sent.
+ * - `folders()` / `spawn()` are Host-level requests matched by requestId, with the same failure semantics.
  * Pure TS: the WebSocket constructor and timers are injected.
  */
 import {
@@ -18,7 +19,11 @@ import {
 	type InstanceSummary,
 	type Request,
 	type Response,
+	type SpawnParams,
 } from "@pimate/protocol";
+
+type FoldersResult = Extract<HostMessage, { type: "folders_result" }>;
+type SpawnResult = Extract<HostMessage, { type: "spawn_result" }>;
 
 export type ConnectionState = "idle" | "connecting" | "connected" | "offline" | "auth_failed";
 export type AuthFailure = "invalid_token" | "protocol_mismatch" | "bad_request" | "revoked";
@@ -91,6 +96,7 @@ export class HostConnection {
 	private authTimer: unknown = null;
 	private subscription: string | null = null;
 	private pending = new Map<string, { resolve: (r: Response) => void; reject: (e: RcError) => void }>();
+	private hostPending = new Map<string, { resolve: (r: never) => void; reject: (e: RcError) => void }>();
 	private stateListeners = new Set<() => void>();
 	private messageListeners = new Set<(msg: HostMessage) => void>();
 
@@ -178,6 +184,28 @@ export class HostConnection {
 			this.pending.set(request.id, { resolve, reject });
 			if (!this.send({ type: "rc", instanceId, request })) {
 				this.pending.delete(request.id);
+				reject(new RcError("not_connected"));
+			}
+		});
+	}
+
+	/** Folder candidates for a new Pi. */
+	folders(requestId: string): Promise<FoldersResult> {
+		return this.hostRequest<FoldersResult>({ type: "folders", requestId });
+	}
+
+	/** Starts a new Pi on this Host. Never retried: a dropped socket rejects with `outcome_unknown`. */
+	spawn(requestId: string, params: SpawnParams): Promise<SpawnResult> {
+		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
+	}
+
+	private hostRequest<T>(msg: Extract<AppMessage, { requestId: string }>): Promise<T> {
+		if (!this.authed || !this.socket || this.socket.readyState !== OPEN)
+			return Promise.reject(new RcError("not_connected"));
+		return new Promise<T>((resolve, reject) => {
+			this.hostPending.set(msg.requestId, { resolve: resolve as (r: never) => void, reject });
+			if (!this.send(msg)) {
+				this.hostPending.delete(msg.requestId);
 				reject(new RcError("not_connected"));
 			}
 		});
@@ -292,6 +320,15 @@ export class HostConnection {
 				}
 				return;
 			}
+			case "folders_result":
+			case "spawn_result": {
+				const p = this.hostPending.get(msg.requestId);
+				if (p) {
+					this.hostPending.delete(msg.requestId);
+					p.resolve(msg as never);
+				}
+				return;
+			}
 		}
 		for (const l of this.messageListeners) l(msg);
 	}
@@ -381,8 +418,9 @@ export class HostConnection {
 	}
 
 	private failPending(): void {
-		const pending = [...this.pending.values()];
+		const pending = [...this.pending.values(), ...this.hostPending.values()];
 		this.pending.clear();
+		this.hostPending.clear();
 		for (const p of pending) p.reject(new RcError("outcome_unknown"));
 	}
 }

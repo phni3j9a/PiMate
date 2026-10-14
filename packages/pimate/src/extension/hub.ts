@@ -10,6 +10,7 @@ import type {
 	InstanceSnapshot,
 	InstanceStatus,
 	Origin,
+	PcPrompt,
 	SessionRef,
 } from "@pimate/protocol";
 import { encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
@@ -39,10 +40,15 @@ export class Hub {
 	subscriptions: (() => void)[] = [];
 	tui?: { requestRender(force?: boolean): void };
 	winchInstalled = false;
+	pcPrompt: PcPrompt | null = null;
+	trust?: "yes" | "no";
 	constructor() {
 		this.instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
 		this.origin = process.env.PIMATE_ORIGIN === "mobile" ? "mobile" : "pc";
 		this.abducoSession = process.env.PIMATE_ABDUCO_SESSION ?? null;
+		if (this.origin === "mobile" && ["yes", "no"].includes(process.env.PIMATE_TRUST ?? ""))
+			this.trust = process.env.PIMATE_TRUST as "yes" | "no";
+		delete process.env.PIMATE_TRUST;
 		delete process.env.PIMATE_INSTANCE_ID;
 		delete process.env.PIMATE_ORIGIN;
 		delete process.env.PIMATE_ABDUCO_SESSION;
@@ -72,6 +78,9 @@ export class Hub {
 			else c.write(line);
 		}
 	};
+	emitContext = (): void => {
+		this.emit({ type: "context", context: this.ctx?.getContextUsage() ?? null });
+	};
 	setStatus = (status: InstanceStatus): void => {
 		if (this.status === status) return;
 		this.status = status;
@@ -92,13 +101,24 @@ export class Hub {
 			model: this.ctx?.model ? { provider: this.ctx.model.provider, id: this.ctx.model.id } : null,
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),
+			pcPrompt: this.pcPrompt,
+			context: this.ctx?.getContextUsage() ?? null,
 			seq: this.seq,
 			streaming: { ...this.streaming },
 		};
 	}
 	writeMeta(): void {
 		if (!this.server) return;
-		const { model: _, thinking: __, pendingUI: ___, seq: ____, streaming: _____, ...snapshot } = this.snapshot();
+		const {
+			model: _,
+			thinking: __,
+			pendingUI: ___,
+			seq: ____,
+			streaming: _____,
+			context: ______,
+			pcPrompt: _______,
+			...snapshot
+		} = this.snapshot();
 		const meta: InstanceMeta = { ...snapshot, updatedAt: Date.now() };
 		const tmp = `${this.metaPath}.${randomUUID()}.tmp`;
 		// Best effort: a removed run dir or full disk must not break dialogs or status updates.

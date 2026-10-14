@@ -1,4 +1,4 @@
-/** Chat with the selected Pi instance (docs/design/html/Main.html, Chat-Edge.html). */
+/** Chat with the selected Pi instance (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
 import { router, useNavigation } from "expo-router";
 import { DrawerActions } from "expo-router/react-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,13 +15,17 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
+import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
-import { ArrowDownIcon, MenuIcon } from "@/components/icons";
+import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
+import { ModelSheet } from "@/components/sheets/ModelSheet";
+import { SessionSheet } from "@/components/sheets/SessionSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
+import { modelLabel } from "@/lib/sessionInfo";
 import { draftKey } from "@/lib/store";
 import { buildRows, type Row, type SpacedRow, spaceRows } from "@/lib/transcriptRows";
 import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
@@ -38,6 +42,10 @@ export default function ChatScreen() {
 	const notice = useAppState((s) => s.notice);
 	const targetChanged = useAppState((s) => s.targetChanged);
 	const aborting = useAppState((s) => s.aborting);
+	const models = useAppState((s) => s.models);
+	const answering = useAppState((s) => s.answering);
+	const [sheet, setSheet] = useState<"session" | "model" | null>(null);
+	const closeSheet = useCallback(() => setSheet(null), []);
 
 	const host = hosts.find((h) => h.hostId === selection?.hostId);
 	const summary = host?.instances.find((i) => i.instanceId === selection?.instanceId);
@@ -63,6 +71,25 @@ export default function ChatScreen() {
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
 	const blocker = useAppState(() => appStore.sendBlocker());
 	const queued = outbox.filter((e) => e.state === "queued");
+	const placeholder =
+		blocker === "dialog"
+			? "上の質問に回答すると入力できます"
+			: blocker === "pc_prompt"
+				? "PC での操作が終わると入力できます"
+				: "Pi にメッセージ";
+	const label = view ? modelLabel(view.model, view.thinking, models?.list) : null;
+
+	const abducoSession = summary?.abducoSession ?? null;
+	const canAnswer = connected && view?.phase === "ready";
+	const dialog = useMemo<DialogContextValue>(
+		() => ({
+			answering,
+			canAnswer,
+			abducoSession,
+			onAnswer: (requestId, answer) => void appStore.answerUI(requestId, answer),
+		}),
+		[answering, canAnswer, abducoSession],
+	);
 
 	const banners: Banner[] = [];
 	if (host?.state === "auth_failed")
@@ -108,10 +135,10 @@ export default function ChatScreen() {
 		banners.push({
 			key: "notice",
 			tone: notice.kind === "error" ? "failed" : "normal",
-			icon: notice.kind === "unconfirmed" ? "clock" : "error",
+			icon: notice.kind === "unconfirmed" ? "clock" : notice.busy ? "busy" : notice.kind === "info" ? "check" : "error",
 			title: notice.title ?? "",
 			text: notice.text,
-			onDismiss: notice.kind === "error" ? () => appStore.dismissNotice() : undefined,
+			onDismiss: notice.kind !== "unconfirmed" ? () => appStore.dismissNotice() : undefined,
 		});
 
 	return (
@@ -137,13 +164,20 @@ export default function ChatScreen() {
 						</Text>
 					</View>
 				) : null}
+				{selection && view ? (
+					<IconButton label="セッションのメニュー" onPress={() => setSheet("session")}>
+						<MoreIcon />
+					</IconButton>
+				) : null}
 			</View>
 
 			{/* Android is edge-to-edge (SDK 57), so the window no longer resizes for the keyboard: pad on both platforms. */}
 			<KeyboardAvoidingView style={styles.flex} behavior="padding">
 				<View style={styles.flex}>
 					{selection && view && (view.phase === "ready" || view.phase === "gone" || rows.length > 0) ? (
-						<Transcript key={key} rows={rows} />
+						<DialogContext.Provider value={dialog}>
+							<Transcript key={key} rows={rows} />
+						</DialogContext.Provider>
 					) : (
 						<EmptyState onOpenDrawer={openDrawer} />
 					)}
@@ -154,7 +188,7 @@ export default function ChatScreen() {
 						<Composer
 							draft={draft}
 							onChangeDraft={(t) => appStore.setDraft(t)}
-							placeholder="Pi にメッセージ"
+							placeholder={placeholder}
 							// Stay editable while sending: disabling the field drops the Android keyboard, and the store only
 							// clears the draft on success when it still equals the sent text.
 							editable
@@ -165,12 +199,17 @@ export default function ChatScreen() {
 							stopping={aborting}
 							onStop={() => void appStore.abort()}
 							banners={banners}
+							model={label}
+							contextPercent={view?.context?.percent ?? null}
+							onOpenModel={() => setSheet("model")}
 						>
 							<QueuedRows entries={queued} />
 						</Composer>
 					</View>
 				) : null}
 			</KeyboardAvoidingView>
+			<SessionSheet visible={sheet === "session"} onClose={closeSheet} />
+			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
 		</SafeAreaView>
 	);
 }
@@ -333,7 +372,7 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		gap: 6,
 		paddingLeft: 6,
-		paddingRight: spacing.screenSide - 6,
+		paddingRight: 4,
 	},
 	statusText: { ...typography.caption, color: colors.textSecondary },
 	listContent: {

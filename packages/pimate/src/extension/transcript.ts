@@ -15,6 +15,10 @@ function text(content: unknown): string {
 			: "";
 }
 /** Accept persisted entries and live messages through one normalization path. */
+/**
+ * Pi 1.2 records an aborted turn as stopReason "error" with an abort error message. Only that message is
+ * evidence of an abort: a turn-level "abort requested" flag could relabel a real error that finished first.
+ */
 export function normalizeMessage(value: unknown, entryId: string): TranscriptItem | null {
 	const m = record(value);
 	const body = text(m.content);
@@ -45,7 +49,14 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 						cost: m.usage.cost?.total,
 					}
 				: undefined,
-			stopReason: m.stopReason,
+			stopReason:
+				m.stopReason === "error" &&
+				typeof m.errorMessage === "string" &&
+				/^(?:AbortError:\s*)?(?:This operation was aborted|The operation was aborted|The user aborted a request|Request (?:was )?aborted|Aborted)[.!]?$/i.test(
+					m.errorMessage.trim(),
+				)
+					? "aborted"
+					: m.stopReason,
 			errorMessage: m.errorMessage,
 		};
 	}

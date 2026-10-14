@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { EventMessage } from "@pimate/protocol";
 import { expect, it } from "vitest";
 import type { RcClient } from "../src/host/index.ts";
-import { findExecutable, HostCore, resolveAbduco } from "../src/host/index.ts";
+import { findExecutable, HostCore, parseAbducoList, resolveAbduco } from "../src/host/index.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const pocAbduco = join(root, "poc/bin", `${process.platform}-${process.arch}`, "abduco");
@@ -114,6 +114,18 @@ it.skipIf(!pi || !abduco)(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled" && x.event.aborted),
 			);
+			const abortedHistory = await client.request("history", {});
+			expect(abortedHistory.items).toEqual(
+				expect.arrayContaining([expect.objectContaining({ kind: "assistant", stopReason: "aborted" })]),
+			);
+			expect(
+				events.some(
+					(event) =>
+						event.event.type === "message_end" &&
+						event.event.item.kind === "assistant" &&
+						event.event.item.stopReason === "aborted",
+				),
+			).toBe(true);
 			const before = (await client.request("hello", {})).snapshot;
 			expect(before.status).toBe("idle");
 			for (const op of ["new", "reload"] as const) {
@@ -127,6 +139,20 @@ it.skipIf(!pi || !abduco)(
 				expect((await client.request("hello", {})).snapshot.instanceId).toBe(instanceId);
 			}
 			expect((await client.request("hello", {})).snapshot.session?.id).not.toBe(before.session?.id);
+			// Shutting down from the phone exits Pi; the Host then reaps the leftover abduco session.
+			await client.request("shutdown", {});
+			client.close();
+			client = undefined;
+			const name = abducoSession;
+			await until(
+				async () => {
+					const list = await host.list();
+					const sessions = parseAbducoList(execFileSync(abduco!, [], { encoding: "utf8", env: host.env }));
+					return { list, sessions };
+				},
+				({ list, sessions }) =>
+					!list.some((i) => i.instanceId === instanceId) && !sessions.some((s) => s.name === name),
+			);
 		} finally {
 			client?.close();
 			if (!pid && instanceId) {

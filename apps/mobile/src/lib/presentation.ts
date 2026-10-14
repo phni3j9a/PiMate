@@ -114,6 +114,7 @@ export function chatStatus(host: HostRuntime | undefined, view: InstanceView | n
 		case "gone":
 			return { mark: "idle", text: "終了", tone: "normal" };
 	}
+	if (view.uiPrompt && !view.pendingUI.length) return { mark: "waiting", text: "PC で操作待ち", tone: "waiting" };
 	if (view.status === "waiting_input") return { mark: "waiting", text: "入力待ち", tone: "waiting" };
 	if (view.status === "running") {
 		const since = view.runningSince;

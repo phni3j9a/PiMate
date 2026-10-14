@@ -21,6 +21,9 @@ const methods = [
 	"compact",
 	"session_op",
 	"commands",
+	"models",
+	"sessions",
+	"shutdown",
 	"subagents_rpc",
 ];
 function object(v: unknown): v is Record<string, unknown> {
@@ -39,6 +42,9 @@ export function validateRequest(value: unknown): Request {
 	const bool = (k: string) => p[k] === undefined || typeof p[k] === "boolean";
 	let ok = true;
 	switch (value.method) {
+		case "sessions":
+			ok = p.limit === undefined || (Number.isSafeInteger(p.limit) && (p.limit as number) > 0);
+			break;
 		case "prompt":
 			ok =
 				str("text", true) &&
