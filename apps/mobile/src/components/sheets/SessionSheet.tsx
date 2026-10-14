@@ -3,7 +3,8 @@
  * Pages: the main menu, past sessions (/resume) and the message to branch from (/fork). /tree is left out.
  */
 import type { SessionListItem } from "@pimate/protocol";
-import { type ReactNode, useEffect, useState } from "react";
+import { router } from "expo-router";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { CommandPill } from "@/components/CommandPill";
@@ -11,6 +12,7 @@ import { BackIcon, CheckIcon, ChevronRightIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton, TextButton } from "@/components/ui";
+import { collectChanges, groupByFile, totals } from "@/lib/changes";
 import { ago, tildePath, tokens } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { chatTitle } from "@/lib/presentation";
@@ -53,6 +55,28 @@ async function run(action: () => Promise<Result<null>>, onDone: () => void) {
 	if (res.ok) onDone();
 }
 
+type SheetError = { title: string; text: string };
+
+/**
+ * Like `run`, but a refusal stays in the sheet: the chat notice it also raised would be hidden behind it.
+ * The notice is taken back when it is this same error, so it is not shown twice after the sheet closes.
+ */
+async function runInSheet(
+	action: () => Promise<Result<null>>,
+	onDone: () => void,
+	onError: (e: SheetError | null) => void,
+) {
+	onError(null);
+	const res = await action();
+	if (res.ok) {
+		onDone();
+		return;
+	}
+	const notice = appStore.getState().notice;
+	if (notice?.title === res.title && notice.text === res.text) appStore.dismissNotice();
+	onError({ title: res.title, text: res.text });
+}
+
 function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () => void }) {
 	const { view, host, summary, op, ready } = useSelected();
 	const stats = sessionStats(view?.items ?? []);
@@ -62,6 +86,13 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 	const attached =
 		summary?.pcAttached === true ? "PC から接続中" : summary?.pcAttached === false ? "PC から未接続" : null;
 	const hasUser = view?.items.some((i) => i.kind === "user") ?? false;
+	const [error, setError] = useState<SheetError | null>(null);
+	const changes = useMemo(() => groupByFile(collectChanges(view?.items ?? [], view?.cwd ?? null)), [view]);
+	const changeTotal = totals(changes);
+	const openChanges = () => {
+		onClose();
+		router.push({ pathname: "/review", params: { scope: "session" } });
+	};
 
 	const confirmShutdown = () => {
 		// Bound to the Pi on screen now: if the selection changes before the answer, nothing is shut down.
@@ -72,7 +103,11 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 			"作業中の処理は止まります。会話はセッションに保存され、あとで開き直せます。",
 			[
 				{ text: "キャンセル", style: "cancel" },
-				{ text: "終了する", style: "destructive", onPress: () => void run(() => appStore.shutdown(target), onClose) },
+				{
+					text: "終了する",
+					style: "destructive",
+					onPress: () => void runInSheet(() => appStore.shutdown(target), onClose, setError),
+				},
 			],
 		);
 	};
@@ -90,6 +125,12 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				<Text style={styles.strong}>{tokens(stats.tokens).toUpperCase()}</Text> · コスト{" "}
 				<Text style={styles.strong}>{formatCost(stats.cost)}</Text>
 			</Text>
+			{error ? (
+				<View style={styles.error} accessibilityLiveRegion="polite" accessibilityRole="alert">
+					<Text style={styles.errorTitle}>{error.title}</Text>
+					{error.text ? <Text style={styles.errorText}>{error.text}</Text> : null}
+				</View>
+			) : null}
 
 			<Text style={styles.section}>会話</Text>
 			<Row
@@ -97,7 +138,7 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				command="/new"
 				busy={op?.kind === "new"}
 				disabled={disabled}
-				onPress={() => void run(() => appStore.sessionOp("new"), onClose)}
+				onPress={() => void runInSheet(() => appStore.sessionOp("new"), onClose, setError)}
 			/>
 			<Row
 				label="過去のセッションを開く"
@@ -113,12 +154,20 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				chevron
 				onPress={() => onPage("fork")}
 			/>
+			{changes.length ? (
+				<Row
+					label="変更を見る"
+					detail={`${changes.length} ファイル${changeTotal.counted ? ` · +${changeTotal.add} −${changeTotal.del}` : ""}`}
+					chevron
+					onPress={openChanges}
+				/>
+			) : null}
 			<Row
 				label="コンテキストを圧縮"
 				command="/compact"
 				busy={op?.kind === "compact"}
 				disabled={disabled}
-				onPress={() => void run(() => appStore.compact(), onClose)}
+				onPress={() => void runInSheet(() => appStore.compact(), onClose, setError)}
 			/>
 
 			<Text style={styles.section}>この Pi</Text>
@@ -152,13 +201,16 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 function Row({
 	label,
 	command,
+	detail,
 	onPress,
 	disabled,
 	busy,
 	chevron,
 }: {
 	label: string;
-	command: string;
+	command?: string;
+	/** Plain secondary text in place of a command (e.g. "3 ファイル · +26 −2"). */
+	detail?: string;
 	onPress: () => void;
 	disabled?: boolean;
 	busy?: boolean;
@@ -174,7 +226,13 @@ function Row({
 			style={({ pressed }) => [styles.row, pressed && styles.pressed, disabled && !busy && { opacity: 0.4 }]}
 		>
 			<Text style={styles.rowLabel}>{label}</Text>
-			{busy ? <Spinner /> : <Text style={styles.command}>{command}</Text>}
+			{busy ? (
+				<Spinner />
+			) : command ? (
+				<Text style={styles.command}>{command}</Text>
+			) : detail ? (
+				<Text style={styles.detail}>{detail}</Text>
+			) : null}
 			{chevron ? <ChevronRightIcon color={colors.textTertiary} /> : null}
 		</Pressable>
 	);
@@ -318,6 +376,10 @@ const styles = StyleSheet.create({
 	row: { height: 52, flexDirection: "row", alignItems: "center", gap: 10 },
 	rowLabel: { flex: 1, fontSize: 15, color: colors.text },
 	command: { fontFamily: fontFamily.mono, fontSize: 11, color: colors.textSecondary },
+	detail: { fontSize: 13, color: colors.textSecondary },
+	error: { marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: colors.surface },
+	errorTitle: { fontSize: 14, lineHeight: 20, fontWeight: "600", color: colors.statusFailedText },
+	errorText: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
 	infoRow: { height: 48, flexDirection: "row", alignItems: "center" },
 	infoValue: { fontSize: 13, color: colors.textSecondary },
 	caption: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },

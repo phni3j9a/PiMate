@@ -27,7 +27,7 @@ import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { modelLabel } from "@/lib/sessionInfo";
 import { draftKey } from "@/lib/store";
-import { buildRows, type Row, type SpacedRow, spaceRows } from "@/lib/transcriptRows";
+import { buildRows, type Row, type SpacedRow, spaceRows, visibleRows } from "@/lib/transcriptRows";
 import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
 
 export default function ChatScreen() {
@@ -62,7 +62,7 @@ export default function ChatScreen() {
 		const delivered: Row[] = outbox
 			.filter((e) => e.state === "delivered")
 			.map((e) => ({ kind: "user" as const, key: `outbox:${e.id}`, text: e.text }));
-		return spaceRows([...buildRows(view), ...delivered]);
+		return [...buildRows(view), ...delivered];
 	}, [view, outbox]);
 
 	const key = selection ? draftKey(selection) : null;
@@ -195,7 +195,8 @@ export default function ChatScreen() {
 							canSend={blocker === null}
 							sending={sending}
 							onSend={() => void appStore.send()}
-							showStop={working && connected}
+							// Only a turn can be stopped: an extension command's dialog outside one is answered, not stopped.
+							showStop={!!view?.agentActive && view.phase === "ready" && connected}
 							stopping={aborting}
 							onStop={() => void appStore.abort()}
 							banners={banners}
@@ -215,7 +216,7 @@ export default function ChatScreen() {
 }
 
 /** Message list that follows new output only while the user is at the bottom. */
-function Transcript({ rows }: { rows: SpacedRow[] }) {
+function Transcript({ rows: allRows }: { rows: Row[] }) {
 	const listRef = useRef<FlatList<SpacedRow>>(null);
 	const atBottom = useRef(true);
 	const [showJump, setShowJump] = useState(false);
@@ -228,9 +229,14 @@ function Transcript({ rows }: { rows: SpacedRow[] }) {
 		setExpanded((prev) => ({ ...prev, [k]: open }));
 	}, []);
 
-	// Running tool output is open by default; the user's choice wins once made.
+	// Running tool output is open by default; the user's choice wins once made. Folded turns start closed.
 	const isOpen = (row: SpacedRow) =>
 		expanded[row.key] ?? (row.kind === "tool" && row.state === "running" && row.output.trim().length > 0);
+	const rows = useMemo(() => spaceRows(visibleRows(allRows, (turn) => expanded[turn] ?? false)), [allRows, expanded]);
+	const openReview = useCallback(
+		(turn: string) => router.push({ pathname: "/review", params: { scope: "turn", turn } }),
+		[],
+	);
 
 	// Scroll metrics, so "at the bottom" can be re-evaluated when the content or viewport changes without a scroll.
 	const metrics = useRef({ offset: 0, content: 0, viewport: 0 });
@@ -277,7 +283,9 @@ function Transcript({ rows }: { rows: SpacedRow[] }) {
 				ref={listRef}
 				data={rows}
 				keyExtractor={(r) => r.key}
-				renderItem={({ item }) => <TranscriptRow row={item} expanded={isOpen(item)} onToggle={onToggle} />}
+				renderItem={({ item }) => (
+					<TranscriptRow row={item} expanded={isOpen(item)} onToggle={onToggle} onOpenReview={openReview} />
+				)}
 				extraData={expanded}
 				contentContainerStyle={styles.listContent}
 				onScroll={onScroll}

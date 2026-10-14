@@ -11,6 +11,10 @@
  * M2: folders/spawn, RC models/sessions/session_op/compact/set_model/set_thinking/ui_respond/shutdown,
  * snapshot context + pcPrompt.
  *
+ * M3: tool results carry diffs like the real ones — edit `details.patch` (Pi's unified patch) and write
+ * `details.pimate` (RC write_diff) — plus message timestamps, so turns fold and the Review screen has content.
+ * The canned "--shout" history has a write without RC details (an older session's fallback).
+ *
  * Dev controls (curl -X POST http://127.0.0.1:47800/_dev/<cmd>):
  *   turn?i=<instanceId>   run the scripted turn as if typed on the PC   (default: the first instance)
  *   ask?i=<id>&kind=select|confirm|input|editor   open a ui_request (instance goes waiting_input)
@@ -195,6 +199,49 @@ function addInstance(
 	});
 }
 
+const README_CONTENT = "# demo\n\n挨拶を表示する CLI です。\n\n```sh\nnpx demo Alice\n```\n";
+
+/** Pi's edit tool patch (jsdiff createTwoFilesPatch with FILE_HEADERS_ONLY, 4 lines of context). */
+const GREET_PATCH = [
+	"--- src/greet.ts",
+	"+++ src/greet.ts",
+	"@@ -1,7 +1,11 @@",
+	" export interface Options {",
+	" \tname: string;",
+	"+\tshout?: boolean;",
+	" }",
+	" ",
+	"-export function greet({ name }: Options): string {",
+	'-\treturn "Hello, " + name;',
+	"+export function greet({ name, shout }: Options): string {",
+	'+\tconst text = "Hello, " + name;',
+	"+\treturn shout ? text.toUpperCase() : text;",
+	" }",
+	"+",
+	"+export const GREETING_VERSION = 2;",
+	"",
+].join("\n");
+
+const TEST_CONTENT = [
+	'import { expect, it } from "vitest";',
+	'import { greet } from "./greet";',
+	"",
+	'it("shouts", () => {',
+	'\texpect(greet({ name: "a", shout: true })).toBe("HELLO, A");',
+	"});",
+	"",
+].join("\n");
+/** The RC's write diff (details.pimate) for a file that did not exist. */
+const TEST_PATCH = [
+	"--- src/shout.test.ts",
+	"+++ src/shout.test.ts",
+	`@@ -0,0 +1,${TEST_CONTENT.split("\n").length - 1} @@`,
+	...TEST_CONTENT.replace(/\n$/, "")
+		.split("\n")
+		.map((l) => `+${l}`),
+	"",
+].join("\n");
+
 let entry = 0;
 const eid = () => `e${(++entry).toString(16).padStart(6, "0")}`;
 
@@ -206,11 +253,12 @@ addInstance("6c1b2f0e-shout", {
 	thinking: "high",
 	tokens: 82_000,
 	history: [
-		{ kind: "user", entryId: eid(), text: "プロジェクトの構成を説明して" },
+		{ kind: "user", entryId: eid(), text: "プロジェクトの構成を説明して", timestamp: Date.now() - 40 * MIN },
 		{
 			kind: "assistant",
 			entryId: eid(),
 			text: "",
+			timestamp: Date.now() - 40 * MIN + 3_000,
 			thinking: "まず README と src を確認する。",
 			toolCalls: [{ id: "h-t1", name: "ls", args: { path: "src" } }],
 			model: MODEL,
@@ -228,9 +276,39 @@ addInstance("6c1b2f0e-shout", {
 			kind: "assistant",
 			entryId: eid(),
 			text: "CLI のエントリは `src/cli.ts`、挨拶の生成は `src/greet.ts` にまとまっています。",
+			timestamp: Date.now() - 40 * MIN + 9_000,
 			toolCalls: [],
 			model: MODEL,
 			usage: { input: 6000, output: 210, cacheRead: 200, cost: 0.04 },
+			stopReason: "stop",
+		},
+		{ kind: "user", entryId: eid(), text: "README に使い方を書いて", timestamp: Date.now() - 30 * MIN },
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "",
+			timestamp: Date.now() - 30 * MIN + 4_000,
+			toolCalls: [{ id: "h-t2", name: "write", args: { path: "README.md", content: README_CONTENT } }],
+			model: MODEL,
+			stopReason: "toolUse",
+		},
+		// No details.pimate: written before the RC recorded write diffs.
+		{
+			kind: "tool_result",
+			entryId: eid(),
+			toolCallId: "h-t2",
+			toolName: "write",
+			text: `Successfully wrote ${README_CONTENT.length} bytes to README.md`,
+			isError: false,
+		},
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "README.md に使い方を書きました。",
+			timestamp: Date.now() - 30 * MIN + 11_000,
+			toolCalls: [],
+			model: MODEL,
+			usage: { input: 6400, output: 160, cacheRead: 5800, cost: 0.02 },
 			stopReason: "stop",
 		},
 	],
@@ -782,7 +860,33 @@ function fullScript(prompt) {
 				),
 		},
 		{ ms: 100, run: (id) => toolStart(id, `${t}-2`, "edit", { path: "src/greet.ts" }) },
-		{ ms: 900, run: (id) => toolEnd(id, `${t}-2`, "edit", "Successfully replaced 1 block(s) in src/greet.ts.") },
+		{
+			ms: 900,
+			run: (id) =>
+				toolEnd(id, `${t}-2`, "edit", "Successfully replaced 1 block(s) in src/greet.ts.", false, {
+					diff: "(display diff)",
+					patch: GREET_PATCH,
+				}),
+		},
+		{
+			ms: 300,
+			run: (id, turn) =>
+				assistantEnd(
+					id,
+					turn,
+					"",
+					[toolCall(`${t}-w`, "write", { path: "src/shout.test.ts", content: TEST_CONTENT })],
+					"toolUse",
+				),
+		},
+		{ ms: 100, run: (id) => toolStart(id, `${t}-w`, "write", { path: "src/shout.test.ts", content: TEST_CONTENT }) },
+		{
+			ms: 500,
+			run: (id) =>
+				toolEnd(id, `${t}-w`, "write", `Successfully wrote ${TEST_CONTENT.length} bytes to src/shout.test.ts`, false, {
+					pimate: { kind: "write_diff", existed: false, patch: TEST_PATCH },
+				}),
+		},
 		{
 			ms: 300,
 			run: (id, turn) => assistantEnd(id, turn, "", [toolCall(`${t}-3`, "bash", { command: "npm test" })], "toolUse"),
@@ -832,6 +936,7 @@ function assistantEnd(id, turn, text, toolCalls, stopReason, final = false) {
 		model: MODEL,
 		usage: final ? { input: 6200, output: 210, cacheRead: 0, cost: 0.04 } : { input: 5800, output: 40 },
 		stopReason,
+		timestamp: Date.now(),
 	};
 	turn.thinking = "";
 	turn.text = "";
@@ -843,9 +948,12 @@ function toolStart(id, toolCallId, toolName, args) {
 function toolUpdate(id, toolCallId, toolName, text) {
 	emit(id, { type: "tool_update", toolCallId, toolName, partial: { content: [{ type: "text", text }] } });
 }
-function toolEnd(id, toolCallId, toolName, text, isError = false) {
+function toolEnd(id, toolCallId, toolName, text, isError = false, details = undefined) {
 	emit(id, { type: "tool_end", toolCallId, toolName, isError, durationMs: 1500 });
-	emit(id, { type: "message_end", item: { kind: "tool_result", entryId: eid(), toolCallId, toolName, text, isError } });
+	emit(id, {
+		type: "message_end",
+		item: { kind: "tool_result", entryId: eid(), toolCallId, toolName, text, isError, details },
+	});
 }
 
 function startTurn(id, prompt, kind) {

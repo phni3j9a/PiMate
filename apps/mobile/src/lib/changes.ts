@@ -62,6 +62,7 @@ export const NOTE_BINARY = "バイナリファイルのため差分を表示で�
 export const NOTE_NO_DIFF = "差分の情報がありません";
 export const NOTE_CONTENT_ONLY = "変更前の内容は分からないため、書き込んだ内容を表示しています";
 export const NOTE_UNREADABLE = "変更前の内容を読めなかったため、書き込んだ内容を表示しています";
+export const NOTE_CONCURRENT = "同時に複数の変更があったため差分を表示できません。書き込んだ内容を表示しています";
 
 function record(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -116,7 +117,8 @@ export function changeOf(
 		toolCallId: result.toolCallId,
 		tool: toolName,
 		path: displayPath(rawPath || "（不明なファイル）", cwd),
-		status: pimate?.existed === false ? "A" : "M",
+		// With a concurrent write in the same batch, "did not exist" may describe a state another call changed.
+		status: pimate?.existed === false && pimate.omitted !== "concurrent" ? "A" : "M",
 		kind: "omitted",
 		hunks: [],
 		add: 0,
@@ -144,7 +146,7 @@ export function changeOf(
 			kind: "content",
 			hunks: [hunk],
 			lines: hunk.lines.length,
-			note: pimate ? NOTE_UNREADABLE : NOTE_CONTENT_ONLY,
+			note: !pimate ? NOTE_CONTENT_ONLY : pimate.omitted === "concurrent" ? NOTE_CONCURRENT : NOTE_UNREADABLE,
 		};
 	}
 	return { ...piece, note: NOTE_NO_DIFF };

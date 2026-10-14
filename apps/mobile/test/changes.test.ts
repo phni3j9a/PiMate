@@ -7,6 +7,7 @@ import {
 	displayPath,
 	groupByFile,
 	latestChangedTurn,
+	NOTE_CONCURRENT,
 	NOTE_CONTENT_ONLY,
 	NOTE_TOO_LARGE,
 	scopeChanges,
@@ -146,6 +147,13 @@ describe("changes", () => {
 			null,
 		);
 		expect(tooLarge).toMatchObject({ kind: "omitted", note: NOTE_TOO_LARGE });
+		const concurrent = changeOf(
+			"write",
+			{ path: "x", content: "y\n" },
+			result("c", "write", { pimate: { kind: "write_diff", existed: false, omitted: "concurrent" } }) as any,
+			null,
+		);
+		expect(concurrent).toMatchObject({ kind: "content", status: "M", lines: 1, note: NOTE_CONCURRENT });
 		expect(changeOf("read", {}, result("r", "read") as any, null)).toBeNull();
 		expect(changeOf("edit", {}, { ...(result("f", "edit") as any), isError: true }, null)).toBeNull();
 		expect(displayPath("@/w/a.ts", "/w/")).toBe("a.ts");
