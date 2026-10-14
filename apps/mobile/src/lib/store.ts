@@ -492,8 +492,7 @@ export class AppStore {
 				(op.kind === "new" || op.kind === "switch" || op.kind === "fork") &&
 				!!op.fromSessionId &&
 				op.fromSessionId === view.session?.id;
-			const byPhone =
-				byOp || (this.phoneSwitch?.key === key && this.phoneSwitch.fromSessionId === view.session?.id);
+			const byPhone = byOp || (this.phoneSwitch?.key === key && this.phoneSwitch.fromSessionId === view.session?.id);
 			const draft = this.state.drafts[key]?.trim();
 			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
