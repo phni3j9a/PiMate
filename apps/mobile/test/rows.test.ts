@@ -39,6 +39,7 @@ describe("format", () => {
 			"m · 6.2k in · 210 out · $0.04",
 		);
 		expect(usageLine({ provider: "a", id: "m" }, { input: 10, output: 5, cost: 0.0002 })).toBe("m · 10 in · 5 out");
+		expect(usageLine({ provider: "a", id: "m" }, { input: 0, output: 0, cost: 0 })).toBeNull();
 		expect(usageLine(undefined, undefined)).toBeNull();
 	});
 

@@ -23,6 +23,7 @@
  *   resume?i=<id>         simulate /resume on the PC (session_changed + new history)
  *   model?i=<id>          the model is changed on the PC (model + thinking events)
  *   gone?i=<id>           the instance exits (instance_gone)
+ *   refuse-shutdown?on=1  RC shutdown answers with an error (on=0 to accept again)
  *   drop                  cut all WebSocket connections (simulated network loss)
  *   offline?s=20          cut connections and refuse new ones for s seconds
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
@@ -596,6 +597,7 @@ class Peer {
 
 const peers = new Set();
 let refuseUntil = 0;
+let refuseShutdown = false;
 let spawning = false;
 
 // ------------------------------------------------------------------ M2 RC methods
@@ -733,6 +735,7 @@ const RC = {
 		return { result: {} };
 	},
 	shutdown(id) {
+		if (refuseShutdown) return { error: "shutdown_failed", message: "fake host: shutdown refused (refuse-shutdown)" };
 		setTimeout(() => removeInstance(id), 500);
 		return { result: {} };
 	},
@@ -1117,6 +1120,9 @@ const server = createServer((req, res) => {
 				log(`resume: ${from} -> ${session.name}`);
 				break;
 			}
+			case "refuse-shutdown":
+				refuseShutdown = url.searchParams.get("on") !== "0";
+				return reply(200, { ok: true, refuseShutdown });
 			case "gone":
 				if (!inst) return reply(404, {});
 				removeInstance(id);
