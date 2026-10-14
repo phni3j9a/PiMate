@@ -98,6 +98,10 @@ export default function pimate(pi: ExtensionAPI): void {
 		pi.on("input", (e) => {
 			h.emit({ type: "user_input", text: e.text, source: e.source });
 		}),
+		pi.on("message_start", (e) => {
+			flushMessages();
+			if (e.message.role === "assistant") h.streaming = { text: "", thinking: "" };
+		}),
 		pi.on("message_update", (e) => {
 			const a = e.assistantMessageEvent;
 			if (a.type === "text_delta" || a.type === "thinking_delta") h.emit({ type: a.type, delta: a.delta });

@@ -1,0 +1,715 @@
+#!/usr/bin/env node
+/**
+ * Dev-only fake PiMate Host for exercising the app UI without a PC-side Pi (not bundled into the app).
+ *
+ *   node apps/mobile/scripts/dev-fake-host.mjs [--port 47800] [--listen 127.0.0.1] [--address 127.0.0.1:47800]
+ *
+ * Implements POST /pair and the Host WebSocket protocol (packages/protocol/src/host.ts) with canned instances
+ * (idle / running / waiting_input / phone-started) and a scripted turn: thinking, tool rows with live output,
+ * streamed text, follow-ups, abort. No dependencies: a minimal RFC 6455 server is included.
+ *
+ * Dev controls (curl -X POST http://127.0.0.1:47800/_dev/<cmd>):
+ *   turn?i=<instanceId>   run the scripted turn as if typed on the PC   (default: the first instance)
+ *   ask?i=<instanceId>    open a ui_request (instance goes waiting_input)
+ *   resume?i=<id>         simulate /resume on the PC (session_changed + new history)
+ *   gone?i=<id>           the instance exits (instance_gone)
+ *   drop                  cut all WebSocket connections (simulated network loss)
+ *   offline?s=20          cut connections and refuse new ones for s seconds
+ *   revoke                close with 4403 and forget all tokens (app must re-pair)
+ *   pair                  print a fresh pairing link
+ */
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// ------------------------------------------------------------------ options & persisted state
+
+const args = process.argv.slice(2);
+const opt = (name, fallback) => {
+	const i = args.indexOf(`--${name}`);
+	return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+};
+const port = Number(opt("port", "47800"));
+const listen = opt("listen", "127.0.0.1");
+const address = opt("address", `${listen}:${port}`);
+const statePath = opt("state", join(tmpdir(), "pimate-fake-host.json"));
+
+let state = { hostId: randomUUID(), tokens: [] };
+try {
+	state = { ...state, ...JSON.parse(readFileSync(statePath, "utf8")) };
+} catch {
+	// first run
+}
+const saveState = () => writeFileSync(statePath, JSON.stringify(state), { mode: 0o600 });
+saveState();
+
+const HOST_NAME = "fake-host";
+let pairCode = randomBytes(18).toString("base64url");
+
+function pairingLink() {
+	const q = [
+		["h", address],
+		["c", pairCode],
+		["n", HOST_NAME],
+		["id", state.hostId],
+	]
+		.map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+		.join("&");
+	return { pimate: `pimate://pair?${q}`, expoGo: `exp://127.0.0.1:8081/--/pair?${q}` };
+}
+
+function printLink() {
+	const link = pairingLink();
+	console.log(
+		`\nPairing link (reusable while this fake host runs):\n  ${link.pimate}\nExpo Go deep link:\n  ${link.expoGo}\n`,
+	);
+	console.log(`adb shell am start -a android.intent.action.VIEW -d '${link.expoGo}'\n`);
+}
+
+// ------------------------------------------------------------------ canned instances
+
+const now = Date.now();
+const MIN = 60_000;
+const MODEL = { provider: "openai", id: "gpt-6-luna" };
+
+const instances = new Map();
+
+function addInstance(id, { cwd, name, origin = "pc", status = "idle", updatedAgo = 0, history = [], pendingUI = [] }) {
+	const sessionId = `sess-${id}`;
+	instances.set(id, {
+		summary: {
+			instanceId: id,
+			cwd,
+			origin,
+			abducoSession: origin === "mobile" ? `pimate-${id}` : null,
+			pcAttached: origin === "mobile" ? false : null,
+			session: { id: sessionId, name },
+			status,
+			startedAt: now - 3 * 3600_000,
+			updatedAt: now - updatedAgo,
+		},
+		seq: 100,
+		items: history,
+		pendingUI,
+		streaming: { text: "", thinking: "" },
+		turn: null,
+		followUps: [],
+	});
+}
+
+let entry = 0;
+const eid = () => `e${(++entry).toString(16).padStart(6, "0")}`;
+
+addInstance("6c1b2f0e-shout", {
+	cwd: "/home/dev/code/demo",
+	name: "--shout フラグを追加",
+	updatedAgo: 0.5 * MIN,
+	history: [
+		{ kind: "user", entryId: eid(), text: "プロジェクトの構成を説明して" },
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "",
+			thinking: "まず README と src を確認する。",
+			toolCalls: [{ id: "h-t1", name: "ls", args: { path: "src" } }],
+			model: MODEL,
+			stopReason: "toolUse",
+		},
+		{
+			kind: "tool_result",
+			entryId: eid(),
+			toolCallId: "h-t1",
+			toolName: "ls",
+			text: "cli.ts\ngreet.ts\ngreet.test.ts\n",
+			isError: false,
+		},
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "CLI のエントリは `src/cli.ts`、挨拶の生成は `src/greet.ts` にまとまっています。",
+			toolCalls: [],
+			model: MODEL,
+			usage: { input: 6000, output: 210, cacheRead: 200, cost: 0.04 },
+			stopReason: "stop",
+		},
+	],
+});
+addInstance("9a4d7c21-login", {
+	cwd: "/home/dev/work/web",
+	name: "ログイン画面の改修",
+	status: "waiting_input",
+	updatedAgo: 0.2 * MIN,
+	history: [
+		{ kind: "user", entryId: eid(), text: "ログイン画面をメールリンク認証に対応させて" },
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "現状の構成を確認しました。\n\n- `LoginForm.tsx` はパスワード入力のみ\n- 認証は `/api/session` に集約\n\n実装方針を選んでください。",
+			toolCalls: [],
+			model: MODEL,
+			usage: { input: 9100, output: 380, cost: 0.03 },
+			stopReason: "stop",
+		},
+	],
+	pendingUI: [
+		{
+			requestId: "ui-1",
+			kind: "select",
+			title: "メールリンクの実装方式は？",
+			options: ["既存の認証 API を拡張", "外部の Magic Link サービスを使う", "今回は UI の整理だけ"],
+		},
+	],
+});
+addInstance("3e8f0a55-api", { cwd: "/home/dev/work/api", name: "API クライアントのリファクタ", updatedAgo: 5 * MIN });
+addInstance("7b2c9d10-readme", {
+	cwd: "/home/dev/code/website",
+	name: "README の整理",
+	origin: "mobile",
+	updatedAgo: 62 * MIN,
+});
+addInstance("1f5e6a77-poc", { cwd: "/home/dev/projects/PiMate", name: undefined, updatedAgo: 26 * 3600_000 });
+
+// ------------------------------------------------------------------ minimal WebSocket server
+
+const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+function encodeFrame(opcode, payload) {
+	const len = payload.length;
+	let header;
+	if (len < 126) header = Buffer.from([0x80 | opcode, len]);
+	else if (len < 65536) {
+		header = Buffer.alloc(4);
+		header[0] = 0x80 | opcode;
+		header[1] = 126;
+		header.writeUInt16BE(len, 2);
+	} else {
+		header = Buffer.alloc(10);
+		header[0] = 0x80 | opcode;
+		header[1] = 127;
+		header.writeBigUInt64BE(BigInt(len), 2);
+	}
+	return Buffer.concat([header, payload]);
+}
+
+class Peer {
+	constructor(socket) {
+		this.socket = socket;
+		this.buf = Buffer.alloc(0);
+		this.authed = false;
+		this.subs = new Set();
+		this.open = true;
+		socket.on("data", (d) => this.onData(d));
+		socket.on("close", () => this.closed());
+		socket.on("error", () => this.closed());
+		this.authTimer = setTimeout(() => this.close(4408), 5000);
+	}
+	onData(chunk) {
+		this.buf = Buffer.concat([this.buf, chunk]);
+		while (this.buf.length >= 2) {
+			const b0 = this.buf[0];
+			const b1 = this.buf[1];
+			const opcode = b0 & 0x0f;
+			const masked = (b1 & 0x80) !== 0;
+			let len = b1 & 0x7f;
+			let off = 2;
+			if (len === 126) {
+				if (this.buf.length < 4) return;
+				len = this.buf.readUInt16BE(2);
+				off = 4;
+			} else if (len === 127) {
+				if (this.buf.length < 10) return;
+				len = Number(this.buf.readBigUInt64BE(2));
+				off = 10;
+			}
+			const maskLen = masked ? 4 : 0;
+			if (this.buf.length < off + maskLen + len) return;
+			const mask = masked ? this.buf.subarray(off, off + 4) : null;
+			const payload = Buffer.from(this.buf.subarray(off + maskLen, off + maskLen + len));
+			if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4];
+			this.buf = this.buf.subarray(off + maskLen + len);
+			if (opcode === 0x8) {
+				this.write(0x8, payload.subarray(0, 2));
+				this.socket.end();
+				return;
+			}
+			if (opcode === 0x9) this.write(0xa, payload);
+			else if (opcode === 0x1) this.onText(payload.toString("utf8"));
+		}
+	}
+	write(opcode, payload) {
+		if (this.open && !this.socket.destroyed) this.socket.write(encodeFrame(opcode, payload));
+	}
+	send(msg) {
+		this.write(0x1, Buffer.from(JSON.stringify(msg)));
+	}
+	close(code) {
+		const p = Buffer.alloc(2);
+		p.writeUInt16BE(code, 0);
+		this.write(0x8, p);
+		this.socket.end();
+		this.closed();
+	}
+	destroy() {
+		this.socket.destroy();
+		this.closed();
+	}
+	closed() {
+		if (!this.open) return;
+		this.open = false;
+		clearTimeout(this.authTimer);
+		peers.delete(this);
+	}
+	onText(text) {
+		let msg;
+		try {
+			msg = JSON.parse(text);
+		} catch {
+			return this.close(4400);
+		}
+		if (!this.authed) {
+			clearTimeout(this.authTimer);
+			if (msg.type !== "auth") {
+				this.send({ type: "auth_error", code: "bad_request" });
+				return this.close(4400);
+			}
+			if (msg.protocol !== 1) {
+				this.send({ type: "auth_error", code: "protocol_mismatch" });
+				return this.close(4400);
+			}
+			if (!state.tokens.includes(msg.token)) {
+				this.send({ type: "auth_error", code: "invalid_token" });
+				return this.close(4401);
+			}
+			this.authed = true;
+			log(`auth ok (${msg.app?.platform} ${msg.app?.version})`);
+			this.send({
+				type: "auth_ok",
+				deviceId: "fake-device",
+				host: { hostId: state.hostId, name: HOST_NAME, protocol: 1, version: "0.0.0-fake", platform: "linux" },
+			});
+			this.send({ type: "instances", instances: summaries() });
+			return;
+		}
+		switch (msg.type) {
+			case "ping":
+				return this.send({ type: "pong", t: msg.t });
+			case "subscribe":
+				return this.subscribe(msg.instanceId);
+			case "unsubscribe":
+				this.subs.delete(msg.instanceId);
+				return;
+			case "rc":
+				return this.rc(msg.instanceId, msg.request);
+			default:
+				return this.close(4400);
+		}
+	}
+	subscribe(id) {
+		const inst = instances.get(id);
+		if (!inst) return this.send({ type: "subscribe_error", instanceId: id, code: "not_found" });
+		log(`subscribe ${id}`);
+		this.subs.add(id);
+		// Like the real Host: a short delay for hello + history over the RC socket.
+		setTimeout(() => {
+			if (!this.subs.has(id) || !instances.has(id)) return;
+			this.send({
+				type: "subscribed",
+				instanceId: id,
+				snapshot: snapshot(id),
+				history: { session: inst.summary.session, items: inst.items },
+			});
+		}, 150);
+	}
+	rc(id, request) {
+		const inst = instances.get(id);
+		const reply = (response) => this.send({ type: "rc_result", instanceId: id, response });
+		const fail = (code, message) => reply({ type: "response", id: request.id, ok: false, error: { code, message } });
+		if (!inst) return fail("not_found");
+		if (request.expectInstanceId && request.expectInstanceId !== id) return fail("instance_mismatch");
+		if (request.expectSessionId && request.expectSessionId !== inst.summary.session?.id)
+			return fail("session_changed", "Session changed");
+		log(`rc ${request.method} ${id}`);
+		setTimeout(() => {
+			if (request.method === "prompt") {
+				const text = String(request.params?.text ?? "");
+				if (inst.turn) {
+					inst.followUps.push(text);
+					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs: "followUp" } });
+				} else {
+					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs: "prompt" } });
+					startTurn(id, text, "full");
+				}
+			} else if (request.method === "abort") {
+				abortTurn(id);
+				reply({ type: "response", id: request.id, ok: true, result: {} });
+			} else if (request.method === "hello") {
+				reply({ type: "response", id: request.id, ok: true, result: { snapshot: snapshot(id) } });
+			} else fail("unsupported", `fake host does not implement ${request.method}`);
+		}, 120);
+	}
+}
+
+const peers = new Set();
+let refuseUntil = 0;
+
+function log(...a) {
+	console.log(new Date().toISOString().slice(11, 19), ...a);
+}
+
+function summaries() {
+	return [...instances.values()].map((i) => i.summary);
+}
+function broadcastInstances() {
+	for (const p of peers) if (p.authed) p.send({ type: "instances", instances: summaries() });
+}
+function snapshot(id) {
+	const inst = instances.get(id);
+	const s = inst.summary;
+	return {
+		protocol: 1,
+		instanceId: id,
+		pid: 4242,
+		cwd: s.cwd,
+		origin: s.origin,
+		abducoSession: s.abducoSession,
+		startedAt: s.startedAt,
+		session: s.session,
+		status: s.status,
+		model: MODEL,
+		thinking: "off",
+		pendingUI: inst.pendingUI,
+		seq: inst.seq,
+		streaming: { ...inst.streaming },
+		piVersion: "1.2.0",
+	};
+}
+
+function emit(id, event) {
+	const inst = instances.get(id);
+	if (!inst) return;
+	inst.seq += 1;
+	if (event.type === "text_delta") inst.streaming.text += event.delta;
+	else if (event.type === "thinking_delta") inst.streaming.thinking += event.delta;
+	else if (["message_end", "agent_settled", "session_changed"].includes(event.type))
+		inst.streaming = { text: "", thinking: "" };
+	if (event.type === "message_end") {
+		const i = inst.items.findIndex((x) => x.entryId === event.item.entryId);
+		if (i >= 0) inst.items[i] = event.item;
+		else inst.items.push(event.item);
+	}
+	const msg = { type: "event", instanceId: id, sessionId: inst.summary.session?.id ?? null, seq: inst.seq, event };
+	for (const p of peers) if (p.authed && p.subs.has(id)) p.send(msg);
+}
+
+function setStatus(id, status) {
+	const inst = instances.get(id);
+	if (!inst || inst.summary.status === status) return;
+	inst.summary.status = status;
+	inst.summary.updatedAt = Date.now();
+	emit(id, { type: "status", status });
+	broadcastInstances();
+}
+
+// ------------------------------------------------------------------ scripted turn
+
+/** Each step runs after `ms`; text steps stream in chunks. */
+function fullScript(prompt) {
+	const toolCall = (id, name, args) => ({ id, name, args });
+	const t = Date.now().toString(36);
+	return [
+		{ ms: 300, run: (id) => emit(id, { type: "agent_start" }) },
+		{
+			ms: 0,
+			stream: "thinking",
+			text: `「${prompt.slice(0, 40)}」への対応。まず greet.ts を読み、フラグの扱いを確認する。`,
+		},
+		{
+			ms: 200,
+			run: (id, turn) => assistantEnd(id, turn, "", [toolCall(`${t}-1`, "read", { path: "src/greet.ts" })], "toolUse"),
+		},
+		{ ms: 100, run: (id) => toolStart(id, `${t}-1`, "read", { path: "src/greet.ts" }) },
+		{
+			ms: 700,
+			run: (id) =>
+				toolEnd(
+					id,
+					`${t}-1`,
+					"read",
+					Array.from({ length: 42 }, (_, i) => `${i + 1}  export const line${i} = ${i};`).join("\n"),
+				),
+		},
+		{
+			ms: 300,
+			run: (id, turn) =>
+				assistantEnd(
+					id,
+					turn,
+					"",
+					[toolCall(`${t}-2`, "edit", { path: "src/greet.ts", oldText: "a", newText: "b" })],
+					"toolUse",
+				),
+		},
+		{ ms: 100, run: (id) => toolStart(id, `${t}-2`, "edit", { path: "src/greet.ts" }) },
+		{ ms: 900, run: (id) => toolEnd(id, `${t}-2`, "edit", "Successfully replaced 1 block(s) in src/greet.ts.") },
+		{
+			ms: 300,
+			run: (id, turn) => assistantEnd(id, turn, "", [toolCall(`${t}-3`, "bash", { command: "npm test" })], "toolUse"),
+		},
+		{ ms: 100, run: (id) => toolStart(id, `${t}-3`, "bash", { command: "npm test" }) },
+		{ ms: 1200, run: (id) => toolUpdate(id, `${t}-3`, "bash", "> vitest run\n") },
+		{ ms: 1800, run: (id) => toolUpdate(id, `${t}-3`, "bash", "> vitest run\n ✓ src/greet.test.ts (3 tests)\n") },
+		{
+			ms: 2200,
+			run: (id) =>
+				toolUpdate(id, `${t}-3`, "bash", "> vitest run\n ✓ src/greet.test.ts (3 tests)\n ⠹ src/cli.test.ts\n"),
+		},
+		{
+			ms: 3000,
+			run: (id) =>
+				toolEnd(
+					id,
+					`${t}-3`,
+					"bash",
+					"> vitest run\n ✓ src/greet.test.ts (3 tests)\n ✓ src/cli.test.ts (2 tests)\n\n Test Files  2 passed (2)\n      Tests  5 passed (5)\n",
+				),
+		},
+		{
+			ms: 300,
+			stream: "text",
+			text: "`src/greet.ts` に `--shout` フラグを追加しました。指定すると挨拶を大文字で出力します。\n\nテストを 2 件追加し、`npm test` はすべて通っています。",
+		},
+		{ ms: 200, run: (id, turn) => assistantEnd(id, turn, turn.text, [], "stop", true) },
+	];
+}
+
+function shortScript() {
+	return [
+		{ ms: 300, run: (id) => emit(id, { type: "agent_start" }) },
+		{ ms: 200, stream: "text", text: "了解しました。README の使い方にも追記しておきます。" },
+		{ ms: 200, run: (id, turn) => assistantEnd(id, turn, turn.text, [], "stop", true) },
+	];
+}
+
+function assistantEnd(id, turn, text, toolCalls, stopReason, final = false) {
+	const item = {
+		kind: "assistant",
+		entryId: eid(),
+		text,
+		thinking: turn.thinking || undefined,
+		toolCalls,
+		model: MODEL,
+		usage: final ? { input: 6200, output: 210, cacheRead: 0, cost: 0.04 } : { input: 5800, output: 40 },
+		stopReason,
+	};
+	turn.thinking = "";
+	turn.text = "";
+	emit(id, { type: "message_end", item });
+}
+function toolStart(id, toolCallId, toolName, args) {
+	emit(id, { type: "tool_start", toolCallId, toolName, args });
+}
+function toolUpdate(id, toolCallId, toolName, text) {
+	emit(id, { type: "tool_update", toolCallId, toolName, partial: { content: [{ type: "text", text }] } });
+}
+function toolEnd(id, toolCallId, toolName, text, isError = false) {
+	emit(id, { type: "tool_end", toolCallId, toolName, isError, durationMs: 1500 });
+	emit(id, { type: "message_end", item: { kind: "tool_result", entryId: eid(), toolCallId, toolName, text, isError } });
+}
+
+function startTurn(id, prompt, kind) {
+	const inst = instances.get(id);
+	if (!inst) return;
+	emit(id, { type: "user_input", text: prompt, source: "rpc" });
+	emit(id, { type: "message_end", item: { kind: "user", entryId: eid(), text: prompt, timestamp: Date.now() } });
+	setStatus(id, "running");
+	const turn = { steps: kind === "full" ? fullScript(prompt) : shortScript(), timer: null, text: "", thinking: "" };
+	inst.turn = turn;
+	const next = () => {
+		if (inst.turn !== turn) return;
+		const step = turn.steps.shift();
+		if (!step) return finishTurn(id, false);
+		turn.timer = setTimeout(() => {
+			if (inst.turn !== turn) return;
+			if (step.run) {
+				step.run(id, turn);
+				next();
+			} else streamText(id, turn, step.stream, step.text, next);
+		}, step.ms);
+	};
+	next();
+}
+
+function streamText(id, turn, kind, text, done) {
+	const chars = [...text];
+	const tick = () => {
+		if (instances.get(id)?.turn !== turn) return;
+		if (!chars.length) return done();
+		const chunk = chars.splice(0, 3).join("");
+		if (kind === "text") turn.text += chunk;
+		else turn.thinking += chunk;
+		emit(id, { type: kind === "text" ? "text_delta" : "thinking_delta", delta: chunk });
+		turn.timer = setTimeout(tick, 60);
+	};
+	tick();
+}
+
+function finishTurn(id, aborted) {
+	const inst = instances.get(id);
+	if (!inst) return;
+	const follow = !aborted && inst.followUps.shift();
+	if (follow) {
+		inst.turn = null;
+		startTurn(id, follow, "short");
+		return;
+	}
+	inst.turn = null;
+	inst.followUps = [];
+	emit(id, { type: "agent_settled", aborted });
+	setStatus(id, inst.pendingUI.length ? "waiting_input" : "idle");
+}
+
+function abortTurn(id) {
+	const inst = instances.get(id);
+	const turn = inst?.turn;
+	if (!turn) return;
+	clearTimeout(turn.timer);
+	assistantEnd(id, turn, turn.text, [], "aborted");
+	inst.turn = null;
+	finishTurn(id, true);
+}
+
+// ------------------------------------------------------------------ HTTP
+
+const server = createServer((req, res) => {
+	const url = new URL(req.url, "http://x");
+	const reply = (status, body) => {
+		res.writeHead(status, { "content-type": "application/json" });
+		res.end(JSON.stringify(body));
+	};
+	if (req.method === "GET" && url.pathname === "/health") return reply(200, { ok: true, protocol: 1 });
+	if (req.method === "POST" && url.pathname === "/pair") {
+		let body = "";
+		req.on("data", (c) => {
+			body += c;
+		});
+		req.on("end", () => {
+			let value;
+			try {
+				value = JSON.parse(body);
+			} catch {
+				return reply(400, { error: "bad_request" });
+			}
+			if (!value || typeof value.code !== "string" || typeof value.deviceName !== "string")
+				return reply(400, { error: "bad_request" });
+			if (value.code.startsWith("expired")) return reply(410, { error: "expired_code" });
+			if (value.code !== pairCode) return reply(401, { error: "invalid_code" });
+			const token = randomBytes(32).toString("base64url");
+			state.tokens.push(token);
+			saveState();
+			log(`paired "${value.deviceName}"`);
+			reply(200, { hostId: state.hostId, hostName: HOST_NAME, deviceId: randomUUID(), token });
+		});
+		return;
+	}
+	if (req.method === "POST" && url.pathname.startsWith("/_dev/")) {
+		const cmd = url.pathname.slice(6);
+		const id = url.searchParams.get("i") ?? [...instances.keys()][0];
+		const inst = instances.get(id);
+		switch (cmd) {
+			case "turn":
+				if (!inst) return reply(404, {});
+				if (inst.turn) inst.followUps.push("PC から: 続けて");
+				else startTurn(id, "PC から: --shout フラグを追加して。テストも書いて", "full");
+				break;
+			case "ask": {
+				if (!inst) return reply(404, {});
+				const request = { requestId: `ui-${Date.now()}`, kind: "confirm", title: "変更をコミットしますか？" };
+				inst.pendingUI.push(request);
+				emit(id, { type: "ui_request", request });
+				setStatus(id, "waiting_input");
+				break;
+			}
+			case "resume": {
+				if (!inst) return reply(404, {});
+				const from = inst.summary.session?.name;
+				inst.summary.session = { id: `sess-${Date.now()}`, name: "エラー処理の見直し" };
+				emit(id, { type: "session_changed", reason: "resume", session: inst.summary.session });
+				inst.items = [
+					{ kind: "user", entryId: eid(), text: "エラーメッセージを日本語にそろえて" },
+					{
+						kind: "assistant",
+						entryId: eid(),
+						text: "エラーメッセージを `errors.ts` にまとめ、文言を日本語にそろえました。",
+						toolCalls: [],
+						model: MODEL,
+						usage: { input: 9100, output: 380, cost: 0.04 },
+						stopReason: "stop",
+					},
+				];
+				broadcastInstances();
+				log(`resume: ${from} -> ${inst.summary.session.name}`);
+				break;
+			}
+			case "gone":
+				if (!inst) return reply(404, {});
+				instances.delete(id);
+				for (const p of peers) if (p.subs.has(id)) p.send({ type: "instance_gone", instanceId: id });
+				broadcastInstances();
+				break;
+			case "drop":
+				for (const p of [...peers]) p.destroy();
+				break;
+			case "offline": {
+				const s = Number(url.searchParams.get("s") ?? 20);
+				refuseUntil = Date.now() + s * 1000;
+				for (const p of [...peers]) p.destroy();
+				log(`offline for ${s}s`);
+				break;
+			}
+			case "revoke":
+				state.tokens = [];
+				saveState();
+				for (const p of [...peers]) p.close(4403);
+				break;
+			case "pair":
+				pairCode = randomBytes(18).toString("base64url");
+				printLink();
+				return reply(200, pairingLink());
+			default:
+				return reply(404, { error: "unknown command" });
+		}
+		return reply(200, { ok: true });
+	}
+	reply(404, {});
+});
+
+server.on("upgrade", (req, socket) => {
+	if (req.url !== "/ws" || Date.now() < refuseUntil) {
+		socket.destroy();
+		return;
+	}
+	const key = req.headers["sec-websocket-key"];
+	const accept = createHash("sha1")
+		.update(key + GUID)
+		.digest("base64");
+	socket.write(
+		`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+	);
+	socket.setNoDelay(true);
+	peers.add(new Peer(socket));
+});
+
+server.listen(port, listen, () => {
+	console.log(`Fake PiMate Host on http://${listen}:${port} (hostId ${state.hostId}, state ${statePath})`);
+	printLink();
+});
+
+const stop = () => {
+	for (const p of [...peers]) p.destroy();
+	server.close(() => process.exit(0));
+	setTimeout(() => process.exit(0), 500).unref();
+};
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
