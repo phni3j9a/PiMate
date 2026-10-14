@@ -12,7 +12,7 @@ import {
 	usageLine,
 } from "../src/lib/format";
 import { createView, type InstanceView, reduceView } from "../src/lib/instanceView";
-import { buildRows, spaceRows } from "../src/lib/transcriptRows";
+import { buildRows, spaceRows, visibleRows } from "../src/lib/transcriptRows";
 
 describe("format", () => {
 	it("shortens home paths and picks titles", () => {
@@ -109,13 +109,23 @@ describe("transcript rows", () => {
 	];
 
 	it("joins tool calls with results and adds meta lines", () => {
-		const rows = buildRows(viewWith(items));
-		expect(rows.map((r) => r.kind)).toEqual(["user", "thinking", "tool", "tool", "text", "meta", "tool", "note"]);
-		expect(rows[2]).toMatchObject({ name: "read", subject: "a.ts", state: "done", meta: "3 行", output: "1\n2\n3\n" });
-		expect(rows[3]).toMatchObject({ name: "bash", state: "error", meta: "エラー" });
-		expect(rows[5]).toMatchObject({ text: "m · 10 in · 5 out" });
-		expect(rows[6]).toMatchObject({ toolCallId: "orphan", name: "ls" });
-		expect(rows[7]).toMatchObject({ text: "compaction: summary" });
+		const rows = visibleRows(buildRows(viewWith(items)), () => true);
+		expect(rows.map((r) => r.kind)).toEqual([
+			"user",
+			"turnSummary",
+			"thinking",
+			"tool",
+			"tool",
+			"text",
+			"meta",
+			"tool",
+			"note",
+		]);
+		expect(rows[3]).toMatchObject({ name: "read", subject: "a.ts", state: "done", meta: "3 行", output: "1\n2\n3\n" });
+		expect(rows[4]).toMatchObject({ name: "bash", state: "error", meta: "エラー" });
+		expect(rows[6]).toMatchObject({ text: "m · 10 in · 5 out" });
+		expect(rows[7]).toMatchObject({ toolCallId: "orphan", name: "ls" });
+		expect(rows[8]).toMatchObject({ text: "compaction: summary" });
 	});
 
 	it("shows a stop as 中断しました, also when Pi records it as an error", () => {
@@ -168,8 +178,18 @@ describe("transcript rows", () => {
 	});
 
 	it("spaces turns by 32 and packs tool rows", () => {
-		const spaced = spaceRows(buildRows(viewWith([...items, { kind: "user", entryId: "u2", text: "again" }])));
-		expect(spaced.map((r) => r.marginTop)).toEqual([0, 12, 0, 0, 8, 6, 8, 12, 32]);
+		const rows = buildRows(viewWith([...items, { kind: "user", entryId: "u2", text: "again" }]));
+		const open = spaceRows(visibleRows(rows, () => true));
+		expect(open.map((r) => r.marginTop)).toEqual([0, 10, 4, 0, 0, 8, 6, 8, 12, 32]);
+		const closed = spaceRows(visibleRows(rows, () => false));
+		expect(closed.map((r) => [r.kind, r.marginTop])).toEqual([
+			["user", 0],
+			["turnSummary", 10],
+			["text", 6],
+			["meta", 6],
+			["note", 12],
+			["user", 32],
+		]);
 	});
 
 	it("puts the session notice first", () => {

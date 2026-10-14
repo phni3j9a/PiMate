@@ -211,6 +211,35 @@ describe("instance view reducer", () => {
 		expect(v.pendingUI).toEqual([]);
 	});
 
+	it("tells a running turn from a dialog opened outside one", () => {
+		// An extension command's dialog while idle: waiting_input, but no turn to stop.
+		let v = apply(ready(), ev({ type: "status", status: "waiting_input" }));
+		expect(v.agentActive).toBe(false);
+		v = apply(v, ev({ type: "agent_start" }), ev({ type: "status", status: "waiting_input" }));
+		expect(v.agentActive).toBe(true);
+		v = apply(v, ev({ type: "agent_settled", aborted: false }), ev({ type: "status", status: "idle" }));
+		expect(v.agentActive).toBe(false);
+		// Snapshots: decided by the transcript.
+		const done = [user("u", "hi"), assistant("a", "ok", { stopReason: "stop" })];
+		expect(ready(done, { status: "waiting_input" }).agentActive).toBe(false);
+		expect(ready([user("u", "hi")], { status: "waiting_input" }).agentActive).toBe(true);
+		expect(ready(done, { status: "running" }).agentActive).toBe(true);
+	});
+
+	it("times thinking only when seen from its start", () => {
+		let v = ready([user("u", "hi")], { status: "running" });
+		v = reduceView(v, ev({ type: "thinking_delta", delta: "hm" }), 5_000);
+		v = reduceView(v, ev({ type: "thinking_delta", delta: "m" }), 6_000);
+		v = reduceView(v, ev({ type: "text_delta", delta: "ok" }), 9_000);
+		v = reduceView(v, ev({ type: "message_end", item: assistant("a", "ok", { thinking: "hmm" }) }), 9_500);
+		expect(v.thinkingMs).toEqual({ a: 4_000 });
+		// Joined mid-stream: no number is made up.
+		let w = ready([user("u", "hi")], { status: "running", streaming: { text: "", thinking: "earlier" } });
+		w = reduceView(w, ev({ type: "thinking_delta", delta: "more" }), 5_000);
+		w = reduceView(w, ev({ type: "message_end", item: assistant("a", "ok", { thinking: "x" }) }), 9_000);
+		expect(w.thinkingMs).toEqual({});
+	});
+
 	it("handles status, model, session name and instance_gone", () => {
 		let v = ready();
 		v = apply(

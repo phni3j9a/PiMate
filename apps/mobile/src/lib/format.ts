@@ -63,7 +63,8 @@ export function tokens(n: number): string {
 export function usageLine(model: ModelRef | undefined, usage: Usage | undefined): string | null {
 	const parts: string[] = [];
 	if (model) parts.push(model.id);
-	if (usage) {
+	// All-zero usage (an aborted or failed request) is not a measurement.
+	if (usage && (usage.input || usage.output || usage.cacheRead || usage.cacheWrite)) {
 		const input = usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
 		parts.push(`${tokens(input)} in`, `${tokens(usage.output)} out`);
 		// Costs that would print as $0.000 (subscriptions, cached turns) are left out.
