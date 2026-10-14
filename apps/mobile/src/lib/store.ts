@@ -222,7 +222,7 @@ export class AppStore {
 	 * A phone switch whose success arrived before the switch itself (the Host delivers result events ahead of
 	 * the snapshot when it resyncs). Lets the following session change still count as the phone's own.
 	 */
-	private phoneSwitch: { key: string; fromSessionId: string } | null = null;
+	private phoneSwitch: { key: string; fromSessionId: string; toSessionId: string } | null = null;
 	private state: AppState = {
 		loaded: false,
 		hosts: [],
@@ -471,7 +471,7 @@ export class AppStore {
 		// events and waits for the snapshot), so they are matched here on the raw sequence instead.
 		const opPatch =
 			msg.type === "event" && msg.instanceId === selection.instanceId && msg.seq > view.seq
-				? this.opEvent(key, msg.event)
+				? this.opEvent(key, msg.event, msg.sessionId)
 				: {};
 		if (next === view) {
 			if (Object.keys(opPatch).length) this.set(opPatch);
@@ -492,7 +492,11 @@ export class AppStore {
 				(op.kind === "new" || op.kind === "switch" || op.kind === "fork") &&
 				!!op.fromSessionId &&
 				op.fromSessionId === view.session?.id;
-			const byPhone = byOp || (this.phoneSwitch?.key === key && this.phoneSwitch.fromSessionId === view.session?.id);
+			const byPhone =
+				byOp ||
+				(this.phoneSwitch?.key === key &&
+					this.phoneSwitch.fromSessionId === view.session?.id &&
+					this.phoneSwitch.toSessionId === next.session?.id);
 			const draft = this.state.drafts[key]?.trim();
 			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
@@ -532,7 +536,11 @@ export class AppStore {
 	}
 
 	/** Finishes phone-started operations from their result events. */
-	private opEvent(key: string, event: Extract<Parameters<typeof reduceView>[1], { type: "event" }>["event"]) {
+	private opEvent(
+		key: string,
+		event: Extract<Parameters<typeof reduceView>[1], { type: "event" }>["event"],
+		sessionId: string | null,
+	) {
 		const op = this.state.op?.key === key ? this.state.op : null;
 		switch (event.type) {
 			case "session_op_done": {
@@ -551,8 +559,9 @@ export class AppStore {
 						},
 					};
 				const v = this.state.view;
-				if (op.fromSessionId && v?.phase === "ready" && v.session?.id === op.fromSessionId)
-					this.phoneSwitch = { key, fromSessionId: op.fromSessionId };
+				// The event carries the session the switch arrived at; only a move there is the phone's own.
+				if (op.fromSessionId && sessionId && v?.phase === "ready" && v.session?.id === op.fromSessionId)
+					this.phoneSwitch = { key, fromSessionId: op.fromSessionId, toSessionId: sessionId };
 				return this.sessionOpDone(op, key);
 			}
 			case "compact_done":

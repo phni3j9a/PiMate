@@ -499,7 +499,7 @@ describe("AppStore M2", () => {
 		rcReply(s, opRcs(s)[0].request.id, true);
 		await fork;
 		// The Host resynced: session_changed (6) is inside the snapshot, session_op_done (7) comes first.
-		s.receive(event(7, { type: "session_op_done", op: "fork", cancelled: false }));
+		s.receive(event(7, { type: "session_op_done", op: "fork", cancelled: false }, "s2"));
 		expect(store.getState().op).toBeNull();
 		s.receive(subscribedMsg([], "s2", "idle", { seq: 8 }));
 		expect(store.getState().drafts["h1/i1"]).toBe("最初の質問");
@@ -508,6 +508,19 @@ describe("AppStore M2", () => {
 		// The marker is spent: a later PC switch asks again.
 		s.receive(event(9, { type: "session_changed", reason: "resume", session: { id: "s3", name: "s3" } }));
 		expect(store.getState().targetChanged).toEqual({ to: "s3" });
+	});
+
+	it("asks before the draft follows when the PC moved on after a phone switch reported ahead", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);
+		const fork = store.sessionOp("fork", "u1", "最初の質問");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await fork;
+		// The fork arrived at s2 (reported ahead), but the PC switched to s3 before the snapshot.
+		s.receive(event(7, { type: "session_op_done", op: "fork", cancelled: false }, "s2"));
+		s.receive(subscribedMsg([], "s3", "idle", { seq: 9 }));
+		expect(store.getState().targetChanged).toEqual({ to: "s3" });
+		expect(store.sendBlocker()).toBe("target_changed");
 	});
 
 	it("gives up an accepted op whose result can no longer arrive after a fresh snapshot", async () => {
