@@ -14,6 +14,8 @@
  *   On reconnect, or when the Host loses its RC connection, the app gets `subscribed` again (or
  *   `subscribe_error` / `instance_gone`) and must rebuild that instance's view from it.
  * - Transcript items are deduplicated by `entryId` (live `message_end` items and `history` share ids).
+ * - `spawn` starts a new Pi under abduco on the Host (M2). Its result only says the process started; the
+ *   instance appears in `instances` once its RC has registered (the app waits for that instanceId).
  * - The Host forwards `rc` requests unchanged (incl. expectInstanceId / expectSessionId guards) and never
  *   retries them.
  */
@@ -25,6 +27,7 @@ import type {
 	Request,
 	Response,
 	SessionRef,
+	ThinkingLevel,
 	TranscriptItem,
 } from "./index.ts";
 
@@ -80,6 +83,34 @@ export interface InstanceSummary {
 	updatedAt: number;
 }
 
+/** A folder offered on the "new Pi" screen (from Pi's saved sessions and running instances). */
+export interface FolderInfo {
+	/** Absolute path. */
+	path: string;
+	/** Last time a Pi session was used there (ms), if known. */
+	lastUsed?: number;
+	/** Number of running instances in this folder. */
+	running: number;
+	/** Saved project-trust decision (~/.pi/agent/trust.json), if any. */
+	trusted?: boolean;
+}
+
+export interface SpawnParams {
+	/** Absolute path or `~/...`; must be an existing directory. */
+	cwd: string;
+	/**
+	 * Project-trust decision for this start only (handled by RC's `project_trust` handler so the TUI prompt
+	 * never blocks a phone-started Pi). Omitted = decline.
+	 */
+	trust?: boolean;
+	model?: { provider: string; id: string };
+	thinking?: ThinkingLevel;
+	/** First prompt, sent once the Pi is ready. */
+	message?: string;
+}
+
+export type SpawnErrorCode = "bad_request" | "not_found" | "not_directory" | "spawn_failed" | "unsupported";
+
 // ---------------------------------------------------------------- app -> Host
 
 export type AppMessage =
@@ -88,7 +119,9 @@ export type AppMessage =
 	| { type: "unsubscribe"; instanceId: string }
 	/** Forward an RC request to an instance. The reply is `rc_result` with the same `request.id`. */
 	| { type: "rc"; instanceId: string; request: Request }
-	| { type: "ping"; t: number };
+	| { type: "ping"; t: number }
+	| { type: "folders"; requestId: string }
+	| { type: "spawn"; requestId: string; params: SpawnParams };
 
 // ---------------------------------------------------------------- Host -> app
 
@@ -108,7 +141,10 @@ export type HostMessage =
 	| { type: "rc_result"; instanceId: string; response: Response }
 	/** The instance's process ended or its socket disappeared; subscriptions to it are dropped. */
 	| { type: "instance_gone"; instanceId: string }
-	| { type: "pong"; t: number };
+	| { type: "pong"; t: number }
+	| { type: "folders_result"; requestId: string; home: string; folders: FolderInfo[] }
+	| { type: "spawn_result"; requestId: string; ok: true; instanceId: string; abducoSession: string }
+	| { type: "spawn_result"; requestId: string; ok: false; code: SpawnErrorCode; message?: string };
 
 /** WebSocket close codes used by the Host. */
 export const HostCloseCode = {

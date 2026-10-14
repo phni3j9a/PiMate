@@ -57,6 +57,7 @@ export type TranscriptItem =
 			toolCalls: ToolCallRef[];
 			model?: ModelRef;
 			usage?: Usage;
+			/** Pi's stop reason. RC normalizes an aborted turn (Pi 1.2 records it as "error") to "aborted". */
 			stopReason?: string;
 			errorMessage?: string;
 			timestamp?: number;
@@ -90,6 +91,43 @@ export interface UIRequest {
 	tuiStaysOpen?: boolean;
 }
 
+/** Context window usage (ctx.getContextUsage()). `tokens`/`percent` are null right after compaction. */
+export interface ContextInfo {
+	tokens: number | null;
+	contextWindow: number;
+	percent: number | null;
+}
+
+/** A TUI-only prompt (ctx.ui.custom() or Pi's own selectors) the phone cannot answer: "needs the PC". */
+export interface PcPrompt {
+	kind: string;
+	title?: string;
+}
+
+/** One selectable model (ctx.modelRegistry, models with configured auth only). */
+export interface ModelInfo {
+	provider: string;
+	id: string;
+	name: string;
+	contextWindow?: number;
+	/** Thinking levels this model accepts; ["off"] for non-reasoning models. */
+	thinkingLevels: ThinkingLevel[];
+}
+
+/** A saved session of the instance's cwd (SessionManager.list). */
+export interface SessionListItem {
+	id: string;
+	/** Session file; pass as `session_op` `switch` arg. */
+	path: string;
+	name?: string;
+	firstMessage: string;
+	messageCount: number;
+	created: number;
+	modified: number;
+	/** The instance's current session. */
+	current: boolean;
+}
+
 export interface InstanceSnapshot {
 	protocol: number;
 	instanceId: string;
@@ -104,6 +142,9 @@ export interface InstanceSnapshot {
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];
+	/** TUI-only prompt currently open on the PC, if any. */
+	pcPrompt?: PcPrompt | null;
+	context?: ContextInfo | null;
 	/** Last event seq emitted before this snapshot was taken. */
 	seq: number;
 	/** Assistant output streamed so far in the current, not yet finished message (for late subscribers). */
@@ -148,6 +189,8 @@ export type InstanceEvent =
 	/** Any TUI prompt incl. ctx.ui.custom(), which the phone cannot render ("needs the PC"). */
 	| { type: "ui_prompt"; phase: "start" | "end"; kind: string; title?: string }
 	| { type: "notify"; message: string; level: "info" | "warning" | "error" }
+	/** Sent after each assistant message, compaction, model change and session change. */
+	| { type: "context"; context: ContextInfo | null }
 	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string }
 	| { type: "compact_done" }
 	| { type: "compact_error"; error: string }
@@ -185,6 +228,11 @@ export interface RcMethods {
 	/** Pi built-in session commands. Result arrives as a `session_op_done` event. */
 	session_op: { params: { op: SessionOp; arg?: string }; result: Record<string, never> };
 	commands: { params: Record<string, never>; result: { commands: CommandInfo[] } };
+	models: { params: Record<string, never>; result: { models: ModelInfo[]; current: ModelRef | null } };
+	/** Saved sessions of the instance's cwd, newest first. */
+	sessions: { params: { limit?: number }; result: { sessions: SessionListItem[] } };
+	/** Gracefully exit this Pi (ctx.shutdown()). The instance then disappears (`instance_gone`). */
+	shutdown: { params: Record<string, never>; result: Record<string, never> };
 	/** Relay to pi-subagents' in-process RPC (`subagents:rpc:v1:*`). */
 	subagents_rpc: {
 		params: { method: string; params?: unknown; timeoutMs?: number };
