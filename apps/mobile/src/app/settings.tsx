@@ -67,6 +67,7 @@ export default function SettingsScreen() {
 						}
 						icon={<PlusIcon color={colors.accentText} />}
 						onPress={() => router.push("/pair")}
+						weight="400"
 						style={styles.add}
 					/>
 				</View>

@@ -66,7 +66,8 @@ export function usageLine(model: ModelRef | undefined, usage: Usage | undefined)
 	if (usage) {
 		const input = usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
 		parts.push(`${tokens(input)} in`, `${tokens(usage.output)} out`);
-		if (usage.cost && usage.cost > 0)
+		// Costs that would print as $0.000 (subscriptions, cached turns) are left out.
+		if (usage.cost && usage.cost >= 0.0005)
 			parts.push(`$${usage.cost < 0.01 ? usage.cost.toFixed(3) : usage.cost.toFixed(2)}`);
 	}
 	return parts.length ? parts.join(" · ") : null;

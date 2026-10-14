@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { Keyboard } from "react-native";
 
 import { appStore } from "./runtime";
 import type { AppState } from "./store";
@@ -22,4 +23,18 @@ export function useNow(intervalMs: number, enabled = true): number {
 		return () => clearInterval(timer);
 	}, [intervalMs, enabled]);
 	return now;
+}
+
+/** Whether the software keyboard is shown (the composer drops its bottom inset then). */
+export function useKeyboardVisible(): boolean {
+	const [visible, setVisible] = useState(false);
+	useEffect(() => {
+		const show = Keyboard.addListener("keyboardDidShow", () => setVisible(true));
+		const hide = Keyboard.addListener("keyboardDidHide", () => setVisible(false));
+		return () => {
+			show.remove();
+			hide.remove();
+		};
+	}, []);
+	return visible;
 }

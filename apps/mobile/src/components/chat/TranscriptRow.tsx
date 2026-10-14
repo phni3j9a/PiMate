@@ -49,15 +49,15 @@ export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onTogg
 		case "note":
 			return <Text style={[styles.note, margin]}>{row.text}</Text>;
 		case "waiting":
+			// Chat-Waiting.html question card, read-only in M1: answering from the phone comes later.
 			return (
 				<View style={[styles.waiting, margin]} accessibilityRole="text">
 					<View style={styles.waitingHead}>
 						<StatusMark kind="waiting" />
-						<Text style={styles.waitingTitle}>PC 側で入力待ちです</Text>
+						<Text style={styles.waitingLabel}>PC 側で入力待ちです</Text>
 					</View>
-					<Text style={styles.waitingText}>
-						{row.title ? `${row.title}\n` : ""}PC のターミナルで回答してください（スマホからの回答は今後対応します）
-					</Text>
+					{row.title ? <Text style={styles.waitingTitle}>{row.title}</Text> : null}
+					<Text style={styles.waitingText}>PC のターミナルで回答してください（スマホからの回答は今後対応します）</Text>
 				</View>
 			);
 		case "sessionNotice": {
@@ -217,10 +217,11 @@ const styles = StyleSheet.create({
 	meta: { ...typography.meta, color: colors.textSecondary },
 	error: { ...typography.caption, color: colors.statusFailedText },
 	note: { ...typography.caption, color: colors.textSecondary },
-	waiting: { gap: 2 },
+	waiting: { padding: 16, paddingBottom: 14, borderRadius: radii.cardMin, backgroundColor: colors.surface },
 	waitingHead: { flexDirection: "row", alignItems: "center", gap: 8 },
-	waitingTitle: { ...typography.caption, fontWeight: "600", color: colors.statusWaitingText },
-	waitingText: { ...typography.caption, color: colors.textSecondary, marginLeft: 14 },
+	waitingLabel: { ...typography.caption, fontWeight: "600", color: colors.statusWaitingText },
+	waitingTitle: { ...typography.body, fontWeight: "600", color: colors.text, marginTop: 8 },
+	waitingText: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
 	notice: { alignItems: "center", gap: 4, marginBottom: 0 },
 	noticeHead: { flexDirection: "row", alignItems: "center", gap: 6 },
 	noticeText: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },

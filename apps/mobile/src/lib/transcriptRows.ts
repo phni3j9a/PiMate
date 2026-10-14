@@ -92,9 +92,11 @@ export function buildRows(view: InstanceView): Row[] {
 					shownTools.add(call.id);
 					rows.push(toolRow(call.id, call.name, call.args, results.get(call.id), view.tools[call.id], viewRunning));
 				}
-				if (item.errorMessage) rows.push({ kind: "error", key: `${item.entryId}:error`, text: item.errorMessage });
-				else if (item.stopReason === "aborted")
+				// A stop is the user's choice, not a failure. Pi 1.2 records a stop during a tool call as
+				// stopReason "error" + "This operation was aborted", so the message is matched too.
+				if (item.stopReason === "aborted" || /\b(operation|request) was aborted\b/i.test(item.errorMessage ?? ""))
 					rows.push({ kind: "note", key: `${item.entryId}:aborted`, text: "中断しました" });
+				else if (item.errorMessage) rows.push({ kind: "error", key: `${item.entryId}:error`, text: item.errorMessage });
 				if (item.text.trim() && item.stopReason !== "toolUse") {
 					const line = usageLine(item.model, item.usage);
 					if (line) rows.push({ kind: "meta", key: `${item.entryId}:meta`, text: line });
@@ -140,6 +142,7 @@ function gap(prev: Row | undefined, row: Row): number {
 	if (row.kind === "user") return prev.kind === "user" ? 12 : 32;
 	if (prev.kind === "user") return row.kind === "text" ? 10 : 12;
 	if (row.kind === "meta") return 6;
+	if (row.kind === "waiting") return 24;
 	const compact = (r: Row) => r.kind === "tool" || r.kind === "thinking";
 	if (compact(row)) return compact(prev) ? 0 : 8;
 	if (row.kind === "text") return prev.kind === "text" ? 12 : 8;

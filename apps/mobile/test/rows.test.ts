@@ -38,6 +38,7 @@ describe("format", () => {
 		expect(usageLine({ provider: "a", id: "m" }, { input: 6000, output: 210, cacheRead: 200, cost: 0.04 })).toBe(
 			"m · 6.2k in · 210 out · $0.04",
 		);
+		expect(usageLine({ provider: "a", id: "m" }, { input: 10, output: 5, cost: 0.0002 })).toBe("m · 10 in · 5 out");
 		expect(usageLine(undefined, undefined)).toBeNull();
 	});
 
@@ -115,6 +116,18 @@ describe("transcript rows", () => {
 		expect(rows[5]).toMatchObject({ text: "m · 10 in · 5 out" });
 		expect(rows[6]).toMatchObject({ toolCallId: "orphan", name: "ls" });
 		expect(rows[7]).toMatchObject({ text: "compaction: summary" });
+	});
+
+	it("shows a stop as 中断しました, also when Pi records it as an error", () => {
+		const stopped = (stopReason: string, errorMessage?: string): TranscriptItem[] => [
+			{ kind: "assistant", entryId: "a", text: "", toolCalls: [], stopReason, errorMessage },
+		];
+		expect(buildRows(viewWith(stopped("aborted")))[0]).toMatchObject({ kind: "note", text: "中断しました" });
+		expect(buildRows(viewWith(stopped("error", "This operation was aborted")))[0]).toMatchObject({
+			kind: "note",
+			text: "中断しました",
+		});
+		expect(buildRows(viewWith(stopped("error", "429 rate limited")))[0]).toMatchObject({ kind: "error" });
 	});
 
 	it("shows unanswered tool calls as running only while the instance works", () => {

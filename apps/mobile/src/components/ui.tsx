@@ -76,11 +76,14 @@ export function TextButton({
 	icon,
 	disabled,
 	style,
+	weight,
 }: {
 	label: string;
 	onPress: () => void;
 	tone?: "accent" | "secondary" | "destructive";
 	size?: number;
+	/** Defaults to 600 for accent buttons, 400 otherwise; list-row actions use 400 (Settings.html). */
+	weight?: "400" | "600";
 	icon?: ReactNode;
 	disabled?: boolean;
 	style?: StyleProp<ViewStyle>;
@@ -103,7 +106,7 @@ export function TextButton({
 					fontSize: size,
 					lineHeight: Math.round(size * 1.4),
 					color,
-					fontWeight: tone === "accent" ? "600" : "400",
+					fontWeight: weight ?? (tone === "accent" ? "600" : "400"),
 				}}
 			>
 				{label}

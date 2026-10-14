@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	FlatList,
 	KeyboardAvoidingView,
+	type LayoutChangeEvent,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
-	Platform,
 	StyleSheet,
 	Text,
 	View,
@@ -19,7 +19,7 @@ import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { ArrowDownIcon, MenuIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { IconButton, TextButton } from "@/components/ui";
-import { useAppState, useNow } from "@/lib/hooks";
+import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { draftKey } from "@/lib/store";
@@ -29,6 +29,7 @@ import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
 export default function ChatScreen() {
 	const navigation = useNavigation();
 	const insets = useSafeAreaInsets();
+	const keyboard = useKeyboardVisible();
 	const hosts = useAppState((s) => s.hosts);
 	const selection = useAppState((s) => s.selection);
 	const view = useAppState((s) => s.view);
@@ -59,7 +60,8 @@ export default function ChatScreen() {
 	const key = selection ? draftKey(selection) : null;
 	const draft = key ? (drafts[key] ?? "") : "";
 	const sending = outbox.some((e) => e.state === "sending");
-	const blocker = appStore.sendBlocker();
+	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
+	const blocker = useAppState(() => appStore.sendBlocker());
 	const queued = outbox.filter((e) => e.state === "queued");
 
 	const banners: Banner[] = [];
@@ -137,7 +139,8 @@ export default function ChatScreen() {
 				) : null}
 			</View>
 
-			<KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+			{/* Android is edge-to-edge (SDK 57), so the window no longer resizes for the keyboard: pad on both platforms. */}
+			<KeyboardAvoidingView style={styles.flex} behavior="padding">
 				<View style={styles.flex}>
 					{selection && view && (view.phase === "ready" || view.phase === "gone" || rows.length > 0) ? (
 						<Transcript key={key} rows={rows} />
@@ -147,12 +150,14 @@ export default function ChatScreen() {
 				</View>
 
 				{selection ? (
-					<View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
+					<View style={[styles.footer, { paddingBottom: keyboard ? 8 : Math.max(insets.bottom, 12) + 4 }]}>
 						<Composer
 							draft={draft}
 							onChangeDraft={(t) => appStore.setDraft(t)}
 							placeholder="Pi にメッセージ"
-							editable={!sending}
+							// Stay editable while sending: disabling the field drops the Android keyboard, and the store only
+							// clears the draft on success when it still equals the sent text.
+							editable
 							canSend={blocker === null}
 							sending={sending}
 							onSend={() => void appStore.send()}
@@ -177,7 +182,10 @@ function Transcript({ rows }: { rows: SpacedRow[] }) {
 	const [showJump, setShowJump] = useState(false);
 	const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+	// Expanding a row grows the content; following to the end then would scroll the tapped row away.
+	const holdFollowUntil = useRef(0);
 	const onToggle = useCallback((k: string, open: boolean) => {
+		holdFollowUntil.current = Date.now() + 500;
 		setExpanded((prev) => ({ ...prev, [k]: open }));
 	}, []);
 
@@ -185,17 +193,38 @@ function Transcript({ rows }: { rows: SpacedRow[] }) {
 	const isOpen = (row: SpacedRow) =>
 		expanded[row.key] ?? (row.kind === "tool" && row.state === "running" && row.output.trim().length > 0);
 
-	const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-		const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-		const bottom = contentSize.height - layoutMeasurement.height - contentOffset.y < 48;
-		if (bottom !== atBottom.current) {
-			atBottom.current = bottom;
-			setShowJump(!bottom);
-		}
+	// Scroll metrics, so "at the bottom" can be re-evaluated when the content or viewport changes without a scroll.
+	const metrics = useRef({ offset: 0, content: 0, viewport: 0 });
+	const setAtBottom = (bottom: boolean) => {
+		if (bottom === atBottom.current) return;
+		atBottom.current = bottom;
+		setShowJump(!bottom);
+	};
+	const measuredAtBottom = () => {
+		const m = metrics.current;
+		return m.content - m.viewport - m.offset < 48;
 	};
 
+	const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+		const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+		metrics.current = { offset: contentOffset.y, content: contentSize.height, viewport: layoutMeasurement.height };
+		setAtBottom(measuredAtBottom());
+	};
+
+	// Follow new output while at the bottom. Deferred a frame: on a viewport shrink (keyboard) the list must
+	// measure its new size first. Right after the user expands a row, stay put and offer the jump button instead.
 	const follow = () => {
-		if (atBottom.current) listRef.current?.scrollToEnd({ animated: false });
+		if (!atBottom.current) return;
+		if (Date.now() < holdFollowUntil.current) setAtBottom(measuredAtBottom());
+		else requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+	};
+	const onContentSizeChange = (_w: number, h: number) => {
+		metrics.current.content = h;
+		follow();
+	};
+	const onLayout = (e: LayoutChangeEvent) => {
+		metrics.current.viewport = e.nativeEvent.layout.height;
+		follow();
 	};
 
 	useEffect(() => {
@@ -214,12 +243,16 @@ function Transcript({ rows }: { rows: SpacedRow[] }) {
 				contentContainerStyle={styles.listContent}
 				onScroll={onScroll}
 				scrollEventThrottle={32}
-				onContentSizeChange={follow}
-				onLayout={follow}
+				onContentSizeChange={onContentSizeChange}
+				onLayout={onLayout}
 				initialNumToRender={40}
 				keyboardDismissMode="interactive"
 				keyboardShouldPersistTaps="handled"
-				ListEmptyComponent={<Text style={styles.emptyLine}>この会話にはまだメッセージがありません</Text>}
+				ListEmptyComponent={
+					<View style={styles.emptyList}>
+						<Text style={styles.emptyLine}>この会話にはまだメッセージがありません</Text>
+					</View>
+				}
 			/>
 			{showJump ? (
 				<IconButton
@@ -316,7 +349,7 @@ const styles = StyleSheet.create({
 		right: 16,
 		bottom: 8,
 		borderRadius: radii.capsule,
-		backgroundColor: colors.surface,
+		backgroundColor: colors.surfaceStrong,
 		width: sizes.composerControl,
 		height: sizes.composerControl,
 	},
@@ -329,5 +362,6 @@ const styles = StyleSheet.create({
 	},
 	emptyTitle: { fontSize: 15, fontWeight: "600", color: colors.text, textAlign: "center" },
 	emptyText: { ...typography.body, color: colors.textSecondary, textAlign: "center" },
+	emptyList: { flex: 1, justifyContent: "center" },
 	emptyLine: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },
 });

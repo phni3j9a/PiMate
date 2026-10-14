@@ -36,6 +36,20 @@ export function RichText({ text }: { text: string }) {
 							{block.text}
 						</Text>
 					</View>
+				) : block.type === "item" ? (
+					// biome-ignore lint/suspicious/noArrayIndexKey: blocks have no identity beyond their position
+					<View key={i} style={[styles.item, { paddingLeft: block.depth * 16 }]}>
+						{block.marker === "•" ? (
+							<View style={styles.markerCol}>
+								<View style={styles.dot} />
+							</View>
+						) : (
+							<Text style={[styles.paragraph, styles.markerCol]}>{block.marker}</Text>
+						)}
+						<Text style={[styles.paragraph, styles.itemText]} selectable>
+							<Spans spans={block.spans} />
+						</Text>
+					</View>
 				) : (
 					// biome-ignore lint/suspicious/noArrayIndexKey: blocks have no identity beyond their position
 					<Text key={i} style={styles.paragraph} selectable>
@@ -51,6 +65,11 @@ const styles = StyleSheet.create({
 	root: { gap: 8 },
 	paragraph: { ...typography.body, color: colors.text },
 	bold: { fontWeight: "600" },
+	item: { flexDirection: "row" },
+	markerCol: { minWidth: 22, paddingLeft: 4 },
+	/** Bullet as a drawn dot: the "•" glyph renders tiny next to Japanese text on Android. */
+	dot: { width: 5, height: 5, borderRadius: 3, marginTop: 8, marginLeft: 2, backgroundColor: colors.text },
+	itemText: { flex: 1, minWidth: 0 },
 	inlineCode: {
 		fontFamily: fontFamily.mono,
 		fontSize: 12.5,
