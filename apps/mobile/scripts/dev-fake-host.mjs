@@ -8,10 +8,16 @@
  * (idle / running / waiting_input / phone-started) and a scripted turn: thinking, tool rows with live output,
  * streamed text, follow-ups, abort. No dependencies: a minimal RFC 6455 server is included.
  *
+ * M2: folders/spawn, RC models/sessions/session_op/compact/set_model/set_thinking/ui_respond/shutdown,
+ * snapshot context + pcPrompt.
+ *
  * Dev controls (curl -X POST http://127.0.0.1:47800/_dev/<cmd>):
  *   turn?i=<instanceId>   run the scripted turn as if typed on the PC   (default: the first instance)
- *   ask?i=<instanceId>    open a ui_request (instance goes waiting_input)
+ *   ask?i=<id>&kind=select|confirm|input|editor   open a ui_request (instance goes waiting_input)
+ *   answered?i=<id>       the oldest open question is answered on the PC (ui_request_end by tui)
+ *   custom?i=<id>[&end=1] a TUI-only screen opens (ui_prompt start, "PC で操作が必要") / closes
  *   resume?i=<id>         simulate /resume on the PC (session_changed + new history)
+ *   model?i=<id>          the model is changed on the PC (model + thinking events)
  *   gone?i=<id>           the instance exits (instance_gone)
  *   drop                  cut all WebSocket connections (simulated network loss)
  *   offline?s=20          cut connections and refuse new ones for s seconds
@@ -73,17 +79,107 @@ function printLink() {
 const now = Date.now();
 const MIN = 60_000;
 const MODEL = { provider: "openai", id: "gpt-6-luna" };
+const ALL_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
+const MODELS = [
+	{
+		provider: "anthropic",
+		id: "claude-opus-5-5",
+		name: "Claude Opus 5.5",
+		contextWindow: 200_000,
+		thinkingLevels: ALL_LEVELS,
+	},
+	{
+		provider: "anthropic",
+		id: "claude-sonnet-5",
+		name: "Claude Sonnet 5",
+		contextWindow: 200_000,
+		thinkingLevels: ALL_LEVELS,
+	},
+	{
+		provider: "anthropic",
+		id: "claude-haiku-5",
+		name: "Claude Haiku 5",
+		contextWindow: 200_000,
+		thinkingLevels: ["off"],
+	},
+	{
+		provider: "openai",
+		id: "gpt-6-luna",
+		name: "GPT-6 Luna",
+		contextWindow: 400_000,
+		thinkingLevels: ["off", "low", "medium", "high"],
+	},
+	{
+		provider: "openai",
+		id: "gpt-6-mini",
+		name: "GPT-6 mini",
+		contextWindow: 400_000,
+		thinkingLevels: ["off", "low", "medium", "high"],
+	},
+	{
+		provider: "google",
+		id: "gemini-3-pro",
+		name: "Gemini 3 Pro",
+		contextWindow: 1_000_000,
+		thinkingLevels: ["off", "low", "high"],
+	},
+	{
+		provider: "openrouter",
+		id: "qwen/qwen4-coder",
+		name: "Qwen4 Coder",
+		contextWindow: 256_000,
+		thinkingLevels: ["off"],
+	},
+];
+const HOME = "/home/dev";
+const findModelInfo = (ref) => MODELS.find((m) => m.provider === ref?.provider && m.id === ref?.id);
 
 const instances = new Map();
 
-function addInstance(id, { cwd, name, origin = "pc", status = "idle", updatedAgo = 0, history = [], pendingUI = [] }) {
+function addInstance(
+	id,
+	{
+		cwd,
+		name,
+		origin = "pc",
+		status = "idle",
+		updatedAgo = 0,
+		history = [],
+		pendingUI = [],
+		model = MODEL,
+		thinking = "off",
+		tokens = 41_000,
+	},
+) {
 	const sessionId = `sess-${id}`;
+	const window = findModelInfo(model)?.contextWindow ?? 200_000;
 	instances.set(id, {
+		model,
+		thinking,
+		context: { tokens, contextWindow: window, percent: (tokens / window) * 100 },
+		pcPrompt: null,
+		// Saved sessions of this folder (the current one first); `items` of past ones are canned.
+		sessions: [
+			{ id: sessionId, path: `${HOME}/.pi/sessions/${sessionId}.jsonl`, name, created: now - 3 * 3600_000 },
+			{
+				id: `${sessionId}-old1`,
+				path: `${HOME}/.pi/sessions/${sessionId}-old1.jsonl`,
+				name: "依存パッケージの更新",
+				created: now - 2 * 86_400_000,
+			},
+			{
+				id: `${sessionId}-old2`,
+				path: `${HOME}/.pi/sessions/${sessionId}-old2.jsonl`,
+				name: undefined,
+				first: "テストが落ちる原因を調べて",
+				created: now - 9 * 86_400_000,
+			},
+		],
 		summary: {
 			instanceId: id,
 			cwd,
 			origin,
-			abducoSession: origin === "mobile" ? `pimate-${id}` : null,
+			abducoSession: origin === "mobile" ? `pimate-${id.slice(0, 8)}` : null,
 			pcAttached: origin === "mobile" ? false : null,
 			session: { id: sessionId, name },
 			status,
@@ -106,6 +202,9 @@ addInstance("6c1b2f0e-shout", {
 	cwd: "/home/dev/code/demo",
 	name: "--shout フラグを追加",
 	updatedAgo: 0.5 * MIN,
+	model: { provider: "anthropic", id: "claude-opus-5-5" },
+	thinking: "high",
+	tokens: 82_000,
 	history: [
 		{ kind: "user", entryId: eid(), text: "プロジェクトの構成を説明して" },
 		{
@@ -302,6 +401,10 @@ class Peer {
 				return;
 			case "rc":
 				return this.rc(msg.instanceId, msg.request);
+			case "folders":
+				return this.folders(msg);
+			case "spawn":
+				return this.spawn(msg);
 			default:
 				return this.close(4400);
 		}
@@ -346,13 +449,238 @@ class Peer {
 				reply({ type: "response", id: request.id, ok: true, result: {} });
 			} else if (request.method === "hello") {
 				reply({ type: "response", id: request.id, ok: true, result: { snapshot: snapshot(id) } });
-			} else fail("unsupported", `fake host does not implement ${request.method}`);
+			} else {
+				const handler = RC[request.method];
+				if (!handler) return fail("unsupported", `fake host does not implement ${request.method}`);
+				const out = handler(id, request.params ?? {});
+				if (out?.error) fail(out.error, out.message);
+				else reply({ type: "response", id: request.id, ok: true, result: out?.result ?? {} });
+			}
 		}, 120);
+	}
+	folders(msg) {
+		setTimeout(() => {
+			const running = new Map();
+			for (const i of instances.values()) running.set(i.summary.cwd, (running.get(i.summary.cwd) ?? 0) + 1);
+			const known = [
+				["/home/dev/code/demo", 0.5 * MIN, true],
+				["/home/dev/work/web", 20 * MIN, true],
+				["/home/dev/work/api", 2 * 86_400_000, true],
+				["/home/dev/code/website", 3 * 86_400_000, false],
+				["/home/dev/projects/PiMate", 5 * 86_400_000, true],
+				["/home/dev/scratch/ocr-test", 12 * 86_400_000, undefined],
+			];
+			const folders = known.map(([path, ago, trusted]) => ({
+				path,
+				lastUsed: Date.now() - ago,
+				running: running.get(path) ?? 0,
+				...(trusted === undefined ? {} : { trusted }),
+			}));
+			this.send({ type: "folders_result", requestId: msg.requestId, home: HOME, folders });
+		}, 300);
+	}
+	spawn(msg) {
+		const p = msg.params ?? {};
+		const done = (body) => this.send({ type: "spawn_result", requestId: msg.requestId, ...body });
+		log(`spawn ${JSON.stringify(p)}`);
+		const cwd = p.cwd === "~" ? HOME : String(p.cwd ?? "").replace(/^~\//, `${HOME}/`);
+		if (!cwd.startsWith("/")) return done({ ok: false, code: "bad_request", message: "cwd must be absolute or ~/..." });
+		if (cwd.includes("missing")) return done({ ok: false, code: "not_found", message: `${cwd} does not exist` });
+		if (spawning) return done({ ok: false, code: "spawn_failed", message: "another spawn is in progress" });
+		spawning = true;
+		setTimeout(() => {
+			spawning = false;
+			const id = `${randomUUID().slice(0, 8)}-new`;
+			const model = p.model ?? MODEL;
+			addInstance(id, {
+				cwd,
+				name: undefined,
+				origin: "mobile",
+				model,
+				thinking: p.thinking ?? (findModelInfo(model)?.thinkingLevels.includes("medium") ? "medium" : "off"),
+				tokens: 0,
+			});
+			broadcastInstances();
+			if (cwd.includes("fail-message")) {
+				done({
+					ok: false,
+					code: "spawn_failed",
+					// Same shape as packages/pimate/src/host/server.ts.
+					message: `Error: prompt failed; Pi started: ${id} (pimate attach pimate-${id.slice(0, 8)}); message outcome may be unknown, not resent`,
+				});
+				return;
+			}
+			done({ ok: true, instanceId: id, abducoSession: `pimate-${id.slice(0, 8)}` });
+			if (p.message) setTimeout(() => startTurn(id, String(p.message), "short"), 200);
+		}, 1500);
 	}
 }
 
 const peers = new Set();
 let refuseUntil = 0;
+let spawning = false;
+
+// ------------------------------------------------------------------ M2 RC methods
+
+function canned(text) {
+	return [
+		{ kind: "user", entryId: eid(), text },
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "（過去のセッションの内容）",
+			toolCalls: [],
+			model: MODEL,
+			usage: { input: 3000, output: 120, cost: 0.01 },
+			stopReason: "stop",
+		},
+	];
+}
+
+function switchSession(id, reason, session, items) {
+	const inst = instances.get(id);
+	inst.summary.session = session;
+	emit(id, { type: "session_changed", reason, session });
+	inst.items = items;
+	inst.pendingUI = [];
+	inst.pcPrompt = null;
+	const tokens = items.length ? 12_000 : 0;
+	inst.context = { ...inst.context, tokens, percent: (tokens / inst.context.contextWindow) * 100 };
+	emit(id, { type: "context", context: inst.context });
+	broadcastInstances();
+}
+
+/** Each returns { result } or { error, message }. */
+const RC = {
+	models(id) {
+		return { result: { models: MODELS, current: instances.get(id).model } };
+	},
+	sessions(id) {
+		const inst = instances.get(id);
+		const current = inst.summary.session?.id;
+		const sessions = inst.sessions.map((s, n) => ({
+			id: s.id,
+			path: s.path,
+			...(s.name ? { name: s.name } : {}),
+			firstMessage:
+				s.first ?? (s.id === current ? (inst.items.find((i) => i.kind === "user")?.text ?? "") : "README を整えて"),
+			messageCount: s.id === current ? inst.items.filter((i) => i.kind !== "tool_result").length : 6 + n * 5,
+			created: s.created,
+			modified: s.id === current ? Date.now() : s.created + 3600_000,
+			current: s.id === current,
+		}));
+		return { result: { sessions } };
+	},
+	set_model(id, params) {
+		const inst = instances.get(id);
+		const info = findModelInfo(params);
+		if (!info) return { error: "not_found", message: "model not found" };
+		inst.model = { provider: info.provider, id: info.id };
+		emit(id, { type: "model", model: inst.model });
+		if (!info.thinkingLevels.includes(inst.thinking)) {
+			inst.thinking = info.thinkingLevels.includes("medium") ? "medium" : "off";
+			emit(id, { type: "thinking", level: inst.thinking });
+		}
+		const tokens = inst.context.tokens;
+		inst.context = {
+			tokens,
+			contextWindow: info.contextWindow,
+			percent: tokens === null ? null : (tokens / info.contextWindow) * 100,
+		};
+		emit(id, { type: "context", context: inst.context });
+		return { result: { model: inst.model } };
+	},
+	set_thinking(id, params) {
+		const inst = instances.get(id);
+		const levels = findModelInfo(inst.model)?.thinkingLevels ?? ["off"];
+		inst.thinking = levels.includes(params.level) ? params.level : levels.at(-1);
+		emit(id, { type: "thinking", level: inst.thinking });
+		return { result: { thinking: inst.thinking } };
+	},
+	ui_respond(id, params) {
+		const inst = instances.get(id);
+		const i = inst.pendingUI.findIndex((r) => r.requestId === params.requestId);
+		if (i < 0) return { error: "no_such_request", message: "request already answered" };
+		const [request] = inst.pendingUI.splice(i, 1);
+		log(`ui_respond ${request.kind} ${JSON.stringify(params)}`);
+		setTimeout(() => {
+			emit(id, { type: "ui_request_end", requestId: request.requestId, by: "remote" });
+			if (!inst.pendingUI.length) setStatus(id, inst.turn ? "running" : "idle");
+		}, 80);
+		return { result: {} };
+	},
+	compact(id) {
+		const inst = instances.get(id);
+		if (inst.turn) return { error: "busy", message: "agent is running" };
+		setTimeout(() => {
+			if (!instances.has(id)) return;
+			inst.context = { ...inst.context, tokens: null, percent: null };
+			emit(id, { type: "compact_done" });
+			emit(id, { type: "context", context: inst.context });
+		}, 1500);
+		return { result: {} };
+	},
+	session_op(id, params) {
+		const inst = instances.get(id);
+		if (inst.turn) return { error: "busy", message: "agent is running" };
+		const op = params.op;
+		setTimeout(() => {
+			if (!instances.has(id)) return;
+			if (op === "new") {
+				const session = { id: `sess-${Date.now()}`, name: undefined };
+				inst.sessions.unshift({
+					id: session.id,
+					path: `${HOME}/.pi/sessions/${session.id}.jsonl`,
+					created: Date.now(),
+				});
+				switchSession(id, "new", session, []);
+			} else if (op === "switch") {
+				const target = inst.sessions.find((s) => s.path === params.arg);
+				if (!target) return emit(id, { type: "session_op_done", op, cancelled: false, error: "session not found" });
+				switchSession(id, "resume", { id: target.id, name: target.name }, canned(target.first ?? "README を整えて"));
+			} else if (op === "fork") {
+				const at = inst.items.findIndex((x) => x.entryId === params.arg);
+				if (at < 0) return emit(id, { type: "session_op_done", op, cancelled: false, error: "entry not found" });
+				const session = { id: `sess-${Date.now()}`, name: inst.summary.session?.name };
+				inst.sessions.unshift({
+					id: session.id,
+					path: `${HOME}/.pi/sessions/${session.id}.jsonl`,
+					name: session.name,
+					created: Date.now(),
+				});
+				switchSession(id, "fork", session, inst.items.slice(0, at));
+			}
+			emit(id, { type: "session_op_done", op, cancelled: false });
+		}, 400);
+		return { result: {} };
+	},
+	shutdown(id) {
+		setTimeout(() => removeInstance(id), 500);
+		return { result: {} };
+	},
+};
+
+function removeInstance(id) {
+	if (!instances.delete(id)) return;
+	for (const p of peers) if (p.subs.has(id)) p.send({ type: "instance_gone", instanceId: id });
+	broadcastInstances();
+}
+
+const ASK = {
+	select: () => ({
+		kind: "select",
+		title: "メールリンクの実装方式は？",
+		options: ["既存の認証 API を拡張", "外部の Magic Link サービスを使う", "今回は UI の整理だけ"],
+	}),
+	confirm: () => ({ kind: "confirm", title: "変更をコミットしますか？", message: "3 ファイルを変更しています。" }),
+	input: () => ({ kind: "input", title: "コミットメッセージ", placeholder: "例: fix: ログインの不具合" }),
+	editor: () => ({
+		kind: "editor",
+		title: "リリースノートを編集",
+		message: "## v1.4.0\n\n- --shout フラグを追加\n- エラーメッセージを日本語に統一\n",
+		tuiStaysOpen: true,
+	}),
+};
 
 function log(...a) {
 	console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -377,9 +705,11 @@ function snapshot(id) {
 		startedAt: s.startedAt,
 		session: s.session,
 		status: s.status,
-		model: MODEL,
-		thinking: "off",
+		model: inst.model,
+		thinking: inst.thinking,
 		pendingUI: inst.pendingUI,
+		...(inst.pcPrompt ? { pcPrompt: inst.pcPrompt } : {}),
+		context: inst.context,
 		seq: inst.seq,
 		streaming: { ...inst.streaming },
 		piVersion: "1.2.0",
@@ -625,18 +955,46 @@ const server = createServer((req, res) => {
 				break;
 			case "ask": {
 				if (!inst) return reply(404, {});
-				const request = { requestId: `ui-${Date.now()}`, kind: "confirm", title: "変更をコミットしますか？" };
+				const make = ASK[url.searchParams.get("kind") ?? "confirm"];
+				if (!make) return reply(400, { error: "kind must be select|confirm|input|editor" });
+				const request = { requestId: `ui-${Date.now()}`, ...make() };
 				inst.pendingUI.push(request);
 				emit(id, { type: "ui_request", request });
 				setStatus(id, "waiting_input");
 				break;
 			}
+			case "answered": {
+				const request = inst?.pendingUI.shift();
+				if (!request) return reply(404, { error: "no open question" });
+				emit(id, { type: "ui_request_end", requestId: request.requestId, by: "tui" });
+				if (!inst.pendingUI.length) setStatus(id, inst.turn ? "running" : "idle");
+				break;
+			}
+			case "custom": {
+				if (!inst) return reply(404, {});
+				if (url.searchParams.get("end")) {
+					const kind = inst.pcPrompt?.kind ?? "custom";
+					inst.pcPrompt = null;
+					emit(id, { type: "ui_prompt", phase: "end", kind });
+					setStatus(id, inst.turn ? "running" : "idle");
+				} else {
+					inst.pcPrompt = { kind: "custom", title: url.searchParams.get("title") ?? "git-graph" };
+					emit(id, { type: "ui_prompt", phase: "start", ...inst.pcPrompt });
+					setStatus(id, "waiting_input");
+				}
+				break;
+			}
+			case "model": {
+				if (!inst) return reply(404, {});
+				RC.set_model(id, { provider: "openai", id: "gpt-6-luna" });
+				RC.set_thinking(id, { level: "low" });
+				break;
+			}
 			case "resume": {
 				if (!inst) return reply(404, {});
 				const from = inst.summary.session?.name;
-				inst.summary.session = { id: `sess-${Date.now()}`, name: "エラー処理の見直し" };
-				emit(id, { type: "session_changed", reason: "resume", session: inst.summary.session });
-				inst.items = [
+				const session = { id: `sess-${Date.now()}`, name: "エラー処理の見直し" };
+				switchSession(id, "resume", session, [
 					{ kind: "user", entryId: eid(), text: "エラーメッセージを日本語にそろえて" },
 					{
 						kind: "assistant",
@@ -647,16 +1005,13 @@ const server = createServer((req, res) => {
 						usage: { input: 9100, output: 380, cost: 0.04 },
 						stopReason: "stop",
 					},
-				];
-				broadcastInstances();
-				log(`resume: ${from} -> ${inst.summary.session.name}`);
+				]);
+				log(`resume: ${from} -> ${session.name}`);
 				break;
 			}
 			case "gone":
 				if (!inst) return reply(404, {});
-				instances.delete(id);
-				for (const p of peers) if (p.subs.has(id)) p.send({ type: "instance_gone", instanceId: id });
-				broadcastInstances();
+				removeInstance(id);
 				break;
 			case "drop":
 				for (const p of [...peers]) p.destroy();
