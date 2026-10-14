@@ -428,10 +428,22 @@ describe("detail", () => {
 			stop: { action: "stop_child", runWide: false },
 			resume: false,
 			abortParent: false,
-			readonly: false,
+			canSend: true,
 		});
+		const queued = child({ id: "queued", state: "queued", actions: ["stop_child"] });
+		expect(childControls(full, queued)).toMatchObject({
+			canSend: false,
+			stop: { action: "stop_child", runWide: false },
+			abortParent: false,
+		});
+		const stopOnly = run({ id: "stop-only", actions: ["stop"], children: [child({ id: "c" })] });
+		expect(childControls(stopOnly, stopOnly.children[0]!)).toMatchObject({
+			canSend: false,
+			stop: { action: "stop", runWide: false },
+		});
+
 		const done = { ...full.children[0]!, state: "complete" as const };
-		expect(childControls(full, done)).toMatchObject({ stop: null, resume: true, readonly: false });
+		expect(childControls(full, done)).toMatchObject({ stop: null, resume: true, canSend: true });
 		const stopping = { ...full.children[0]!, state: "stopping" as const };
 		expect(childControls(full, stopping).stop).toBeNull();
 		const example = run({ id: "e", backend: "example", actions: ["abort_parent"], children: [child({ id: "x" })] });
@@ -440,7 +452,7 @@ describe("detail", () => {
 			stop: null,
 			resume: false,
 			abortParent: true,
-			readonly: true,
+			canSend: false,
 		});
 		const fg = run({
 			id: "f",

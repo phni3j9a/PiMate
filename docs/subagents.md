@@ -37,13 +37,20 @@ RCでは現在ブランチのtool result/custom entry、または現在のregist
 `subagent_control` は最新の run/child `actions` に含まれる操作だけ受け付ける。
 stop は受領後に `stopping` とし、最終 status を待つ。resume は元の実行を改変せず、
 新しい run ID を返し `resumedFrom` / `resumedAs` を設定する。
-backend RPC のエラー本文は呼び出し元へ返す。
+backend RPC のエラー本文は呼び出し元へ返す。アプリは操作・記録取得に表示中の
+`expectSessionId` を付け、会話が切り替わった場合は操作を自動再送しない。
+取得中にHost・Pi・会話・run・子が変わった場合、以前の対象の応答は画面へ反映しない。
+送信可否と停止可否は別に扱い、開始待ちで `stop_child` だけがある子も詳細から停止できる。
 
 `subagent_transcript` は子IDからRC内部で解決したパスのみを読む。クライアント指定の
 パスは受け付けない。JSONLの完成行のみ、最大256KiBのページにして返す。
 opaque cursor はファイル識別子とbyte offsetを持ち、縮小・inode交換時に先頭へ戻る。
 公式exampleの記録は `results[].messages` とmessage-count cursorで取得する。
 最初の依頼は `task` に分離し、system message は表示用項目に含めない。
+アプリはcursorが前進する限り1回の取得で最大8ページまで続けて読み、まだ先がある場合は
+「続きを読み込む」を表示する。完了済みrunでも更新イベントを待たず後続ページを読める。
+`truncated` はページ分割と欠損の両方を示すため終端判定に使わず、cursorが変わらない場合は
+取得を止める（末尾の確認に追加1リクエストが発生することがある）。
 
 ## 制約
 

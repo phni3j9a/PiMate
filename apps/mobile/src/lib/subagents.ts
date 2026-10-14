@@ -539,8 +539,8 @@ export interface ChildControls {
 	resume: boolean;
 	/** Official example: the only operation is aborting the parent turn. */
 	abortParent: boolean;
-	/** Nothing can be sent to the child (read-only screen). */
-	readonly: boolean;
+	/** Text input is independent of stop-only controls (e.g. a queued child). */
+	canSend: boolean;
 }
 
 export function childControls(run: SubagentRun, child: SubagentChild): ChildControls {
@@ -553,7 +553,7 @@ export function childControls(run: SubagentRun, child: SubagentChild): ChildCont
 		stop = { action: "interrupt", runWide: run.children.length > 1 };
 	const resume = child.actions.includes("resume") && !isSubagentActive(child.state);
 	const abortParent = run.actions.includes("abort_parent");
-	return { modes, stop, resume, abortParent, readonly: modes.length === 0 && !resume };
+	return { modes, stop, resume, abortParent, canSend: modes.length > 0 || resume };
 }
 
 /** Chain agents for the request card, with the current step marked. */

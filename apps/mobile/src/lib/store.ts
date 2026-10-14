@@ -807,7 +807,7 @@ export class AppStore {
 	private async guardedRc<M extends RcMethod>(
 		method: M,
 		params: ParamsOf<M>,
-		opts: { session?: boolean } = {},
+		opts: { session?: boolean; discardStale?: boolean } = {},
 	): Promise<Result<Response & { ok: true }>> {
 		const { selection, view } = this.state;
 		const conn = selection && this.connections.get(selection.hostId);
@@ -823,7 +823,10 @@ export class AppStore {
 			...(opts.session !== false && sessionId ? { expectSessionId: sessionId } : {}),
 		};
 		try {
-			const res = await conn.rc(selection.instanceId, request);
+			const response = await conn.rc(selection.instanceId, request);
+			const stale =
+				opts.discardStale && (!this.isCurrent(draftKey(selection)) || this.state.view?.session?.id !== sessionId);
+			const res = stale ? { ok: false as const, error: { code: "session_changed", message: undefined } } : response;
 			if (res.ok) return { ok: true, value: res };
 			const n = rcErrorText(res.error.code, res.error.message, "操作しませんでした");
 			return { ok: false, title: n.title ?? "操作できませんでした", text: n.text, code: res.error.code };
@@ -975,7 +978,7 @@ export class AppStore {
 		const res = await this.guardedRc(
 			"subagent_transcript",
 			{ runId, childId, ...(cursor ? { cursor } : {}) },
-			{ session: false },
+			{ discardStale: true },
 		);
 		if (!res.ok) return { ...res, title: "作業記録を読み込めませんでした" };
 		const t = res.value.result as Partial<SubagentTranscript>;
@@ -997,7 +1000,7 @@ export class AppStore {
 	): Promise<Result<{ message?: string; newRunId?: string }>> {
 		if (this.state.selection?.instanceId !== instanceId)
 			return { ok: false, title: "操作しませんでした", text: "この Pi は表示されていません。" };
-		const res = await this.guardedRc("subagent_control", params, { session: false });
+		const res = await this.guardedRc("subagent_control", params, { discardStale: true });
 		if (!res.ok) return res;
 		if (params.text && params.childId) {
 			const key = `${params.runId}/${params.childId}`;

@@ -3,9 +3,9 @@
  * the parent Pi and its work record, with the operations the RC offers for it.
  *
  * The record is fetched with `subagent_transcript` on open, then incrementally (cursor) when a `subagent_run` update
- * for this run arrives — at most once a second, never on a fixed interval.
+ * for this run arrives — refresh batches at most once a second, never on a fixed interval.
  */
-import { isSubagentActive, type SubagentAction, type TranscriptItem } from "@pimate/protocol";
+import { isSubagentActive, type SubagentAction } from "@pimate/protocol";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -19,7 +19,8 @@ import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import { draftKey } from "@/lib/store";
-import { mergeTranscript, subagentRows } from "@/lib/subagentRows";
+import { EMPTY_RECORD, SubagentRecordLoader, type WorkRecord } from "@/lib/subagentRecord";
+import { subagentRows } from "@/lib/subagentRows";
 import {
 	CONTROL_FEEDBACK,
 	chainSteps,
@@ -42,22 +43,25 @@ function back() {
 	else router.replace("/");
 }
 
-interface WorkRecord {
-	task?: string;
-	items: TranscriptItem[];
-	cursor?: string;
-	truncated: boolean;
-	loaded: boolean;
-	error: { title: string; text: string } | null;
-}
-
-const EMPTY_RECORD: WorkRecord = { items: [], truncated: false, loaded: false, error: null };
-
 export default function SubagentScreen() {
 	const params = useLocalSearchParams<{ instanceId?: string; runId?: string; childId?: string }>();
 	const instanceId = params.instanceId ?? "";
 	const runId = params.runId ?? "";
 	const childId = params.childId ?? "";
+	const hostId = useAppState((s) => s.selection?.hostId);
+	const sessionId = useAppState((s) => s.view?.session?.id);
+	// A new target owns a new loader and UI state; A → B → A must not revive A's old request.
+	return (
+		<SubagentDetail
+			key={JSON.stringify([hostId, sessionId, instanceId, runId, childId])}
+			instanceId={instanceId}
+			runId={runId}
+			childId={childId}
+		/>
+	);
+}
+
+function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; runId: string; childId: string }) {
 	const view = useAppState((s) => s.view);
 	const models = useAppState((s) => s.models);
 	const hosts = useAppState((s) => s.hosts);
@@ -76,42 +80,18 @@ export default function SubagentScreen() {
 
 	// ------------------------------------------------------------ work record
 	const [record, setRecord] = useState<WorkRecord>(EMPTY_RECORD);
-	const fetching = useRef(false);
-	const again = useRef(false);
+	const loader = useRef<SubagentRecordLoader | null>(null);
 	const lastFetch = useRef(0);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const cursorRef = useRef<string | undefined>(undefined);
 	const scheduleRef = useRef<() => void>(() => {});
 	const canRead = !!child?.hasTranscript;
 
 	const fetchRecord = useCallback(async () => {
-		if (fetching.current) {
-			again.current = true;
-			return;
-		}
-		fetching.current = true;
 		lastFetch.current = Date.now();
-		const res = await appStore.subagentTranscript(instanceId, runId, childId, cursorRef.current);
-		fetching.current = false;
-		if (res.ok) {
-			const fresh = !cursorRef.current;
-			cursorRef.current = res.value.cursor || cursorRef.current;
-			setRecord((r) => ({
-				task: res.value.task ?? r.task,
-				items: fresh ? res.value.items : mergeTranscript(r.items, res.value.items),
-				cursor: cursorRef.current,
-				truncated: res.value.truncated || r.truncated,
-				loaded: true,
-				error: null,
-			}));
-		} else setRecord((r) => ({ ...r, loaded: true, error: { title: res.title, text: res.text } }));
-		if (again.current) {
-			again.current = false;
-			scheduleRef.current();
-		}
-	}, [instanceId, runId, childId]);
+		if (await loader.current?.load()) scheduleRef.current();
+	}, []);
 
-	// Throttled: one fetch per REFRESH_GAP_MS at most, the last update always gets one.
+	// Throttled refresh batches; each batch drains a bounded number of cursor pages.
 	const schedule = useCallback(() => {
 		if (timer.current) return;
 		const wait = Math.max(0, lastFetch.current + REFRESH_GAP_MS - Date.now());
@@ -125,13 +105,14 @@ export default function SubagentScreen() {
 		scheduleRef.current = schedule;
 	}, [schedule]);
 
-	// Reset when another child is shown (resume navigates to the new run in place).
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the params are the trigger, not inputs
 	useEffect(() => {
-		cursorRef.current = undefined;
-		again.current = false;
-		setRecord(EMPTY_RECORD);
+		const current = new SubagentRecordLoader(
+			(cursor) => appStore.subagentTranscript(instanceId, runId, childId, cursor),
+			setRecord,
+		);
+		loader.current = current;
 		return () => {
+			current.dispose();
 			if (timer.current) clearTimeout(timer.current);
 			timer.current = null;
 		};
@@ -291,7 +272,7 @@ export default function SubagentScreen() {
 	const mark = childMark(child.state);
 	const steps = chainSteps(run, child);
 	const abortParent = controls.abortParent && runStop(run)?.action === "abort_parent" && isSubagentActive(run.state);
-	const showComposer = !controls.readonly;
+	const showComposer = controls.canSend;
 	const banners: Banner[] = [];
 	if (error)
 		banners.push({
@@ -383,7 +364,7 @@ export default function SubagentScreen() {
 					{run.resumedFrom && runs?.some((r) => r.id === run.resumedFrom) ? (
 						<RunLink label="前の実行を開く" onPress={() => openRun(run.resumedFrom)} />
 					) : null}
-					{record.truncated ? <Text style={styles.note}>古い記録は省略されています</Text> : null}
+					{record.truncated ? <Text style={styles.note}>記録の一部が省略、または分割されています</Text> : null}
 					{record.error ? (
 						<View style={styles.recordError} accessibilityRole="alert">
 							<Text style={styles.errorTitle}>{record.error.title}</Text>
@@ -403,6 +384,9 @@ export default function SubagentScreen() {
 							/>
 						))}
 					</View>
+					{record.hasMore && !record.error ? (
+						<TextButton label="続きを読み込む" onPress={() => void fetchRecord()} />
+					) : null}
 					{record.loaded && rows.length === 0 && canRead && !record.error ? (
 						<Text style={styles.note}>{active ? "作業を始めています…" : "作業記録はありません"}</Text>
 					) : null}
@@ -507,6 +491,14 @@ export default function SubagentScreen() {
 									? "この Extension では、サブエージェントに指示を送れません。\n止めると、親の Pi の作業もまとめて止まります。"
 									: "この Extension では、サブエージェントに指示を送れません。"}
 							</Text>
+						) : null}
+						{controls.stop ? (
+							<TextButton
+								label={stopping ? "停止しています…" : controls.stop.action === "interrupt" ? "一時停止…" : "停止…"}
+								tone="destructive"
+								onPress={stop}
+								disabled={stopping || !connected}
+							/>
 						) : null}
 						{abortParent ? (
 							<TextButton
