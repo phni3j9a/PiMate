@@ -32,7 +32,8 @@ export default function pimate(pi: ExtensionAPI): void {
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
 			h.pcPrompt = null;
-			h.agentActive = false;
+			// An earlier extension's session_start may already have started a run (agent_start seen before ours).
+			h.agentActive = !ctx.isIdle();
 			h.ctx = ctx;
 			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {

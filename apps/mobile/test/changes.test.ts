@@ -199,6 +199,9 @@ describe("changes", () => {
 		expect(groupByFile([piece("../other/a.ts"), piece("/other/a.ts")])).toHaveLength(1);
 		expect(groupByFile([piece("../a.ts", null), piece("a.ts", null)])).toHaveLength(2);
 		expect(groupByFile([piece("src/a.ts", null), piece("/w/src/a.ts", null)])).toHaveLength(2);
+		// `~` is expanded by Pi to an unknown home: never conflate it with cwd-relative paths.
+		expect(groupByFile([piece("a.ts"), piece("~/../a.ts")])).toHaveLength(2);
+		expect(groupByFile([piece("~/a.ts"), piece("./~/a.ts")])).toHaveLength(2);
 	});
 
 	it("parses each patch once and reuses result indexes/turn summaries across streaming deltas", () => {

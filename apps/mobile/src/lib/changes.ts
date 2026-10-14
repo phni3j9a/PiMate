@@ -92,8 +92,12 @@ function normalizePath(path: string): string {
 
 function pathKey(path: string, cwd: string | null): string {
 	const p = path.replace(/^@/, "");
+	// Pi expands `~` to a home directory the app doesn't know: keep such paths verbatim so `~/../a.ts` never
+	// collapses onto a cwd-relative `a.ts`, and keep relative keys from ever starting with `~`.
+	if (p === "~" || p.startsWith("~/")) return p;
 	const base = cwd ? normalizePath(cwd) : null;
-	return displayPath(normalizePath(base && !p.startsWith("/") ? `${base}/${p}` : p), base);
+	const key = displayPath(normalizePath(base && !p.startsWith("/") ? `${base}/${p}` : p), base);
+	return key === "~" || key.startsWith("~/") ? `./${key}` : key;
 }
 
 // Transcript entries and arrays are immutable in the reducer. Weak keys release old sessions/snapshots.
