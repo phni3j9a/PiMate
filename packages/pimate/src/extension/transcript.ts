@@ -15,7 +15,7 @@ function text(content: unknown): string {
 			: "";
 }
 /** Accept persisted entries and live messages through one normalization path. */
-export function normalizeMessage(value: unknown, entryId: string): TranscriptItem | null {
+export function normalizeMessage(value: unknown, entryId: string, aborted = false): TranscriptItem | null {
 	const m = record(value);
 	const body = text(m.content);
 	const base = { entryId, ...(typeof m.timestamp === "number" ? { timestamp: m.timestamp } : {}) };
@@ -45,7 +45,15 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 						cost: m.usage.cost?.total,
 					}
 				: undefined,
-			stopReason: m.stopReason,
+			stopReason:
+				m.stopReason === "error" &&
+				(aborted ||
+					(typeof m.errorMessage === "string" &&
+						/^(?:AbortError:\s*)?(?:This operation was aborted|The operation was aborted|The user aborted a request|Request (?:was )?aborted|Aborted)[.!]?$/i.test(
+							m.errorMessage.trim(),
+						)))
+					? "aborted"
+					: m.stopReason,
 			errorMessage: m.errorMessage,
 		};
 	}

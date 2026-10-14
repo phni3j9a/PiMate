@@ -114,6 +114,18 @@ it.skipIf(!pi || !abduco)(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled" && x.event.aborted),
 			);
+			const abortedHistory = await client.request("history", {});
+			expect(abortedHistory.items).toEqual(
+				expect.arrayContaining([expect.objectContaining({ kind: "assistant", stopReason: "aborted" })]),
+			);
+			expect(
+				events.some(
+					(event) =>
+						event.event.type === "message_end" &&
+						event.event.item.kind === "assistant" &&
+						event.event.item.stopReason === "aborted",
+				),
+			).toBe(true);
 			const before = (await client.request("hello", {})).snapshot;
 			expect(before.status).toBe("idle");
 			for (const op of ["new", "reload"] as const) {

@@ -14,13 +14,19 @@ export default function pimate(pi: ExtensionAPI): void {
 	for (const off of h.subscriptions) off();
 	h.subscriptions = [];
 	h.handlers = createHandlers(h);
+	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
 	const messages: { message: unknown; ctx: ExtensionContext; sessionId: string }[] = [];
 	const flushMessages = () => {
 		for (const { message, ctx, sessionId } of messages.splice(0)) {
 			if (h.session?.id !== sessionId) continue;
 			const entry = findMessageEntry(ctx.sessionManager.getBranch(), message);
-			const item = normalizeMessage(message, entry?.id ?? `live-${randomUUID()}`);
+			const item = normalizeMessage(
+				message,
+				entry?.id ?? `live-${randomUUID()}`,
+				h.abortRequested || !!ctx.signal?.aborted,
+			);
 			if (item) h.emit({ type: "message_end", item });
+			if (item?.kind === "assistant") h.emitContext();
 		}
 	};
 	h.subscriptions.push(
@@ -28,6 +34,8 @@ export default function pimate(pi: ExtensionAPI): void {
 			if (!ctx.hasUI) return;
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
+			h.pcPrompt = null;
+			h.abortRequested = false;
 			h.ctx = ctx;
 			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {
@@ -52,6 +60,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.status = ctx.isIdle() ? "idle" : "running";
 			h.writeMeta();
 			h.emit({ type: "session_changed", reason: event.reason, session: h.session });
+			h.emitContext();
 		}),
 	);
 	pi.registerCommand("pimate-session", {
@@ -87,10 +96,12 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "session_info", name: e.name });
 		}),
 		pi.on("agent_start", () => {
+			h.abortRequested = false;
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "running");
 			h.emit({ type: "agent_start" });
 		}),
 		pi.on("agent_settled", (e) => {
+			h.abortRequested ||= e.aborted;
 			flushMessages();
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "idle");
 			h.emit({ type: "agent_settled", aborted: e.aborted });
@@ -135,16 +146,21 @@ export default function pimate(pi: ExtensionAPI): void {
 				durationMs: e.durationMs,
 			});
 		}),
+		pi.on("session_compact", () => h.emitContext()),
 		pi.on("model_select", (e) => {
 			h.emit({ type: "model", model: { provider: e.model.provider, id: e.model.id } });
+			h.emitContext();
 		}),
 		pi.on("thinking_level_select", (e) => {
 			h.emit({ type: "thinking", level: e.level });
 		}),
 		pi.on("ui_prompt_start", (e) => {
+			if (![...h.pendingUI.values()].some((p) => p.request.kind === e.kind && p.request.title === e.title))
+				h.pcPrompt = { kind: e.kind, title: e.title };
 			h.emit({ type: "ui_prompt", phase: "start", kind: e.kind, title: e.title });
 		}),
 		pi.on("ui_prompt_end", (e) => {
+			if (h.pcPrompt?.kind === e.kind) h.pcPrompt = null;
 			h.emit({ type: "ui_prompt", phase: "end", kind: e.kind, title: e.title });
 		}),
 	);

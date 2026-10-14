@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/compat";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
@@ -22,7 +24,9 @@ export function createHandlers(h: Hub): Handlers {
 			return { deliveredAs: deliverAs ?? "prompt" };
 		},
 		abort: () => {
-			ready().ctx.abort();
+			const { ctx } = ready();
+			h.abortRequested = !ctx.isIdle();
+			ctx.abort();
 			return {};
 		},
 		ui_respond: (p) => {
@@ -63,6 +67,42 @@ export function createHandlers(h: Hub): Handlers {
 			const { pi, ctx } = ready();
 			if (!ctx.isIdle()) throw new RcError("busy");
 			pi.sendUserMessage(`/pimate-session ${JSON.stringify(p)}`, { expandPromptTemplates: true });
+			return {};
+		},
+		models: () => {
+			const { ctx } = ready();
+			return {
+				models: ctx.modelRegistry.getAvailable().map((model) => ({
+					provider: model.provider,
+					id: model.id,
+					name: model.name,
+					contextWindow: model.contextWindow,
+					thinkingLevels: getSupportedThinkingLevels(model),
+				})),
+				current: ctx.model ? { provider: ctx.model.provider, id: ctx.model.id } : null,
+			};
+		},
+		sessions: async (p) => {
+			const { ctx } = ready();
+			const sessions = await SessionManager.list(ctx.cwd, ctx.sessionManager.getSessionDir());
+			return {
+				sessions: sessions
+					.sort((a, b) => b.modified.getTime() - a.modified.getTime())
+					.slice(0, p.limit)
+					.map((s) => ({
+						id: s.id,
+						path: s.path,
+						name: s.name,
+						firstMessage: s.firstMessage,
+						messageCount: s.messageCount,
+						created: s.created.getTime(),
+						modified: s.modified.getTime(),
+						current: s.id === ctx.sessionManager.getSessionId(),
+					})),
+			};
+		},
+		shutdown: () => {
+			ready().ctx.shutdown();
 			return {};
 		},
 		commands: () => ({
