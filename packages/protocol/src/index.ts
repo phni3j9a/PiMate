@@ -82,6 +82,8 @@ export type TranscriptItem =
 			truncated?: boolean;
 			isError: boolean;
 			details?: unknown;
+			/** RC omitted details because their serialized JSON exceeds 256 KiB or cannot be serialized. */
+			detailsOmitted?: boolean;
 			timestamp?: number;
 	  }
 	/** Compaction summaries, branch summaries, custom messages etc. shown as a single line. */

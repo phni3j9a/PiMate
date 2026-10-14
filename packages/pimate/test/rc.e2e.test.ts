@@ -35,7 +35,12 @@ it.skipIf(!pi || !abduco)(
 		let abducoSession: string | undefined;
 		const host = new HostCore({
 			runDir: join(dir, "run"),
-			env: { PIMATE_ABDUCO: abduco, PI_CODING_AGENT_DIR: join(dir, "agent"), PIMATE_E2E: "1" },
+			env: {
+				PIMATE_ABDUCO: abduco,
+				PI_CODING_AGENT_DIR: join(dir, "agent"),
+				PIMATE_E2E: "1",
+				PIMATE_E2E_WRITE_DIFF: "1",
+			},
 		});
 		try {
 			const launched = await host.spawn({
@@ -52,6 +57,8 @@ it.skipIf(!pi || !abduco)(
 					"--no-themes",
 					"--thinking",
 					"off",
+					"--tools",
+					"write,edit",
 				],
 			});
 			instanceId = launched.instanceId;
@@ -103,6 +110,41 @@ it.skipIf(!pi || !abduco)(
 				if (e.event.type === "message_end") expect(history.items).toContainEqual(e.event.item);
 			}
 			expect(events.every((e, i) => !i || e.seq === events[i - 1].seq + 1)).toBe(true);
+			events.length = 0;
+			await client.request("prompt", { text: "write and edit a file" });
+			await until(
+				() => events,
+				(e) => e.some((x) => x.event.type === "agent_settled"),
+			);
+			const diffHistory = await client.request("history", {});
+			const write = diffHistory.items.find((item) => item.kind === "tool_result" && item.toolName === "write");
+			const edit = diffHistory.items.find((item) => item.kind === "tool_result" && item.toolName === "edit");
+			expect(write).toMatchObject({
+				isError: false,
+				text: "Successfully wrote to diff.txt",
+				details: { pimate: { kind: "write_diff", existed: false, patch: expect.stringContaining("+before edit") } },
+			});
+			expect(edit).toMatchObject({ isError: false, details: { patch: expect.stringContaining("+after edit") } });
+			expect(readFileSync(join(dir, "diff.txt"), "utf8")).toBe("after edit\n");
+			for (const item of [write, edit]) {
+				expect(events.some((e) => e.event.type === "message_end" && e.event.item.entryId === item?.entryId)).toBe(true);
+			}
+			// Verify disk persistence too, not only the in-memory branch used by history.
+			const persisted = readFileSync(diffHistory.session!.file!, "utf8")
+				.trim()
+				.split("\n")
+				.map((line) => JSON.parse(line));
+			expect(persisted).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						message: expect.objectContaining({
+							role: "toolResult",
+							toolName: "write",
+							details: expect.objectContaining({ pimate: expect.objectContaining({ patch: expect.any(String) }) }),
+						}),
+					}),
+				]),
+			);
 			events.length = 0;
 			await client.request("prompt", { text: "slow now" });
 			await until(

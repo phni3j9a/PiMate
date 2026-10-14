@@ -6,13 +6,14 @@ import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { patchUI } from "./ui.ts";
+import { registerWriteDiff } from "./write-diff.ts";
 
 export default function pimate(pi: ExtensionAPI): void {
 	const h = getHub();
 	// Pi recreates extension runtimes on /new, /resume and /reload. The process hub survives,
 	// but old bus and lifecycle subscriptions must not.
 	for (const off of h.subscriptions) off();
-	h.subscriptions = [];
+	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
 	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
 	const messages: { message: unknown; ctx: ExtensionContext; sessionId: string }[] = [];

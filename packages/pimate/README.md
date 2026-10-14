@@ -96,6 +96,12 @@ pimate attach pimate-01234567          # スマホが表示するコマンドで
 
 detachキーは **Ctrl+\**（CLIにも表示）。attachはPCターミナルのstdin/outをabducoへ直接接続するだけで、リモート制御にTTYキー注入は使用しません。
 
+## 書き込み差分の表示（M3）
+
+RCはPi組み込み `write` の実行前にファイルを読み、成功時の `details.pimate` に `{ kind: "write_diff", existed, patch }` を追加します。`patch` は前後3行付きunified diffで、Piのセッションにも保存されます。tool結果の `content`（LLMが見る本文）は変更しません。旧/新内容が256 KiBを超える場合は `omitted: "too_large"`、NULを含む場合は `"binary"`、読み取り失敗や差分計算の時間上限（100ms）超過は `"unreadable"` としてpatchを省略します。`existed: false` はファイル不存在を確認できた場合だけです。同時の外部書き換え・別extensionによるwriteの上書き実装は正確な差分を保証しません。
+
+history/liveのtool_resultでは `details` のJSONが256 KiB超（またはJSON化不能）の場合だけ省略し `detailsOmitted: true` を付けます。通常サイズの `edit` の `details.patch` はそのままです。`tool_end` イベントは従来どおり結果/detailsを持ちません。これらの転送制限で元のPiセッションは書き換えません。
+
 ## 構成
 
 - `src/extension/index.ts`: Pi lifecycle・イベント・session command trampoline
@@ -103,6 +109,7 @@ detachキーは **Ctrl+\**（CLIにも表示）。attachはPCターミナルのs
 - `src/extension/dispatch.ts`, `handlers.ts`: リクエスト検証、guards、全RCメソッド
 - `src/extension/ui.ts`: TUI/remoteの先着回答、AbortSignal、終了通知・状態復元
 - `src/extension/transcript.ts`: 履歴とliveメッセージの共通DTO正規化
+- `src/extension/write-diff.ts`: write実行前の取得と結果への表示用差分追加
 - `src/runtime.ts`: Host/RC共通runDir・権限確認
 - `src/host/`: discovery、RcClient、abduco spawn、開発CLI
 - `test/`: 単体テストと実Piの無課金E2E
@@ -118,7 +125,7 @@ npx biome check packages
 
 E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
-`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答で、**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
+`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit呼び出しを追加し、historyの両patchとwrite差分のセッション保存も検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
 手動でも上記CLIのspawnに以下を渡すと同じfixtureを使用できます（最初の応答後、2回目を送りabortする）。終了時はattachしてPiを終了し、abducoセッションも閉じてください。
 
@@ -143,7 +150,7 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 - select/confirm/input はremote回答でTUIもAbort。editorにはAbortSignalがなくPC側に残ります（`tuiStaysOpen:true`）。custom UIは発生通知のみでPC操作が必要。
 - `/new` 等のPi組み込みコマンドをprompt文字列として送るとLLMへ送られます。`session_op`（new/switch/fork/reload）や`compact`の専用メソッドを使ってください。Extensionコマンド・templates実行は `expandTemplates:true` を明示します。
 - subagents RPC/busは生の中継のみ。サブエージェントDTO正規化、問い合わせへの専用回答、capability依存UIはM4。第三者extension自身の実装・バージョンに依存します。
-- tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool details/他のメッセージは完全なサイズ制限をしません。Hostはdeltaをbatchingしbackpressureを制限しますが、history pagingは未対応。極端に遅いsocketクライアントは切断します。
+- tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool detailsは前述の256 KiB制限がありますが、他のメッセージは完全なサイズ制限をしません。Hostはdeltaをbatchingしbackpressureを制限しますが、history pagingは未対応。極端に遅いsocketクライアントは切断します。
 - snapshotを正とし、seqに欠落があればhello/historyを取り直します。要求を自動再送しません。Hostの生存probe失敗は `reachable:false` として返し、PIDが生きているインスタンスは掃除しません。
 - スマホから起動したPiが終了すると（アプリからの終了を含む）、abducoはattachされるまでサーバー・ソケット・systemd scopeを残します。Hostは一覧更新のたびに、終了済み（`abduco` 一覧の `+`）でHostが命名した `pimate-xxxxxxxx` のセッションだけをSIGTERMで片付けます（終了コードは確認できなくなります）。
 - 通常PC起動のPiにはabduco attachはありません（`pcAttached:null`）。PC/remote同時操作は先着、排他制御はありません。
