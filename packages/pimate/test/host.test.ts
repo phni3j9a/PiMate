@@ -63,7 +63,10 @@ describe("HostCore", () => {
 		const outside = join(temp(), "victim");
 		writeFileSync(outside, "keep");
 		await server(dir);
-		writeFileSync(join(dir, "live.json"), JSON.stringify({ ...snapshot, updatedAt: 1 }));
+		writeFileSync(
+			join(dir, "live.json"),
+			JSON.stringify({ ...snapshot, updatedAt: 1, subagents: { active: 2, waiting: 1, paused: 0, failed: 0 } }),
+		);
 		writeFileSync(join(dir, "broken.json"), "{not json");
 		writeFileSync(join(dir, "wrong.json"), JSON.stringify({ ...snapshot, instanceId: "wrong", pid: "invalid" }));
 		writeFileSync(
@@ -79,7 +82,14 @@ describe("HostCore", () => {
 		);
 		writeFileSync(join(dir, "stale.sock"), "stale");
 		const host = new HostCore({ runDir: dir, env: { PIMATE_ABDUCO: "/does/not/exist" } });
-		expect(await host.list()).toMatchObject([{ instanceId: "live", reachable: true, pcAttached: null }]);
+		expect(await host.list()).toMatchObject([
+			{
+				instanceId: "live",
+				reachable: true,
+				pcAttached: null,
+				subagents: { active: 2, waiting: 1, paused: 0, failed: 0 },
+			},
+		]);
 		expect(existsSync(join(dir, "stale.json"))).toBe(false);
 		expect(existsSync(join(dir, "stale.sock"))).toBe(false);
 		expect(existsSync(outside)).toBe(true);

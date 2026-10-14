@@ -422,17 +422,31 @@ export class HostServer {
 			const list = await this.core.list();
 			if (this.stopped) return;
 			const next = list
-				.map(({ instanceId, cwd, origin, abducoSession, pcAttached, session, status, startedAt, updatedAt }) => ({
-					instanceId,
-					cwd,
-					origin,
-					abducoSession,
-					pcAttached,
-					session,
-					status,
-					startedAt,
-					updatedAt,
-				}))
+				.map(
+					({
+						instanceId,
+						cwd,
+						origin,
+						abducoSession,
+						pcAttached,
+						session,
+						status,
+						startedAt,
+						updatedAt,
+						subagents,
+					}) => ({
+						instanceId,
+						cwd,
+						origin,
+						abducoSession,
+						pcAttached,
+						session,
+						status,
+						startedAt,
+						updatedAt,
+						subagents,
+					}),
+				)
 				.sort((a, b) => a.instanceId.localeCompare(b.instanceId));
 			for (const link of this.links.values())
 				if (!next.some((i) => i.instanceId === link.id)) {
