@@ -47,6 +47,7 @@ export class SubagentRegistry {
 	private h: Hub;
 	private runs = new Map<string, SubagentRun>();
 	private sources = new Map<string, Source>();
+	private recorded = new Set<string>();
 	private tools = new Map<string, { startedAt: number; running: boolean }>();
 	private backends: SubagentsState["backends"] = [];
 	private watchers = new Map<string, FSWatcher>();
@@ -151,7 +152,14 @@ export class SubagentRegistry {
 		for (const entry of branch) {
 			const e = record(entry);
 			if (e.type === "message" && e.message?.role === "toolResult")
-				this.tool(e.message.toolCallId, e.message.details, false, !!e.message.isError, number(e.message.timestamp));
+				this.tool(
+					e.message.toolCallId,
+					e.message.details,
+					false,
+					!!e.message.isError,
+					number(e.message.timestamp),
+					false,
+				);
 			if (e.type === "custom" && e.customType === "pimate_subagent") this.learn(record(e.data), false);
 		}
 		this.emitReset();
@@ -181,7 +189,7 @@ export class SubagentRegistry {
 	toolStart(id: string): void {
 		this.tools.set(id, { startedAt: Date.now(), running: true });
 	}
-	tool(id: string, details: unknown, running: boolean, isError = false, timestamp?: number): void {
+	tool(id: string, details: unknown, running: boolean, isError = false, timestamp?: number, persist = true): void {
 		if (this.disposed || typeof id !== "string") return;
 		const d = record(details);
 		const backend = classify(d);
@@ -194,7 +202,7 @@ export class SubagentRegistry {
 		}
 		if (backend === "example") this.backend(backend, true);
 		if (d.asyncDir || d.asyncId) {
-			this.learn({ ...d, toolCallId: id });
+			this.learn({ ...d, toolCallId: id }, persist);
 			if (!running) this.tools.delete(id);
 			return;
 		}
@@ -215,7 +223,9 @@ export class SubagentRegistry {
 		if (dir) source.dir = dir;
 		if (typeof d.parentWorkflowRunId === "string") source.parentRunId = d.parentWorkflowRunId;
 		this.sources.set(id, source);
-		if (persist && (!previous || (!previous.resumedFrom && d.resumedFrom)))
+		// Replay is read-only. Keep discovery deduplication even after history-cap eviction.
+		// A newly learned resume link is a metadata update, not another launch entry.
+		if (persist && (!this.recorded.has(id) || (!previous?.resumedFrom && d.resumedFrom)))
 			this.h.pi?.appendEntry("pimate_subagent", {
 				runId: id,
 				asyncDir: dir,
@@ -224,6 +234,7 @@ export class SubagentRegistry {
 				resumedFrom: d.resumedFrom,
 				resumedAs: d.resumedAs,
 			});
+		this.recorded.add(id);
 		this.put({
 			...previous,
 			id,
@@ -250,7 +261,8 @@ export class SubagentRegistry {
 		if (d.sessionId && d.sessionId !== this.sessionId && d.sessionId !== this.sessionFile) return;
 		const e = record(d.event);
 		const id = string(d.runId ?? d.asyncId ?? d.id ?? e.runId);
-		if (id && (d.asyncDir || channel === "subagent:async-started")) this.learn({ ...d, runId: id });
+		if (id && (channel === "subagent:async-started" || (d.asyncDir && this.sources.has(id))))
+			this.learn({ ...d, runId: id });
 		if (id) void this.readStatus(id);
 		this.scheduleRefresh();
 	}
@@ -275,7 +287,9 @@ export class SubagentRegistry {
 			this.backend("pi-subagents", true);
 			for (const node of list(data.asyncSnapshot.runs)) {
 				const id = string(node.id);
-				if (!id) continue;
+				// Backend snapshots are session-file scoped, not branch scoped. They may include
+				// abandoned runs after /tree + /reload; only refresh launches known to this branch.
+				if (!id || !this.sources.has(id)) continue;
 				if (this.sources.get(id)?.dir) {
 					await this.readStatus(id);
 					continue;

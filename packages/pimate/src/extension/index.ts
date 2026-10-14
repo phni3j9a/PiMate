@@ -18,6 +18,12 @@ export default function pimate(pi: ExtensionAPI): void {
 	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
 	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
+	const rebuildSubagents = (ctx: ExtensionContext) => {
+		h.subagents?.dispose();
+		h.subagents = new SubagentRegistry(h);
+		h.writeMeta();
+		void h.subagents.start(ctx.sessionManager.getBranch());
+	};
 	const messages: { message: unknown; ctx: ExtensionContext; sessionId: string }[] = [];
 	const flushMessages = () => {
 		for (const { message, ctx, sessionId } of messages.splice(0)) {
@@ -61,10 +67,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.writeMeta();
 			h.emit({ type: "session_changed", reason: event.reason, session: h.session });
 			h.emitContext();
-			h.subagents?.dispose();
-			h.subagents = new SubagentRegistry(h);
-			h.writeMeta();
-			void h.subagents.start(ctx.sessionManager.getBranch());
+			rebuildSubagents(ctx);
 		}),
 	);
 	pi.registerCommand("pimate-session", {
@@ -91,6 +94,11 @@ export default function pimate(pi: ExtensionAPI): void {
 		},
 	});
 	h.subscriptions.push(
+		pi.on("session_tree", (_event, ctx) => {
+			if (!ctx.hasUI) return;
+			h.ctx = ctx;
+			rebuildSubagents(ctx);
+		}),
 		pi.on("session_shutdown", (e) => {
 			h.subagents?.dispose();
 			if (e.reason === "quit" && h.ctx?.hasUI) h.stop();

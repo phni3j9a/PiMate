@@ -19,9 +19,18 @@ run ごとの更新を約250msに合流するが、終端は即時に配信す�
 履歴はトップレベルの最新30件を目安とし、実行中は上限を超えても消さない。
 workflowと参照先の子runは一緒に保持・削除する。
 
-再起動・reload・resume・fork では親の現在ブランチから tool result を再解釈する。
+再起動・reload・resume・fork と `/tree` の移動（Piの `session_tree` イベント）では、
+親の現在ブランチから tool result と保存参照を再解釈する。以前のregistryのwatcherを閉じ、
+`subagents_reset` とmeta件数を更新する。ブランチを外れた実行のプロセス自体は停止しないが、
+そのブランチの一覧・件数・操作対象からは外れる。
 async launch のパスと、RCからのresumeで得た旧→新runのリンクは、モデルに渡らない
-`pimate_subagent` custom entry に記録する。別ブランチの実行は混入させない。
+`pimate_subagent` custom entry に記録する。履歴の再解釈は読取り専用で、RC導入前のlaunchも
+reloadのたびにentryを追記しない。既知のlaunchの重複通知も追記しない（新たなresumeリンクは別途保存）。
+
+backendの `asyncSnapshot.runs` はセッションファイル単位で、別ブランチの稼働中runも含み得る。
+RCでは現在ブランチのtool result/custom entry、または現在のregistryが受けたliveの
+`async-started` で認識したrunだけをsnapshotから更新する。snapshotや未認識runの完了通知から
+新規採用しないため、launch前への `/tree` 移動後に `/reload` しても別ブランチのrunは復活しない。
 
 ## 制御と記録
 
@@ -87,3 +96,6 @@ launch後でforkすると保存参照は引き継がれる。
 回帰テストでは実SDKのcontext構築、実TreeSelectorの既定描画、branchの往復、
 `createBranchedSession` によるforkを確認した。別途registryのcustom-entry復元でも
 workflowの集約と子transcriptへの参照が維持されることを検証している。
+また `session_tree` ハンドラーによるwatcher破棄・一覧reset・件数更新、別ブランチを含む
+backend snapshotの除外とlive launchの受入れ、RC導入前のtool resultを3回reloadしても
+SDKのsession leafとentry数が変わらないことを回帰テストで確認している。

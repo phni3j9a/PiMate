@@ -427,3 +427,111 @@ it("plain custom entries are absent from model context and default tree renderin
 	expect(manager.getBranch().map((e) => e.id)).toContain(custom);
 	expect(JSON.stringify(manager.buildSessionContext())).not.toContain("private-state");
 });
+
+function branchRegistryBackend() {
+	const listeners = new Map<string, (value: unknown) => void>();
+	const appended: unknown[] = [];
+	const snapshotRuns = ["known", "off-branch", "live"].map((id) => ({
+		id,
+		state: "running",
+		children: [{ id: "step:0", label: "scout", state: "running" }],
+	}));
+	const hub = {
+		session: { id: "parent", file: "/same-session.jsonl" },
+		writeMeta() {},
+		emit() {},
+		pi: {
+			appendEntry: (customType: string, data: unknown) => appended.push({ type: "custom", customType, data }),
+			events: {
+				on: (name: string, fn: (value: unknown) => void) => {
+					listeners.set(name, fn);
+					return () => listeners.delete(name);
+				},
+				emit: (_name: string, request: { requestId: string; method: string }) =>
+					queueMicrotask(() =>
+						listeners.get(`subagents:rpc:v1:reply:${request.requestId}`)?.({
+							success: true,
+							data:
+								request.method === "ping"
+									? { capabilities: { asyncStatusSnapshot: { version: 1 } } }
+									: { asyncSnapshot: { version: 1, runs: snapshotRuns } },
+						}),
+					),
+			},
+		},
+	};
+	return { hub: hub as unknown as import("../src/extension/hub.ts").Hub, appended };
+}
+
+it("filters backend snapshots to the current branch, but accepts new live launches", async () => {
+	const { SubagentRegistry } = await import("../src/extension/subagents/registry.ts");
+	const { hub, appended } = branchRegistryBackend();
+	const registry = new SubagentRegistry(hub);
+	try {
+		await registry.start([{ type: "custom", customType: "pimate_subagent", data: { runId: "known" } }]);
+		expect(registry.snapshot().runs.map((r) => r.id)).toEqual(["known"]);
+		expect(registry.snapshot().runs[0]?.state).toBe("running");
+		await expect(registry.control({ runId: "off-branch", action: "stop" })).rejects.toMatchObject({
+			code: "not_found",
+		});
+		registry.bus("subagent:async-complete", {
+			id: "off-branch",
+			asyncDir: "/off-branch",
+			sessionId: "/same-session.jsonl",
+		});
+		await registry.detect();
+		expect(registry.snapshot().runs.map((r) => r.id)).toEqual(["known"]);
+		registry.bus("subagent:async-started", { id: "live", sessionId: "/same-session.jsonl" });
+		await registry.detect();
+		expect(registry.snapshot().runs.map((r) => r.id)).toEqual(["known", "live"]);
+		expect(registry.snapshot().runs[1]?.state).toBe("running");
+		expect(appended).toHaveLength(1);
+	} finally {
+		registry.dispose();
+	}
+	// Navigating before every launch and then reloading must not resurrect session-file fleet entries.
+	const reloaded = new SubagentRegistry(hub);
+	try {
+		await reloaded.start([]);
+		expect(reloaded.snapshot().runs).toEqual([]);
+	} finally {
+		reloaded.dispose();
+	}
+});
+
+it("replays pre-RC async launches without appending entries or moving the session leaf on reload", async () => {
+	const { SubagentRegistry } = await import("../src/extension/subagents/registry.ts");
+	const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+	const manager = SessionManager.inMemory();
+	manager.appendMessage({ role: "user", content: "launch", timestamp: 1 });
+	const details = { mode: "single", asyncId: "known", results: [] };
+	manager.appendMessage({
+		role: "toolResult",
+		toolCallId: "launch-call",
+		toolName: "subagent",
+		content: [],
+		details,
+		isError: false,
+		timestamp: 2,
+	});
+	const leaf = manager.getLeafId();
+	const size = manager.getEntries().length;
+	const { hub } = branchRegistryBackend();
+	hub.pi!.appendEntry = (customType, data) => {
+		manager.appendCustomEntry(customType, data);
+	};
+	for (let i = 0; i < 3; i++) {
+		const registry = new SubagentRegistry(hub);
+		try {
+			await registry.start(manager.getBranch());
+			expect(registry.snapshot().runs.map((r) => r.id)).toEqual(["known"]);
+			// Duplicate launch events/results also must not persist an already recorded branch launch.
+			registry.bus("subagent:async-started", { id: "known" });
+			registry.tool("launch-call", details, false);
+			expect(manager.getLeafId()).toBe(leaf);
+			expect(manager.getEntries()).toHaveLength(size);
+		} finally {
+			registry.dispose();
+		}
+	}
+});
