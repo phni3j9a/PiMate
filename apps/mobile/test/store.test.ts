@@ -463,6 +463,31 @@ describe("AppStore M2", () => {
 		expect(store.getState().op).toBeNull();
 	});
 
+	it("ends a phone session op from the new snapshot when session_op_done was lost in the resync", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);
+		const fork = store.sessionOp("fork", "u1", "最初の質問");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await fork;
+		s.receive(event(6, { type: "session_changed", reason: "fork", session: { id: "s2" } }));
+		expect(store.getState().op?.kind).toBe("fork");
+		// The Host built the snapshot after session_op_done (seq 7) and dropped the buffered event.
+		s.receive(subscribedMsg([], "s2", "idle", { seq: 8 }));
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().drafts["h1/i1"]).toBe("最初の質問");
+		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "fork", byPhone: true });
+	});
+
+	it("keeps a session op pending while the snapshot still shows the old session", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const op = store.sessionOp("new");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await op;
+		s.receive(subscribedMsg([], "s1"));
+		expect(store.getState().op?.kind).toBe("new");
+	});
+
 	it("requires confirmation before a draft goes to a session switched on the PC", async () => {
 		const { store } = await setup();
 		const s = connect();
@@ -475,6 +500,20 @@ describe("AppStore M2", () => {
 		expect(opRcs(s).filter((m) => m.request.method === "prompt")).toEqual([]);
 		store.confirmTarget();
 		expect(store.sendBlocker()).toBeNull();
+	});
+
+	it("names an unnamed resumed conversation by its first message, not as a new one", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "今の質問" }]);
+		store.setDraft("draft");
+		s.receive(event(6, { type: "session_changed", reason: "resume", session: { id: "s2" } }));
+		expect(store.getState().targetChanged).toEqual({ to: undefined });
+		s.receive({
+			...subscribedMsg([{ kind: "user", entryId: "u9", text: "前の\n質問" }], "s2"),
+			history: { session: { id: "s2" }, items: [{ kind: "user", entryId: "u9", text: "前の\n質問" }] },
+		});
+		expect(store.getState().targetChanged).toEqual({ to: "前の 質問" });
+		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "resume", from: "s1", to: "前の 質問" });
 	});
 
 	it("offers the forked message as the draft and reports a cancelled op", async () => {

@@ -127,6 +127,19 @@ function sessionLabel(session: SessionRef | null | undefined): string | undefine
 	return session?.name?.trim() || undefined;
 }
 
+/** How an unnamed conversation is called: its first user message (as in the past-sessions list). */
+export function conversationLabel(
+	session: SessionRef | null | undefined,
+	items: readonly TranscriptItem[],
+): string | undefined {
+	const named = sessionLabel(session);
+	if (named) return named;
+	const first = items.find((i) => i.kind === "user");
+	const text = first?.kind === "user" ? first.text.replace(/\s+/g, " ").trim() : "";
+	if (!text) return undefined;
+	return text.length > 40 ? `${text.slice(0, 39)}…` : text;
+}
+
 function runningSince(prev: InstanceView, status: InstanceStatus, now: number): number | null {
 	if (status === "idle") return null;
 	return prev.runningSince ?? now;
@@ -142,8 +155,9 @@ function applySubscribed(
 	let sessionNotice = prev.phase === "resyncing" ? prev.sessionNotice : null;
 	// A reconnect can land in a different conversation (e.g. /resume on the PC while we were offline).
 	if (!sessionNotice && prev.session && session && prev.session.id !== session.id)
-		sessionNotice = { reason: "switch", from: sessionLabel(prev.session), to: sessionLabel(session) };
-	if (sessionNotice && !sessionNotice.to) sessionNotice = { ...sessionNotice, to: sessionLabel(session) };
+		sessionNotice = { reason: "switch", from: conversationLabel(prev.session, prev.items) };
+	if (sessionNotice && !sessionNotice.to)
+		sessionNotice = { ...sessionNotice, to: conversationLabel(session, history.items) };
 	return {
 		instanceId: prev.instanceId,
 		phase: "ready",
@@ -228,7 +242,7 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 				uiPrompt: null,
 				uiNotes: [],
 				sessionNotice: showNotice
-					? { reason: event.reason, from: sessionLabel(view.session), to: sessionLabel(event.session) }
+					? { reason: event.reason, from: conversationLabel(view.session, view.items), to: sessionLabel(event.session) }
 					: null,
 			};
 		}

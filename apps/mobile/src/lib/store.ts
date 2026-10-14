@@ -23,7 +23,14 @@ import type {
 } from "@pimate/protocol";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
 import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
-import { createView, findDeliveredUserItem, type InstanceView, reduceView, userEntryIds } from "./instanceView";
+import {
+	conversationLabel,
+	createView,
+	findDeliveredUserItem,
+	type InstanceView,
+	reduceView,
+	userEntryIds,
+} from "./instanceView";
 import { pairWithHost } from "./pairing";
 
 export interface HostRuntime {
@@ -93,6 +100,8 @@ export interface PendingOp {
 	key: string;
 	/** fork: the text of the message the new branch starts from (offered as the draft). */
 	forkText?: string;
+	/** new / switch / fork: the session the op started from. Reaching another session also ends the op. */
+	fromSessionId?: string;
 }
 
 export interface UIAnswer {
@@ -466,6 +475,24 @@ export class AppStore {
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
+		// `session_op_done` is not part of the snapshot: when it is emitted while the Host resyncs this view it
+		// can be lost. The snapshot of another session is proof enough that the phone's switch happened.
+		const pending = this.state.op;
+		if (
+			msg.type === "subscribed" &&
+			pending?.key === key &&
+			pending.fromSessionId &&
+			next.session &&
+			next.session.id !== pending.fromSessionId &&
+			!("op" in opPatch)
+		)
+			Object.assign(patch, this.sessionOpDone(pending, key));
+		// An unnamed conversation is known by its first message once its history has arrived.
+		const target = patch.targetChanged ?? this.state.targetChanged;
+		if (msg.type === "subscribed" && target && !target.to) {
+			const to = conversationLabel(next.session, next.items);
+			if (to) patch.targetChanged = { to };
+		}
 		patch.view = next;
 		if (msg.type === "subscribed" && this.state.models?.key !== key) void this.loadModels();
 		if (view.phase === "ready" && next.phase === "resyncing") this.connections.get(hostId)?.resubscribe();
@@ -482,17 +509,20 @@ export class AppStore {
 		switch (event.type) {
 			case "session_op_done": {
 				if (!op || op.kind !== event.op) return {};
-				const patch: Partial<AppState> = { op: null };
 				if (event.error)
-					patch.notice = { kind: "error", title: `${OP_LABEL[op.kind]}に失敗しました`, text: event.error };
-				else if (event.cancelled)
-					patch.notice = {
-						kind: "info",
-						text: `${OP_LABEL[op.kind]}は取り消されました（Pi の拡張機能などが止めました）`,
+					return {
+						op: null,
+						notice: { kind: "error" as const, title: `${OP_LABEL[op.kind]}に失敗しました`, text: event.error },
 					};
-				else if (op.forkText && !this.state.drafts[key]?.trim())
-					patch.drafts = { ...this.state.drafts, [key]: op.forkText };
-				return patch;
+				if (event.cancelled)
+					return {
+						op: null,
+						notice: {
+							kind: "info" as const,
+							text: `${OP_LABEL[op.kind]}は取り消されました（Pi の拡張機能などが止めました）`,
+						},
+					};
+				return this.sessionOpDone(op, key);
 			}
 			case "compact_done":
 				return op?.kind === "compact"
@@ -505,6 +535,12 @@ export class AppStore {
 			default:
 				return {};
 		}
+	}
+
+	private sessionOpDone(op: PendingOp, key: string): Partial<AppState> {
+		const patch: Partial<AppState> = { op: null };
+		if (op.forkText && !this.state.drafts[key]?.trim()) patch.drafts = { ...this.state.drafts, [key]: op.forkText };
+		return patch;
 	}
 
 	/** Removes outbox entries that now appear in the transcript. */
@@ -662,7 +698,10 @@ export class AppStore {
 				);
 		const patch: Partial<AppState> = { drafts, outbox };
 		if (opts.notice) patch.notice = opts.notice;
-		if (opts.targetChanged) patch.targetChanged = { to: this.state.view?.session?.name || undefined };
+		if (opts.targetChanged) {
+			const view = this.state.view;
+			patch.targetChanged = { to: view ? conversationLabel(view.session, view.items) : undefined };
+		}
 		this.set(patch);
 		this.reconcileOutbox(false);
 	}
@@ -872,7 +911,8 @@ export class AppStore {
 
 	/** Session operations (new / switch / fork); the result arrives as `session_op_done`. */
 	async sessionOp(op: "new" | "switch" | "fork", arg?: string, forkText?: string): Promise<Result<null>> {
-		return this.startOp({ kind: op, forkText }, "session_op", { op, ...(arg ? { arg } : {}) });
+		const fromSessionId = this.state.view?.session?.id;
+		return this.startOp({ kind: op, forkText, fromSessionId }, "session_op", { op, ...(arg ? { arg } : {}) });
 	}
 
 	async compact(): Promise<Result<null>> {
