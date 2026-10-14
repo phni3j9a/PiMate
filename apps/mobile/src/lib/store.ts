@@ -218,6 +218,11 @@ function rcErrorText(code: string, message?: string, notDone = "送信しませ�
 }
 
 export class AppStore {
+	/**
+	 * A phone switch whose success arrived before the switch itself (the Host delivers result events ahead of
+	 * the snapshot when it resyncs). Lets the following session change still count as the phone's own.
+	 */
+	private phoneSwitch: { key: string; fromSessionId: string } | null = null;
 	private state: AppState = {
 		loaded: false,
 		hosts: [],
@@ -481,26 +486,31 @@ export class AppStore {
 			const op = this.state.op;
 			// The phone switched on purpose: the draft simply follows, and the divider says who did it.
 			// Only an op started from the conversation being left counts (never a leftover one).
-			const byPhone =
+			const byOp =
 				!!op &&
 				op.key === key &&
 				(op.kind === "new" || op.kind === "switch" || op.kind === "fork") &&
 				!!op.fromSessionId &&
 				op.fromSessionId === view.session?.id;
+			const byPhone =
+				byOp || (this.phoneSwitch?.key === key && this.phoneSwitch.fromSessionId === view.session?.id);
 			const draft = this.state.drafts[key]?.trim();
 			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
+		if (sessionChanged || msg.type === "subscribed") this.phoneSwitch = null;
 		// Result events are not part of the snapshot: one emitted while the Host builds it can be lost.
 		const pending = this.state.op;
 		if (msg.type === "subscribed" && pending?.key === key && !("op" in opPatch)) {
-			// After the switch we saw begin, the snapshot of another session is proof that it happened.
+			// After the switch we saw begin, a snapshot of the very session it arrived at is proof that it
+			// happened. Any other session (e.g. the PC switched again meanwhile) leaves the result unknown.
 			if (
 				view.phase === "resyncing" &&
 				pending.fromSessionId &&
 				next.session &&
-				next.session.id !== pending.fromSessionId
+				next.session.id !== pending.fromSessionId &&
+				next.session.id === view.session?.id
 			)
 				Object.assign(patch, this.sessionOpDone(pending, key));
 			// Otherwise an accepted op may have finished unseen: never wait for it forever.
@@ -541,6 +551,9 @@ export class AppStore {
 							text: `${OP_LABEL[op.kind]}は取り消されました（Pi の拡張機能などが止めました）`,
 						},
 					};
+				const v = this.state.view;
+				if (op.fromSessionId && v?.phase === "ready" && v.session?.id === op.fromSessionId)
+					this.phoneSwitch = { key, fromSessionId: op.fromSessionId };
 				return this.sessionOpDone(op, key);
 			}
 			case "compact_done":

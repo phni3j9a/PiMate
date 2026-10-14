@@ -478,6 +478,38 @@ describe("AppStore M2", () => {
 		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "fork", byPhone: true });
 	});
 
+	it("does not take a snapshot of another session as the fork's arrival", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);
+		const fork = store.sessionOp("fork", "u1", "最初の質問");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await fork;
+		s.receive(event(6, { type: "session_changed", reason: "fork", session: { id: "s2" } }));
+		// session_op_done was lost and the PC switched again before the snapshot was built.
+		s.receive(subscribedMsg([], "s3", "idle", { seq: 9 }));
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice).toMatchObject({ kind: "error" });
+		expect(store.getState().drafts["h1/i1"] ?? "").toBe("");
+	});
+
+	it("keeps a phone switch its own when the Host delivers the result ahead of the snapshot", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);
+		const fork = store.sessionOp("fork", "u1", "最初の質問");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await fork;
+		// The Host resynced: session_changed (6) is inside the snapshot, session_op_done (7) comes first.
+		s.receive(event(7, { type: "session_op_done", op: "fork", cancelled: false }));
+		expect(store.getState().op).toBeNull();
+		s.receive(subscribedMsg([], "s2", "idle", { seq: 8 }));
+		expect(store.getState().drafts["h1/i1"]).toBe("最初の質問");
+		expect(store.getState().targetChanged).toBeNull();
+		expect(store.sendBlocker()).toBeNull();
+		// The marker is spent: a later PC switch asks again.
+		s.receive(event(9, { type: "session_changed", reason: "resume", session: { id: "s3", name: "s3" } }));
+		expect(store.getState().targetChanged).toEqual({ to: "s3" });
+	});
+
 	it("gives up an accepted op whose result can no longer arrive after a fresh snapshot", async () => {
 		const { store } = await setup();
 		const s = connect();
