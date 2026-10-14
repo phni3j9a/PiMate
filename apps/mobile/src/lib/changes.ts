@@ -18,6 +18,8 @@ export interface ChangePiece {
 	tool: "edit" | "write";
 	/** Display path (relative to the instance's folder when inside it). */
 	path: string;
+	/** Lexically normalized POSIX identity, separate from the first-seen display name. */
+	pathKey: string;
 	/** A = the write created the file (RC confirmed it did not exist), M = anything else. */
 	status: "A" | "M";
 	/** patch: a real diff. content: written content only (previous unknown). omitted: nothing to show. */
@@ -76,6 +78,41 @@ export function displayPath(path: string, cwd: string | null): string {
 	return p.startsWith(`${base}/`) ? p.slice(base.length + 1) : p;
 }
 
+/** POSIX lexical normalization only; the app cannot resolve server-side symlinks. */
+function normalizePath(path: string): string {
+	const absolute = path.startsWith("/");
+	const parts: string[] = [];
+	for (const part of path.split("/")) {
+		if (!part || part === ".") continue;
+		if (part === ".." && parts.length && parts.at(-1) !== "..") parts.pop();
+		else if (part !== ".." || !absolute) parts.push(part);
+	}
+	return `${absolute ? "/" : ""}${parts.join("/")}` || ".";
+}
+
+function pathKey(path: string, cwd: string | null): string {
+	const p = path.replace(/^@/, "");
+	const base = cwd ? normalizePath(cwd) : null;
+	return displayPath(normalizePath(base && !p.startsWith("/") ? `${base}/${p}` : p), base);
+}
+
+// Transcript entries and arrays are immutable in the reducer. Weak keys release old sessions/snapshots.
+const pieceCache = new WeakMap<
+	ToolResult,
+	{ toolName: string; args: unknown; cwd: string | null; piece: ChangePiece | null }
+>();
+const resultCache = new WeakMap<readonly TranscriptItem[], Map<string, ToolResult>>();
+
+export function toolResults(items: readonly TranscriptItem[]): ReadonlyMap<string, ToolResult> {
+	let results = resultCache.get(items);
+	if (!results) {
+		results = new Map();
+		for (const item of items) if (item.kind === "tool_result") results.set(item.toolCallId, item);
+		resultCache.set(items, results);
+	}
+	return results;
+}
+
 function writeDetails(details: unknown): PimateWriteDetails["pimate"] | null {
 	const p = record(record(details).pimate);
 	return p.kind === "write_diff" ? (p as PimateWriteDetails["pimate"]) : null;
@@ -101,6 +138,14 @@ export function changeOf(
 	cwd: string | null,
 ): ChangePiece | null {
 	if ((toolName !== "edit" && toolName !== "write") || !result || result.isError) return null;
+	const cached = pieceCache.get(result);
+	if (cached && cached.toolName === toolName && cached.args === args && cached.cwd === cwd) return cached.piece;
+	const piece = buildChange(toolName, args, result, cwd);
+	pieceCache.set(result, { toolName, args, cwd, piece });
+	return piece;
+}
+
+function buildChange(toolName: "edit" | "write", args: unknown, result: ToolResult, cwd: string | null): ChangePiece {
 	const a = record(args);
 	const details = record(result.details);
 	const omittedByRc = (result as { detailsOmitted?: boolean }).detailsOmitted === true;
@@ -117,6 +162,7 @@ export function changeOf(
 		toolCallId: result.toolCallId,
 		tool: toolName,
 		path: displayPath(rawPath || "（不明なファイル）", cwd),
+		pathKey: pathKey(rawPath || "（不明なファイル）", cwd),
 		// With a concurrent write in the same batch, "did not exist" may describe a state another call changed.
 		status: pimate?.existed === false && pimate.omitted !== "concurrent" ? "A" : "M",
 		kind: "omitted",
@@ -171,8 +217,7 @@ export function collectChanges(
 	start = 0,
 	end = items.length,
 ): ChangePiece[] {
-	const results = new Map<string, ToolResult>();
-	for (const item of items) if (item.kind === "tool_result") results.set(item.toolCallId, item);
+	const results = toolResults(items);
 	const pieces: ChangePiece[] = [];
 	for (let i = start; i < end; i++) {
 		const item = items[i]!;
@@ -195,11 +240,11 @@ export function collectChanges(
 export function groupByFile(pieces: readonly ChangePiece[]): FileChange[] {
 	const files = new Map<string, FileChange>();
 	for (const piece of pieces) {
-		let file = files.get(piece.path);
+		let file = files.get(piece.pathKey);
 		if (!file) {
 			// The first call decides A/M: a file the scope created stays "A" even when edited afterwards.
 			file = { path: piece.path, status: piece.status, add: 0, del: 0, counted: false, lines: 0, pieces: [] };
-			files.set(piece.path, file);
+			files.set(piece.pathKey, file);
 		}
 		file.pieces.push(piece);
 		file.add += piece.add;
@@ -222,6 +267,39 @@ export function totals(files: readonly FileChange[]): { add: number; del: number
 	return { add, del, counted };
 }
 
+interface ChangeSummary {
+	files: FileChange[];
+	add: number;
+	del: number;
+	counted: boolean;
+}
+const summaryCache = new WeakMap<
+	readonly TranscriptItem[],
+	{ cwd: string | null; ranges: Map<string, ChangeSummary> }
+>();
+
+/** Cached per immutable transcript/range, so text deltas do not regroup every completed turn. */
+export function changeSummary(
+	items: readonly TranscriptItem[],
+	cwd: string | null,
+	start = 0,
+	end = items.length,
+): ChangeSummary {
+	let cached = summaryCache.get(items);
+	if (!cached || cached.cwd !== cwd) {
+		cached = { cwd, ranges: new Map() };
+		summaryCache.set(items, cached);
+	}
+	const key = `${start}:${end}`;
+	let summary = cached.ranges.get(key);
+	if (!summary) {
+		const files = groupByFile(collectChanges(items, cwd, start, end));
+		summary = { files, ...totals(files) };
+		cached.ranges.set(key, summary);
+	}
+	return summary;
+}
+
 /** The unified diffs of the files, concatenated in display order (content-only pieces have none). */
 export function combinedPatch(files: readonly FileChange[]): string {
 	return files
@@ -240,9 +318,9 @@ export function scopeChanges(
 	scope: ReviewScope,
 	turnId: string | null,
 ): FileChange[] {
-	if (scope === "session") return groupByFile(collectChanges(items, cwd));
+	if (scope === "session") return changeSummary(items, cwd).files;
 	const turn = turnRanges(items).find((t) => t.id === turnId);
-	return turn ? groupByFile(collectChanges(items, cwd, turn.start, turn.end)) : [];
+	return turn ? changeSummary(items, cwd, turn.start, turn.end).files : [];
 }
 
 /** The most recent turn that changed files (the Review screen's "このターン" when opened for the session). */

@@ -32,6 +32,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
 			h.pcPrompt = null;
+			h.agentActive = false;
 			h.ctx = ctx;
 			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {
@@ -92,10 +93,12 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "session_info", name: e.name });
 		}),
 		pi.on("agent_start", () => {
+			h.agentActive = true;
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "running");
 			h.emit({ type: "agent_start" });
 		}),
 		pi.on("agent_settled", (e) => {
+			h.agentActive = false;
 			flushMessages();
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "idle");
 			h.emit({ type: "agent_settled", aborted: e.aborted });

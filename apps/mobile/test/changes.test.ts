@@ -1,8 +1,9 @@
 import type { HostMessage, TranscriptItem } from "@pimate/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	changeOf,
 	changeReference,
+	changeSummary,
 	combinedPatch,
 	displayPath,
 	groupByFile,
@@ -11,10 +12,12 @@ import {
 	NOTE_CONTENT_ONLY,
 	NOTE_TOO_LARGE,
 	scopeChanges,
+	toolResults,
 	totals,
 } from "../src/lib/changes";
+import * as diff from "../src/lib/diff";
 import { parseUnifiedDiff } from "../src/lib/diff";
-import { createView, reduceView } from "../src/lib/instanceView";
+import { createView, type InstanceView, reduceView } from "../src/lib/instanceView";
 import { buildRows, visibleRows } from "../src/lib/transcriptRows";
 
 // What Pi's edit tool stores (jsdiff createTwoFilesPatch, FILE_HEADERS_ONLY).
@@ -98,7 +101,12 @@ describe("parseUnifiedDiff", () => {
 	});
 });
 
-const result = (toolCallId: string, toolName: string, details?: unknown, extra: object = {}): TranscriptItem => ({
+const result = (
+	toolCallId: string,
+	toolName: string,
+	details?: unknown,
+	extra: object = {},
+): Extract<TranscriptItem, { kind: "tool_result" }> => ({
 	kind: "tool_result",
 	entryId: `r-${toolCallId}`,
 	toolCallId,
@@ -160,6 +168,84 @@ describe("changes", () => {
 		expect(displayPath("/other/a.ts", "/w")).toBe("/other/a.ts");
 	});
 
+	it.each([null, "/w", "/w/", "/w/nested/..", "/"])(
+		"groups path aliases with cwd %s and preserves created status",
+		(cwd) => {
+			const aliases = ["src/new.ts", "./src/new.ts", "a/../src/new.ts", "src//./new.ts"];
+			if (cwd) aliases.push(`${cwd}/src/new.ts`);
+			const pieces = aliases.map(
+				(path, i) =>
+					changeOf(
+						i === 0 ? "write" : "edit",
+						{ path },
+						i === 0
+							? result("w", "write", { pimate: { kind: "write_diff", existed: false, patch: writePatch } })
+							: result(`e${i}`, "edit", { patch: EDIT_PATCH }),
+						cwd,
+					)!,
+			);
+			const files = groupByFile(pieces);
+			expect(files).toHaveLength(1);
+			expect(files[0]).toMatchObject({ path: "src/new.ts", status: "A" });
+			expect(files[0]!.pieces).toHaveLength(aliases.length);
+		},
+	);
+
+	it("normalizes outside-cwd paths without conflating different roots or losing the display name", () => {
+		const piece = (path: string, cwd: string | null = "/w") =>
+			changeOf("edit", { path }, result(path, "edit", { patch: EDIT_PATCH }), cwd)!;
+		const files = groupByFile([piece("./src/a.ts"), piece("src/a.ts"), piece("/work/src/a.ts")]);
+		expect(files.map((f) => f.path)).toEqual(["./src/a.ts", "/work/src/a.ts"]);
+		expect(groupByFile([piece("../other/a.ts"), piece("/other/a.ts")])).toHaveLength(1);
+		expect(groupByFile([piece("../a.ts", null), piece("a.ts", null)])).toHaveLength(2);
+		expect(groupByFile([piece("src/a.ts", null), piece("/w/src/a.ts", null)])).toHaveLength(2);
+	});
+
+	it("parses each patch once and reuses result indexes/turn summaries across streaming deltas", () => {
+		const parse = vi.spyOn(diff, "parseUnifiedDiff");
+		try {
+			let view: InstanceView = {
+				...createView("i"),
+				phase: "ready" as const,
+				cwd: "/w",
+				seq: 0,
+				items: [
+					{ kind: "user" as const, entryId: "u", text: "go" },
+					call("a", [{ id: "e", name: "edit", args: { path: "src/greet.ts" } }]),
+					result("e", "edit", { patch: EDIT_PATCH }),
+					call("b", [{ id: "w", name: "write", args: { path: "src/new.ts" } }]),
+					result("w", "write", { pimate: { kind: "write_diff", existed: false, patch: writePatch } }),
+				],
+			};
+			buildRows(view); // tool row and completed-turn summary share each parsed result
+			const summary = changeSummary(view.items, view.cwd);
+			const results = toolResults(view.items);
+			expect(parse).toHaveBeenCalledTimes(2);
+			for (let seq = 1; seq <= 10; seq++) {
+				view = reduceView(
+					view,
+					{ type: "event", instanceId: "i", sessionId: null, seq, event: { type: "text_delta", delta: "x" } },
+					seq,
+				);
+				buildRows(view);
+				expect(changeSummary(view.items, view.cwd)).toBe(summary);
+				expect(toolResults(view.items)).toBe(results);
+			}
+			expect(parse).toHaveBeenCalledTimes(2);
+			// An immutable replacement invalidates the index/summary; unchanged results still reuse their patch.
+			view = {
+				...view,
+				items: view.items.map((item) => (item.entryId === "r-e" ? result("e", "edit", { patch: writePatch }) : item)),
+			};
+			buildRows(view);
+			expect(parse).toHaveBeenCalledTimes(3);
+			expect(changeSummary(view.items, view.cwd)).not.toBe(summary);
+			expect(changeSummary(view.items, view.cwd).add).toBe(4);
+		} finally {
+			parse.mockRestore();
+		}
+	});
+
 	const items: TranscriptItem[] = [
 		{ kind: "user", entryId: "u1", text: "make it", timestamp: 1_000 },
 		call("a1", [{ id: "w1", name: "write", args: { path: "src/new.ts", content: "a\nb\n" } }], 2_000),
@@ -197,7 +283,7 @@ describe("changes", () => {
 		);
 	});
 
-	it("folds completed turns into a summary row with duration, tool count and changes", () => {
+	it("folds history without an invented duration, but keeps tool counts and changes", () => {
 		const view = reduceView(
 			createView("i"),
 			{
@@ -234,7 +320,10 @@ describe("changes", () => {
 			"user",
 			"text",
 		]);
-		expect(closed[1]).toMatchObject({ turnId: "u1", durationMs: 18_500, tools: 2, files: 2, add: 5, del: 2 });
+		expect(closed[1]).toMatchObject({ turnId: "u1", durationMs: null, tools: 2, files: 2, add: 5, del: 2 });
+		const timed = buildRows({ ...view, turnMs: { u1: 27_000, u2: 500 } });
+		expect(timed.find((r) => r.kind === "turnSummary" && r.turnId === "u1")).toMatchObject({ durationMs: 27_000 });
+		expect(timed.find((r) => r.kind === "turnSummary" && r.turnId === "u2")).toMatchObject({ durationMs: null });
 		const tools = rows.filter((r) => r.kind === "tool");
 		expect(tools.map((r) => r.kind === "tool" && [r.meta, r.fold])).toEqual([
 			["+2", "turn:u1"],

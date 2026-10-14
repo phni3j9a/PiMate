@@ -219,11 +219,53 @@ describe("instance view reducer", () => {
 		expect(v.agentActive).toBe(true);
 		v = apply(v, ev({ type: "agent_settled", aborted: false }), ev({ type: "status", status: "idle" }));
 		expect(v.agentActive).toBe(false);
-		// Snapshots: decided by the transcript.
+		// Older RC snapshots without the explicit flag: transcript heuristic remains compatible.
 		const done = [user("u", "hi"), assistant("a", "ok", { stopReason: "stop" })];
 		expect(ready(done, { status: "waiting_input" }).agentActive).toBe(false);
 		expect(ready([user("u", "hi")], { status: "waiting_input" }).agentActive).toBe(true);
 		expect(ready(done, { status: "running" }).agentActive).toBe(true);
+	});
+
+	it("keeps a settled-looking answer stoppable while an extension dialog holds the run open", () => {
+		const done = [user("u", "hi"), assistant("a", "ok", { stopReason: "stop" })];
+		const v = ready(done, {
+			status: "waiting_input",
+			agentActive: true,
+			pendingUI: [{ requestId: "confirm", kind: "confirm", title: "Continue?" }],
+		});
+		expect(v.agentActive).toBe(true);
+		expect(apply(v, ev({ type: "agent_settled", aborted: false })).agentActive).toBe(false);
+		// An explicit false also wins over the old transcript/status heuristic.
+		expect(ready([user("u", "hi")], { status: "waiting_input", agentActive: false }).agentActive).toBe(false);
+		expect(ready(done, { status: "running", agentActive: false }).agentActive).toBe(false);
+	});
+
+	it("times a live turn through settlement, including final generation and extension dialogs", () => {
+		let v = ready();
+		v = reduceView(v, ev({ type: "agent_start" }), 1_000);
+		v = reduceView(v, ev({ type: "message_end", item: user("u", "go") }), 1_000);
+		const items = v.items;
+		v = reduceView(v, ev({ type: "text_delta", delta: "answer" }), 8_000);
+		expect(v.items).toBe(items); // streaming must not invalidate transcript/diff caches
+		v = reduceView(v, ev({ type: "message_end", item: assistant("a", "answer", { timestamp: 2_000 }) }), 9_000);
+		v = reduceView(v, ev({ type: "status", status: "waiting_input" }), 10_000);
+		expect(v.turnMs).toEqual({});
+		v = reduceView(v, ev({ type: "agent_settled", aborted: false }), 13_000);
+		expect(v.turnMs).toEqual({ u: 12_000 });
+		expect(v.turnClock).toBeNull();
+		// Completed local measurements survive a same-session resubscription, not a session switch.
+		expect(reduceView(v, subscribed(v.items), 14_000).turnMs).toEqual({ u: 12_000 });
+		expect(reduceView(v, subscribed([], { session: { id: "s2" } }), 14_000).turnMs).toEqual({});
+	});
+
+	it("does not invent a turn duration after joining or reconnecting mid-run", () => {
+		let v = ready();
+		v = reduceView(v, ev({ type: "agent_start" }), 1_000);
+		v = reduceView(v, ev({ type: "message_end", item: user("u", "go") }), 1_000);
+		v = reduceView(v, subscribed(v.items, { seq: 20, status: "running", agentActive: true }), 5_000);
+		expect(v.turnClock).toBeNull();
+		v = reduceView(v, ev({ type: "agent_settled", aborted: false }, 21), 9_000);
+		expect(v.turnMs).toEqual({});
 	});
 
 	it("times thinking only when seen from its start", () => {

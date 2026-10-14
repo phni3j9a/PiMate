@@ -157,6 +157,8 @@ export interface InstanceSnapshot {
 	startedAt: number;
 	session: SessionRef | null;
 	status: InstanceStatus;
+	/** A Pi run is between agent_start and agent_settled, including extension dialogs after agent_end. */
+	agentActive?: boolean;
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];

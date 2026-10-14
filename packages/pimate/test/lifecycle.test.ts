@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { afterEach, expect, it, vi } from "vitest";
 import { getHub, type Hub } from "../src/extension/hub.ts";
 import extension from "../src/extension/index.ts";
+import { patchUI } from "../src/extension/ui.ts";
 
 const globalHub = globalThis as typeof globalThis & { __pimateV1Hub?: Hub };
 afterEach(() => {
@@ -61,4 +62,35 @@ it("tracks PC-only prompts and context in snapshots/events", () => {
 	expect(h.snapshot().pcPrompt).toBeNull();
 	hooks.get("ui_prompt_start")?.({ kind: "select", title: "Built in" });
 	expect(h.snapshot().pcPrompt).toEqual({ kind: "select", title: "Built in" });
+});
+
+it.each(["agent_end", "agent_before_settle"])("keeps snapshots active while a %s handler awaits a dialog", async () => {
+	const { hooks, h } = setup();
+	const ctx = {
+		ui: { confirm: () => new Promise<boolean>(() => {}) },
+		isIdle: () => !h.agentActive,
+		getContextUsage: () => undefined,
+	} as unknown as ExtensionContext;
+	h.ctx = ctx;
+	patchUI(ctx, h);
+	expect(h.snapshot().agentActive).toBe(false);
+	hooks.get("agent_start")?.();
+	expect(h.snapshot()).toMatchObject({ status: "running", agentActive: true });
+	// Pi awaits either handler before emitting agent_settled. Use the real UI bridge during that wait.
+	const extensionHandler = async () => {
+		await ctx.ui.confirm("Continue?", "After the final answer");
+	};
+	const pending = extensionHandler();
+	expect(h.snapshot()).toMatchObject({ status: "waiting_input", agentActive: true });
+	const [dialog] = h.pendingUI.values();
+	dialog!.resolve({ requestId: dialog!.request.requestId, confirmed: true });
+	await pending;
+	expect(h.snapshot().agentActive).toBe(true);
+	hooks.get("agent_settled")?.({ aborted: false });
+	expect(h.snapshot()).toMatchObject({ status: "idle", agentActive: false });
+	// The same dialog opened outside a run has no Stop button.
+	const outside = ctx.ui.confirm("Outside a run", "Nothing to stop");
+	expect(h.snapshot()).toMatchObject({ status: "waiting_input", agentActive: false });
+	for (const d of h.pendingUI.values()) d.cancel();
+	await outside;
 });

@@ -84,6 +84,9 @@ export interface InstanceView {
 	 * has no timing), so history shows "考えた" without seconds.
 	 */
 	thinkingMs: Record<string, number>;
+	/** Per-user-entry elapsed time, only for turns observed live through agent_settled. */
+	turnMs: Record<string, number>;
+	turnClock: { since: number; userEntryId: string | null } | null;
 	/** Live thinking of the message being streamed: first thinking delta, and the first output after it. */
 	thinkingClock: { since: number; until: number | null } | null;
 }
@@ -112,6 +115,8 @@ export function createView(instanceId: string): InstanceView {
 		runningSince: null,
 		agentActive: false,
 		thinkingMs: {},
+		turnMs: {},
+		turnClock: null,
 		thinkingClock: null,
 	};
 }
@@ -161,10 +166,10 @@ function runningSince(prev: InstanceView, status: InstanceStatus, now: number): 
 }
 
 /**
- * Whether a snapshot taken while waiting for input is inside a turn. The snapshot has no flag for it, so the
- * transcript decides: a turn is open while its last message is the user's, a tool call or a tool result.
+ * Prefer the explicit run flag. For older RCs only, infer an open turn from the transcript.
  */
 function activeFromSnapshot(snapshot: InstanceSnapshot, items: readonly TranscriptItem[]): boolean {
+	if (snapshot.agentActive !== undefined) return snapshot.agentActive;
 	if (snapshot.status !== "waiting_input") return snapshot.status === "running";
 	if (snapshot.streaming?.text || snapshot.streaming?.thinking) return true;
 	for (let i = items.length - 1; i >= 0; i--) {
@@ -212,6 +217,8 @@ function applySubscribed(
 		agentActive: activeFromSnapshot(snapshot, history.items),
 		// Measured durations stay valid for the same conversation (reconnects); a joined stream is not measured.
 		thinkingMs: prev.session?.id === session?.id ? prev.thinkingMs : {},
+		turnMs: prev.session?.id === session?.id ? prev.turnMs : {},
+		turnClock: null,
 		thinkingClock: null,
 	};
 }
@@ -285,6 +292,8 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 				uiPrompt: null,
 				uiNotes: [],
 				thinkingMs: {},
+				turnMs: {},
+				turnClock: null,
 				thinkingClock: null,
 				sessionNotice: showNotice
 					? { reason: event.reason, from: conversationLabel(view.session, view.items), to: sessionLabel(event.session) }
@@ -294,17 +303,20 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 		case "session_info":
 			return view.session ? { ...view, session: { ...view.session, name: event.name } } : view;
 		case "agent_start":
-			return view.status === "idle"
-				? {
-						...view,
-						status: "running" as const,
-						runningSince: runningSince(view, "running", now),
-						agentActive: true,
-					}
-				: { ...view, agentActive: true };
+			return {
+				...view,
+				status: view.status === "idle" ? ("running" as const) : view.status,
+				runningSince: runningSince(view, "running", now),
+				agentActive: true,
+				turnClock: view.turnClock ?? { since: now, userEntryId: null },
+			};
 		case "agent_settled":
 			return {
 				...view,
+				turnMs: view.turnClock?.userEntryId
+					? { ...view.turnMs, [view.turnClock.userEntryId]: Math.max(0, now - view.turnClock.since) }
+					: view.turnMs,
+				turnClock: null,
 				streaming: EMPTY_STREAMING,
 				tools: finishRunningTools(view.tools),
 				agentActive: false,
@@ -327,6 +339,8 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 		case "message_end": {
 			const item = event.item;
 			const next = { ...view, items: upsertItem(view.items, item) };
+			// Use one local clock, not the server's request-start timestamps. A queued user starts a new scope.
+			if (item.kind === "user" && view.turnClock) next.turnClock = { since: now, userEntryId: item.entryId };
 			if (item.kind === "assistant") {
 				next.streaming = EMPTY_STREAMING;
 				const clock = view.thinkingClock;

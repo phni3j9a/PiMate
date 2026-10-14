@@ -7,7 +7,7 @@
  * its usage line, errors and notes stay visible. The turn in progress is never folded.
  */
 import type { TranscriptItem, UIRequest } from "@pimate/protocol";
-import { type ChangePiece, changeOf, collectChanges, groupByFile, totals } from "./changes";
+import { type ChangePiece, changeOf, changeSummary, toolResults } from "./changes";
 import { lineCount, seconds, toolSubject, usageLine } from "./format";
 import type { InstanceView, SessionNotice, ToolState } from "./instanceView";
 
@@ -45,7 +45,7 @@ type BaseRow =
 			kind: "turnSummary";
 			key: string;
 			turnId: string;
-			/** User message to the last message of the turn; null when unknown or under a second. */
+			/** Locally observed user message through agent_settled; null for history or under a second. */
 			durationMs: number | null;
 			tools: number;
 			/** Files changed by edit/write in the turn. */
@@ -129,14 +129,6 @@ interface TurnInfo {
 	finalText: string | null;
 }
 
-function turnDuration(items: readonly TranscriptItem[], turn: TurnInfo): number | null {
-	const start = items[turn.itemStart]?.timestamp;
-	if (!start) return null;
-	let end = 0;
-	for (let i = turn.itemStart + 1; i < turn.itemEnd; i++) end = Math.max(end, items[i]!.timestamp ?? 0);
-	return end - start >= 1000 ? end - start : null;
-}
-
 /** Marks the work rows of completed turns with `fold` and inserts their summary rows. */
 function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 	if (!turns.length) return rows;
@@ -154,8 +146,8 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 			return;
 		}
 		const key = turnKey(turn.id);
-		const changed = groupByFile(collectChanges(view.items, view.cwd, turn.itemStart, turn.itemEnd));
-		const changes = totals(changed);
+		const changes = changeSummary(view.items, view.cwd, turn.itemStart, turn.itemEnd);
+		const duration = view.turnMs[turn.id];
 		let summarized = false;
 		for (const row of range) {
 			const foldable =
@@ -170,9 +162,9 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 					kind: "turnSummary",
 					key,
 					turnId: turn.id,
-					durationMs: turnDuration(view.items, turn),
+					durationMs: duration !== undefined && duration >= 1000 ? duration : null,
 					tools,
-					files: changed.length,
+					files: changes.files.length,
 					add: changes.add,
 					del: changes.del,
 					counted: changes.counted,
@@ -189,8 +181,7 @@ export function buildRows(view: InstanceView): Row[] {
 	const rows: Row[] = [];
 	if (view.sessionNotice) rows.push({ kind: "sessionNotice", key: "session-notice", ...view.sessionNotice });
 
-	const results = new Map<string, ToolResult>();
-	for (const item of view.items) if (item.kind === "tool_result") results.set(item.toolCallId, item);
+	const results = toolResults(view.items);
 	const shownTools = new Set<string>();
 	const viewRunning = view.status !== "idle" && view.phase === "ready";
 	const entryIds = new Set(view.items.map((i) => i.entryId));
