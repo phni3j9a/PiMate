@@ -109,6 +109,9 @@ export function Composer({
 	model,
 	contextPercent,
 	onOpenModel,
+	leading,
+	inputLabel = "メッセージ",
+	stopLabel = "停止",
 }: {
 	draft: string;
 	onChangeDraft: (text: string) => void;
@@ -126,6 +129,10 @@ export function Composer({
 	model?: string | null;
 	contextPercent?: number | null;
 	onOpenModel?: () => void;
+	/** Left side of the action row when there is no model button (e.g. the subagent send mode). */
+	leading?: ReactNode;
+	inputLabel?: string;
+	stopLabel?: string;
 }) {
 	return (
 		<View>
@@ -140,7 +147,7 @@ export function Composer({
 					onChangeText={onChangeDraft}
 					placeholder={placeholder}
 					placeholderTextColor={colors.textSecondary}
-					accessibilityLabel="メッセージ"
+					accessibilityLabel={inputLabel}
 					editable={editable}
 					multiline
 				/>
@@ -165,10 +172,12 @@ export function Composer({
 								</View>
 							) : null}
 						</Pressable>
-					) : null}
+					) : (
+						leading
+					)}
 					<View style={styles.spacer} />
 					{showStop ? (
-						<IconButton label="停止" onPress={onStop} size={sizes.composerControl} disabled={stopping}>
+						<IconButton label={stopLabel} onPress={onStop} size={sizes.composerControl} disabled={stopping}>
 							{stopping ? <Spinner size={18} /> : <StopIcon />}
 						</IconButton>
 					) : null}

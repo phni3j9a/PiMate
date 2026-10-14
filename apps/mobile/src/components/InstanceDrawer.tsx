@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { relativeTime } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
-import { buildDrawerGroups, type DrawerRow, hostConnectionLabel } from "@/lib/presentation";
+import { buildDrawerGroups, type DrawerRow, drawerSubagentText, hostConnectionLabel } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
 import { colors, fontFamily, typography } from "@/theme/tokens";
@@ -32,6 +32,14 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 	};
 
 	const waitingTitle = (row: DrawerRow) => {
+		if (row.status !== "waiting_input") {
+			// A subagent asks; its question is known only for the open instance (the host list carries counts).
+			const asking =
+				row.key === selectedKey
+					? view?.subagents.runs.flatMap((r) => r.children).find((c) => c.state === "waiting" && c.question)
+					: undefined;
+			return asking?.question ? `質問: ${asking.question}` : "サブエージェントが質問しています";
+		}
 		if (row.key === selectedKey && view?.pendingUI.length) return `入力待ち: ${view.pendingUI.at(-1)?.title}`;
 		return "入力待ち: Pi が回答を待っています";
 	};
@@ -163,13 +171,24 @@ function InstanceRow({
 	right: string;
 	onPress: () => void;
 }) {
-	const mark = row.status === "running" ? "running" : row.status === "waiting_input" ? "waiting" : "idle";
+	const asking = row.status !== "waiting_input" && (row.subagents?.waiting ?? 0) > 0;
+	const mark = row.status === "running" ? "running" : row.status === "waiting_input" || asking ? "waiting" : "idle";
 	const statusText = row.status === "running" ? "作業中" : row.status === "waiting_input" ? "入力待ち" : "待機";
+	const subagents = drawerSubagentText(row.subagents);
 	return (
 		<Pressable
 			accessibilityRole="button"
 			accessibilityState={{ selected }}
-			accessibilityLabel={`${row.title}、${statusText}、${row.path}${row.mobile ? "、スマホで起動" : ""}`}
+			accessibilityLabel={[
+				row.title,
+				statusText,
+				attention,
+				row.path,
+				row.mobile ? "スマホで起動" : null,
+				attention ? null : subagents,
+			]
+				.filter(Boolean)
+				.join("、")}
 			onPress={onPress}
 			style={({ pressed }) => [styles.row, selected && styles.rowSelected, pressed && !selected && styles.rowPressed]}
 		>
@@ -190,6 +209,7 @@ function InstanceRow({
 							{row.path}
 						</Text>
 						{row.mobile ? <Text style={styles.rowExtra}>· スマホで起動</Text> : null}
+						{subagents ? <Text style={styles.rowExtra}>· {subagents}</Text> : null}
 					</View>
 				)}
 			</View>

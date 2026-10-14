@@ -1,5 +1,5 @@
 /** Pure view-model helpers for the drawer, chat header and settings (no React Native imports). */
-import type { InstanceSummary } from "@pimate/protocol";
+import type { InstanceSummary, SubagentCounts } from "@pimate/protocol";
 import { elapsed, instanceTitle, platformLabel, tildePath } from "./format";
 import type { InstanceView } from "./instanceView";
 import type { HostRuntime } from "./store";
@@ -25,6 +25,8 @@ export interface DrawerRow {
 	mobile: boolean;
 	status: InstanceSummary["status"];
 	updatedAt: number;
+	/** Subagent counts from the host list (shown even when the parent is idle); null when none / unsupported. */
+	subagents: SubagentCounts | null;
 }
 
 export interface DrawerHostGroup {
@@ -33,7 +35,7 @@ export interface DrawerHostGroup {
 }
 
 export interface DrawerGroups {
-	/** waiting_input instances of connected hosts (要対応). */
+	/** waiting_input instances, or ones with a subagent waiting, of connected hosts (要対応). */
 	attention: DrawerRow[];
 	hosts: DrawerHostGroup[];
 }
@@ -48,7 +50,27 @@ function toRow(hostId: string, i: InstanceSummary): DrawerRow {
 		mobile: i.origin === "mobile",
 		status: i.status,
 		updatedAt: i.updatedAt,
+		subagents: i.subagents ?? null,
 	};
+}
+
+/** A row needs attention: the parent waits for input, or one of its subagents asks a question. */
+export function needsAttention(row: DrawerRow): boolean {
+	return row.status === "waiting_input" || (row.subagents?.waiting ?? 0) > 0;
+}
+
+/**
+ * Subagent activity after the path (Drawer.html): "サブエージェント 2 実行中". Failures are left out — the counts
+ * cover the run history, so they would stay forever.
+ */
+export function drawerSubagentText(c: SubagentCounts | null): string | null {
+	if (!c) return null;
+	const running = Math.max(0, c.active - c.waiting);
+	const parts: string[] = [];
+	if (running) parts.push(`${running} 実行中`);
+	if (c.waiting) parts.push(`${c.waiting} 待ち`);
+	if (c.paused) parts.push(`${c.paused} 一時停止`);
+	return parts.length ? `サブエージェント ${parts.join(" · ")}` : null;
 }
 
 export function buildDrawerGroups(hosts: readonly HostRuntime[], query = ""): DrawerGroups {
@@ -65,8 +87,8 @@ export function buildDrawerGroups(hosts: readonly HostRuntime[], query = ""): Dr
 					.filter((r) => match(r, host))
 					.sort((a, b) => b.updatedAt - a.updatedAt)
 			: [];
-		attention.push(...rows.filter((r) => r.status === "waiting_input"));
-		groups.push({ host, rows: rows.filter((r) => r.status !== "waiting_input") });
+		attention.push(...rows.filter(needsAttention));
+		groups.push({ host, rows: rows.filter((r) => !needsAttention(r)) });
 	}
 	attention.sort((a, b) => b.updatedAt - a.updatedAt);
 	return { attention, hosts: groups };

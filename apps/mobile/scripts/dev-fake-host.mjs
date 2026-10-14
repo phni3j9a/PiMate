@@ -28,6 +28,19 @@
  *   offline?s=20          cut connections and refuse new ones for s seconds
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
  *   pair                  print a fresh pairing link
+ *
+ * M4 subagents: "認証まわりのレビュー" (~/work/api) starts with a pi-subagents background run of 3 reviewers that
+ * progress every 3.5 s (activity, transcript via cursor; one finishes first) plus 以前の実行 (complete + failed).
+ * subagent_control follows each run's/child's actions: steer (appends a user item), follow_up (delivered at the
+ * next step), stop / stop_child (stopping → stopped), resume (new run with resumedFrom/resumedAs), abort_parent.
+ *   sub?kind=parallel[&i=]  another background run of 3 reviewers (default: 認証まわりのレビュー)
+ *   sub?kind=waiting[&i=]   a child asking the parent a question (default: API クライアントのリファクタ → 要対応)
+ *   sub?kind=chain[&i=]     official-example chain scout → planner → worker, read-only (default: PiMate PoC;
+ *                           the parent goes running while it lasts)
+ *   sub?kind=answer[&i=]    waiting children continue (as if the parent answered)
+ *   sub?kind=finish[&i=]    all active children run to completion
+ *   sub?kind=hold           freeze / unfreeze subagent progress (for screenshots)
+ *   sub?kind=reset[&i=]     subagents_reset with no runs
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -791,6 +804,9 @@ function snapshot(id) {
 		pendingUI: inst.pendingUI,
 		...(inst.pcPrompt ? { pcPrompt: inst.pcPrompt } : {}),
 		context: inst.context,
+		...(inst.subagents
+			? { subagents: { runs: inst.subagents.runs.map(publicRun), backends: clone(inst.subagents.backends) } }
+			: {}),
 		seq: inst.seq,
 		streaming: { ...inst.streaming },
 		piVersion: "1.2.0",
@@ -1021,6 +1037,712 @@ function abortTurn(id) {
 	finishTurn(id, true);
 }
 
+// ------------------------------------------------------------------ subagents (M4)
+//
+// Runs as the RC would normalize them (packages/protocol/src/subagents.ts): `subagent_run` upserts, counts in the
+// host list, `subagent_transcript` with a cursor, `subagent_control` gated by each run's/child's `actions`.
+
+const SUB_TICK_MS = 3500;
+/** Ticks per step of a running child (~10 s), so a run lasts minutes. */
+const SUB_STEP_TICKS = 3;
+let subHold = false;
+const SUB_ACTIVE = new Set(["queued", "running", "waiting", "stopping"]);
+const subTranscripts = new Map(); // `${runId}/${childId}` -> { task, items: [], pending: null, followUps: [] }
+let subSeq = 0;
+
+function subState(id) {
+	const inst = instances.get(id);
+	if (!inst) return null;
+	inst.subagents ??= { runs: [], backends: [{ backend: "pi-subagents", version: "0.9.0", supported: true }] };
+	return inst.subagents;
+}
+
+function subCounts(runs) {
+	const c = { active: 0, waiting: 0, paused: 0, failed: 0 };
+	for (const run of runs)
+		for (const ch of run.children.length ? run.children : [{ state: run.state }]) {
+			if (ch.state === "waiting") c.waiting++;
+			if (SUB_ACTIVE.has(ch.state)) c.active++;
+			else if (ch.state === "paused") c.paused++;
+			else if (ch.state === "failed") c.failed++;
+		}
+	return c;
+}
+
+const clone = (v) => JSON.parse(JSON.stringify(v));
+
+/** Strip internal fields (scripts) and broadcast the run + host-list counts. */
+function publishRun(id, run) {
+	run.updatedAt = Date.now();
+	const states = run.children.map((c) => c.state);
+	if (states.length) {
+		if (states.some((s) => s === "stopping")) run.state = "stopping";
+		else if (states.some((s) => s === "running" || s === "queued")) run.state = "running";
+		else if (states.some((s) => s === "waiting")) run.state = "waiting";
+		else if (states.some((s) => s === "paused")) run.state = "paused";
+		else if (states.some((s) => s === "failed")) run.state = "failed";
+		else if (states.every((s) => s === "stopped")) run.state = "stopped";
+		else if (states.some((s) => s === "stopped")) run.state = "stopped";
+		else run.state = "complete";
+		if (!SUB_ACTIVE.has(run.state) && run.state !== "paused") run.endedAt ??= Date.now();
+	}
+	if (run.mode === "chain") {
+		const current = run.children.findIndex((c) => SUB_ACTIVE.has(c.state));
+		run.stage = { index: current < 0 ? run.children.length - 1 : current, count: run.children.length };
+	}
+	if (run.backend === "example" && !SUB_ACTIVE.has(run.state)) {
+		run.actions = [];
+		const inst = instances.get(id);
+		if (inst?.summary.status === "running" && !inst.turn) setStatus(id, "idle");
+	}
+	emit(id, { type: "subagent_run", run: publicRun(run) });
+	instances.get(id).summary.subagents = subCounts(subState(id).runs);
+	broadcastInstances();
+}
+
+function publicRun(run) {
+	const { script: _s, ...rest } = run;
+	return clone({ ...rest, children: run.children.map(({ script: _c, ...c }) => c) });
+}
+
+function argText(name, args) {
+	if (name === "bash") return args.command;
+	if (name === "grep") return [args.pattern, args.path].filter(Boolean).join(" ");
+	if (name === "find") return [JSON.stringify(args.pattern), args.path].filter(Boolean).join(" ");
+	return args.path ?? "";
+}
+
+function subItem(key, item) {
+	const t = subTranscripts.get(key);
+	t.items.push({ entryId: eid(), timestamp: Date.now(), ...item });
+}
+
+function flushPending(key) {
+	const t = subTranscripts.get(key);
+	if (!t.pending) return;
+	subItem(key, {
+		kind: "tool_result",
+		toolCallId: t.pending.id,
+		toolName: t.pending.name,
+		text: t.pending.result,
+		isError: false,
+	});
+	t.pending = null;
+}
+
+/** One step of a running child: finish the pending tool, then start the next tool / say something / finish. */
+function stepChild(run, child) {
+	const key = `${run.id}/${child.id}`;
+	const t = subTranscripts.get(key);
+	flushPending(key);
+	const follow = t.followUps.shift();
+	if (follow) subItem(key, { kind: "user", text: follow });
+	const step = child.script.shift();
+	if (!step) {
+		child.state = child.failWith ? "failed" : "complete";
+		if (child.failWith) child.error = child.failWith;
+		child.endedAt = Date.now();
+		child.activity = undefined;
+		child.actions = child.actions.filter((a) => a === "resume");
+		if (run.backend === "pi-subagents") child.actions = ["resume"];
+		return;
+	}
+	if (step.text) {
+		subItem(key, {
+			kind: "assistant",
+			text: step.text,
+			toolCalls: [],
+			model: child.model,
+			stopReason: "stop",
+		});
+		child.activity = undefined;
+		return;
+	}
+	const call = { id: `${child.id}-t${++subSeq}`, name: step.tool, args: step.args };
+	subItem(key, {
+		kind: "assistant",
+		text: "",
+		...(step.think ? { thinking: step.think } : {}),
+		toolCalls: [call],
+		model: child.model,
+		stopReason: "toolUse",
+	});
+	t.pending = { id: call.id, name: step.tool, result: step.result ?? "" };
+	child.activity = { tool: step.tool, args: argText(step.tool, step.args), startedAt: Date.now() };
+	child.usage = {
+		input: (child.usage?.input ?? 0) + 3_200,
+		output: (child.usage?.output ?? 0) + 140,
+		costUsd: Math.round(((child.usage?.costUsd ?? 0) + 0.012) * 1000) / 1000,
+	};
+	if (step.ask) {
+		child.state = "waiting";
+		child.question = step.ask;
+		child.activity = undefined;
+	}
+}
+
+function tickRun(id, run) {
+	let changed = false;
+	const working = run.children.filter((c) => c.state === "running");
+	for (const child of working) {
+		child.wait = (child.wait ?? 0) + 1;
+		if (child.wait < SUB_STEP_TICKS) continue;
+		child.wait = 0;
+		stepChild(run, child);
+		changed = true;
+	}
+	if (run.mode === "chain" && !run.children.some((c) => c.state === "running" || c.state === "waiting")) {
+		const next = run.children.find((c) => c.state === "queued");
+		if (next && !run.children.some((c) => c.state === "failed" || c.state === "stopped")) {
+			next.state = "running";
+			next.startedAt = Date.now();
+			changed = true;
+		} else if (next) {
+			for (const c of run.children) if (c.state === "queued") c.state = "stopped";
+			changed = true;
+		}
+	}
+	if (changed) publishRun(id, run);
+}
+
+setInterval(() => {
+	if (subHold) return;
+	for (const [id, inst] of instances)
+		for (const run of inst.subagents?.runs ?? []) if (SUB_ACTIVE.has(run.state)) tickRun(id, run);
+}, SUB_TICK_MS).unref();
+
+const fileRead = (n) => Array.from({ length: n }, (_, i) => `${String(i + 1).padStart(3)}  // …`).join("\n");
+
+const MORE_FILES = [
+	"src/api/http.ts",
+	"src/api/errors.ts",
+	"src/auth/types.ts",
+	"src/auth/index.ts",
+	"src/hooks/useAuth.ts",
+	"src/hooks/useSession.ts",
+	"src/pages/Login.tsx",
+	"src/pages/Logout.tsx",
+	"src/lib/clock.ts",
+	"src/lib/storage.ts",
+	"src/lib/retry.ts",
+	"src/lib/events.ts",
+];
+/** Extra reading so the canned runs last a few minutes. */
+const moreReading = (prefix) =>
+	MORE_FILES.flatMap((path, i) => [
+		{ tool: "read", args: { path }, result: fileRead(40 + i * 7) },
+		...(i % 4 === 3
+			? [{ tool: "grep", args: { pattern: `${prefix}${i}`, path: "src/" }, result: "src/a.ts:1\nsrc/b.ts:2" }]
+			: []),
+	]);
+
+const REVIEW_STEPS = {
+	correctness: [
+		{
+			tool: "ls",
+			args: { path: "src/auth/" },
+			think: "まず認証まわりの構成を確認する。",
+			result: "guard.tsx\nrefresh.ts\nsession.ts\nstorage.ts\ntypes.ts\nindex.ts",
+		},
+		{ tool: "read", args: { path: "src/auth/session.ts" }, result: fileRead(128) },
+		{ tool: "read", args: { path: "src/auth/refresh.ts" }, result: fileRead(96) },
+		{
+			tool: "grep",
+			args: { pattern: "expiresAt", path: "src/" },
+			result: Array.from({ length: 7 }, (_, i) => `src/auth/session.ts:${20 + i}: expiresAt`).join("\n"),
+		},
+		{
+			text: "`session.ts` は期限の判定に端末の時刻を使っています。サーバーと時刻がずれていると、期限切れのトークンを有効と判定するおそれがあります。",
+		},
+		{
+			tool: "grep",
+			args: { pattern: "refreshPromise", path: "src/" },
+			result: "src/auth/refresh.ts:12\nsrc/auth/refresh.ts:40\nsrc/api/client.ts:88",
+		},
+		{ tool: "read", args: { path: "src/api/client.ts" }, result: fileRead(210) },
+		{ tool: "read", args: { path: "src/auth/storage.ts" }, result: fileRead(54) },
+		{
+			tool: "grep",
+			args: { pattern: "catch", path: "src/auth/" },
+			result: "src/auth/refresh.ts:51\nsrc/auth/session.ts:77",
+		},
+		{ text: "更新が同時に走ると `refreshPromise` が上書きされ、2 回目の更新が古いトークンで送られる経路があります。" },
+		{ tool: "read", args: { path: "src/auth/guard.tsx" }, result: fileRead(66) },
+		...moreReading("token"),
+		{
+			tool: "bash",
+			args: { command: "git log --oneline -5 -- src/auth" },
+			result: "a1b2c3d fix: refresh race\n9f8e7d6 feat: guard",
+		},
+		{
+			text: "指摘を重要度順にまとめました。\n\n1. 期限の判定が端末の時刻に依存\n2. 同時更新でトークンが巻き戻る\n3. 更新失敗時にセッションが残る",
+		},
+	],
+	tests: [
+		{
+			tool: "find",
+			args: { pattern: "*.test.ts", path: "src/auth/" },
+			result: "src/auth/session.test.ts\nsrc/auth/refresh.test.ts",
+		},
+		{ tool: "read", args: { path: "src/auth/session.test.ts" }, result: fileRead(84) },
+		{
+			tool: "bash",
+			args: { command: "npm test -- auth" },
+			result: "PASS src/auth/session.test.ts\nPASS src/auth/refresh.test.ts\nTests: 14 passed",
+		},
+		{ text: "既存のテストは通っていますが、期限切れの直前・直後の境界を扱うテストがありません。" },
+		{ tool: "read", args: { path: "src/auth/refresh.test.ts" }, result: fileRead(61) },
+		{ tool: "grep", args: { pattern: "useFakeTimers", path: "src/" }, result: "src/api/client.test.ts:5" },
+		{
+			tool: "bash",
+			args: { command: "npm test -- --coverage auth" },
+			result: "session.ts | 71.4 %\nrefresh.ts | 58.2 %",
+		},
+		{ tool: "read", args: { path: "src/api/client.test.ts" }, result: fileRead(140) },
+		...moreReading("expect"),
+		{ text: "テストの不足をまとめました。同時更新とエラー時の扱いにテストがありません。" },
+	],
+	complexity: [
+		{ tool: "read", args: { path: "src/auth/session.ts" }, result: fileRead(128) },
+		{ tool: "read", args: { path: "src/auth/refresh.ts" }, result: fileRead(96) },
+		{ text: "複雑さの指摘は 2 件です。`refresh.ts` の分岐が深く、`session.ts` に保存と判定が混在しています。" },
+	],
+};
+
+function addChild(run, { id, index, agent, title, model, task, steps, startedAgo = 0, state = "running" }) {
+	const child = {
+		id,
+		index,
+		agent,
+		...(title ? { title } : {}),
+		state,
+		model,
+		thinking: "medium",
+		...(state === "queued" ? {} : { startedAt: Date.now() - startedAgo }),
+		hasTranscript: true,
+		actions: run.backend === "pi-subagents" ? ["steer", "follow_up", "stop_child"] : [],
+		script: [...steps],
+	};
+	run.children.push(child);
+	subTranscripts.set(`${run.id}/${id}`, { task, items: [], pending: null, followUps: [] });
+	return child;
+}
+
+function newRun(id, patch) {
+	const run = {
+		id: `run-${Date.now().toString(36)}-${++subSeq}`,
+		backend: "pi-subagents",
+		background: true,
+		mode: "parallel",
+		state: "running",
+		startedAt: Date.now(),
+		children: [],
+		actions: ["stop"],
+		...patch,
+	};
+	subState(id).runs.push(run);
+	return run;
+}
+
+/** Fast-forward a child (canned history, previous runs). */
+function playOut(run, child, n = Infinity) {
+	for (let i = 0; i < n && child.state === "running"; i++) stepChild(run, child);
+}
+
+const SONNET = "anthropic/claude-sonnet-5";
+const HAIKU = "anthropic/claude-haiku-5";
+
+function startParallel(id, toolCallId) {
+	const run = newRun(id, { toolCallId, startedAt: Date.now() - 252_000 });
+	const c1 = addChild(run, {
+		id: `${run.id}-c1`,
+		index: 0,
+		agent: "reviewer",
+		title: "正しさのレビュー",
+		model: SONNET,
+		startedAgo: 252_000,
+		task: "src/auth/ 以下を正しさの観点でレビューしてください。期限切れの判定、トークン更新、エラー時の扱いを重点的に見て、指摘は重要度順に。",
+		steps: REVIEW_STEPS.correctness,
+	});
+	const c2 = addChild(run, {
+		id: `${run.id}-c2`,
+		index: 1,
+		agent: "reviewer",
+		title: "テストのレビュー",
+		model: SONNET,
+		startedAgo: 252_000,
+		task: "src/auth/ のテストをレビューしてください。足りないケースを重要度順に。",
+		steps: REVIEW_STEPS.tests,
+	});
+	const c3 = addChild(run, {
+		id: `${run.id}-c3`,
+		index: 2,
+		agent: "reviewer",
+		title: "複雑さのレビュー",
+		model: SONNET,
+		startedAgo: 252_000,
+		task: "src/auth/ を複雑さの観点でレビューしてください。",
+		steps: REVIEW_STEPS.complexity,
+	});
+	playOut(run, c1, 5);
+	playOut(run, c2, 2);
+	playOut(run, c3, 3);
+	publishRun(id, run);
+	return run;
+}
+
+function seedPrevious(id) {
+	const done = newRun(id, { background: false, mode: "single", startedAt: Date.now() - 19.2 * MIN, actions: [] });
+	const scout = addChild(done, {
+		id: `${done.id}-c1`,
+		index: 0,
+		agent: "scout",
+		title: "ログイン処理の調査",
+		model: HAIKU,
+		startedAgo: 19.2 * MIN,
+		task: "Web 版のログイン処理に関係するファイルを探して、呼び出しの流れをまとめて。",
+		steps: [
+			{ tool: "find", args: { pattern: "*.tsx", path: "src/" }, result: "src/pages/Login.tsx" },
+			{ tool: "read", args: { path: "src/pages/Login.tsx" }, result: fileRead(88) },
+			{ text: "ログインの入口は `src/pages/Login.tsx` の 1 か所です。" },
+		],
+	});
+	playOut(done, scout);
+	scout.endedAt = scout.startedAt + 72_000;
+	done.endedAt = scout.endedAt;
+	const failed = newRun(id, { background: true, mode: "single", startedAt: Date.now() - 45 * MIN, actions: [] });
+	const worker = addChild(failed, {
+		id: `${failed.id}-c1`,
+		index: 0,
+		agent: "worker",
+		title: "依存パッケージの確認",
+		model: SONNET,
+		startedAgo: 45 * MIN,
+		task: "依存パッケージを最新にして、テストが通るか確認して。",
+		steps: [
+			{ tool: "bash", args: { command: "npm outdated" }, result: "react 19.1.0 → 19.2.0" },
+			{ tool: "bash", args: { command: "npm ci" }, result: "npm ERR! code 1" },
+		],
+	});
+	worker.failWith = "npm ci が終了コード 1";
+	playOut(failed, worker);
+	worker.endedAt = worker.startedAt + 185_000;
+	failed.endedAt = worker.endedAt;
+	for (const run of [done, failed]) publishRun(id, run);
+	done.updatedAt = done.endedAt;
+	failed.updatedAt = failed.endedAt;
+}
+
+function startWaiting(id) {
+	const run = newRun(id, { mode: "single" });
+	const child = addChild(run, {
+		id: `${run.id}-c1`,
+		index: 0,
+		agent: "planner",
+		title: "API 設計の確認",
+		model: SONNET,
+		startedAgo: 40_000,
+		task: "API クライアントのリファクタ方針を立てて。迷う点は確認して。",
+		steps: [
+			{ tool: "read", args: { path: "src/api/client.ts" }, result: fileRead(210) },
+			{ tool: "grep", args: { pattern: "/v1/", path: "src/" }, result: "src/api/client.ts:12\nsrc/api/users.ts:4" },
+			{
+				tool: "ask_parent",
+				args: { question: "エンドポイントを v2 に分けますか？" },
+				ask: "エンドポイントを v2 に分けますか？ それとも既存の v1 を拡張しますか？",
+				result: "v2 に分ける",
+			},
+			{ text: "v2 に分ける方針で計画を書きます。" },
+			{ tool: "write", args: { path: "docs/plan.md", content: "# plan" }, result: "ok" },
+			{ text: "計画を docs/plan.md にまとめました。" },
+		],
+	});
+	playOut(run, child, 3);
+	publishRun(id, run);
+	return run;
+}
+
+function startChain(id) {
+	const inst = instances.get(id);
+	inst.subagents ??= { runs: [], backends: [] };
+	if (!inst.subagents.backends.some((b) => b.backend === "example"))
+		inst.subagents.backends.push({ backend: "example", supported: true });
+	const run = newRun(id, {
+		backend: "example",
+		background: false,
+		mode: "chain",
+		actions: ["abort_parent"],
+		toolCallId: `chain-${subSeq}`,
+		startedAt: Date.now() - 48_000,
+	});
+	const task = "Web 版のログイン処理に関係するファイルを探して、呼び出しの流れをまとめて。";
+	const scout = addChild(run, {
+		id: `${run.id}-c1`,
+		index: 0,
+		agent: "scout",
+		title: "ログイン処理の調査",
+		model: HAIKU,
+		startedAgo: 48_000,
+		task,
+		steps: [
+			{
+				tool: "find",
+				args: { pattern: "*.tsx", path: "src/" },
+				think: "ログインの画面から探す。",
+				result: Array.from({ length: 214 }, (_, i) => `src/c${i}.tsx`).join("\n"),
+			},
+			{
+				tool: "grep",
+				args: { pattern: "login", path: "src/" },
+				result: Array.from({ length: 18 }, (_, i) => `src/x${i}.ts`).join("\n"),
+			},
+			{ text: "ログインの入口は `src/pages/Login.tsx` の 1 か所です。ここから呼び出しをたどります。" },
+			{ tool: "read", args: { path: "src/pages/Login.tsx" }, result: fileRead(88) },
+			{ tool: "read", args: { path: "src/api/session.ts" }, result: fileRead(64) },
+			{
+				text: "ここまでの流れです。\n\n1. `Login.tsx` の送信で `signIn()` を呼ぶ\n2. `signIn()` が `/api/session` に送信\n3. 成功したらトークンを保存（保存先を確認中）",
+			},
+			{ tool: "grep", args: { pattern: "useSession", path: "src/" }, result: "src/hooks/useSession.ts:3" },
+			{ text: "保存先は `useSession` です。" },
+		],
+	});
+	addChild(run, {
+		id: `${run.id}-c2`,
+		index: 1,
+		agent: "planner",
+		model: SONNET,
+		state: "queued",
+		task: "scout の結果をもとに改修の計画を立てて。",
+		steps: [
+			{ tool: "read", args: { path: "src/hooks/useSession.ts" }, result: fileRead(40) },
+			{ text: "計画を立てました。" },
+		],
+	});
+	addChild(run, {
+		id: `${run.id}-c3`,
+		index: 2,
+		agent: "worker",
+		model: SONNET,
+		state: "queued",
+		task: "計画どおりに実装して。",
+		steps: [{ tool: "edit", args: { path: "src/pages/Login.tsx" }, result: "ok" }, { text: "実装しました。" }],
+	});
+	playOut(run, scout, 7);
+	// The example's subagent tool runs inside the parent's turn.
+	setStatus(id, "running");
+	publishRun(id, run);
+	return run;
+}
+
+function findSubRun(id, runId) {
+	return subState(id)?.runs.find((r) => r.id === runId);
+}
+
+RC.subagent_transcript = (id, p) => {
+	const run = findSubRun(id, p.runId);
+	const t = subTranscripts.get(`${p.runId}/${p.childId}`);
+	if (!run || !t) return { error: "not_found", message: "no such subagent" };
+	const from = Number(p.cursor ?? 0) || 0;
+	return { result: { task: t.task, items: clone(t.items.slice(from)), cursor: String(t.items.length) } };
+};
+
+RC.subagent_control = (id, p) => {
+	const run = findSubRun(id, p.runId);
+	if (!run) return { error: "not_found", message: "no such run" };
+	const child = p.childId ? run.children.find((c) => c.id === p.childId) : undefined;
+	if (p.childId && !child) return { error: "not_found", message: "no such child" };
+	const childAction = ["steer", "follow_up", "stop_child", "resume"].includes(p.action);
+	const allowed = childAction ? child?.actions.includes(p.action) : run.actions.includes(p.action);
+	if (!allowed) return { error: "unsupported", message: `${p.action} is not available` };
+	const text = typeof p.text === "string" ? p.text.trim() : "";
+	if (["steer", "follow_up", "resume"].includes(p.action) && !text)
+		return { error: "bad_request", message: "text is required" };
+	const key = child && `${run.id}/${child.id}`;
+	switch (p.action) {
+		case "steer":
+			flushPending(key);
+			subItem(key, { kind: "user", text });
+			if (child.state === "waiting") {
+				child.state = "running";
+				child.question = undefined;
+			}
+			publishRun(id, run);
+			return { result: {} };
+		case "follow_up":
+			subTranscripts.get(key).followUps.push(text);
+			return { result: { message: "今の作業が終わったら伝えます" } };
+		case "stop_child":
+		case "stop": {
+			const targets = p.action === "stop" ? run.children : [child];
+			for (const c of targets) if (SUB_ACTIVE.has(c.state)) c.state = "stopping";
+			publishRun(id, run);
+			setTimeout(() => {
+				for (const c of targets)
+					if (c.state === "stopping") {
+						c.state = "stopped";
+						c.endedAt = Date.now();
+						c.activity = undefined;
+						c.actions = ["resume"];
+					}
+				if (p.action === "stop") run.actions = [];
+				publishRun(id, run);
+			}, 1500);
+			return { result: {} };
+		}
+		case "abort_parent":
+			for (const c of run.children)
+				if (SUB_ACTIVE.has(c.state)) {
+					c.state = "stopped";
+					c.endedAt = Date.now();
+					c.activity = undefined;
+				}
+			publishRun(id, run);
+			setStatus(id, "idle");
+			return { result: { message: "親の Pi の作業を止めました" } };
+		case "resume": {
+			const next = newRun(id, { mode: "single", resumedFrom: run.id, toolCallId: undefined });
+			run.resumedAs = next.id;
+			child.actions = child.actions.filter((a) => a !== "resume");
+			const c = addChild(next, {
+				id: `${next.id}-c1`,
+				index: 0,
+				agent: child.agent,
+				title: child.title,
+				model: child.model,
+				task: text,
+				steps: [
+					{ tool: "read", args: { path: "src/auth/refresh.ts" }, result: fileRead(96) },
+					{ tool: "grep", args: { pattern: "retry", path: "src/auth/" }, result: "src/auth/refresh.ts:61" },
+					{ text: "続きを確認しました。追加の指摘はありません。" },
+				],
+			});
+			c.startedAt = Date.now();
+			publishRun(id, run);
+			publishRun(id, next);
+			return { result: { newRunId: next.id } };
+		}
+		default:
+			return { error: "unsupported", message: `${p.action} is not available` };
+	}
+};
+
+// The parent instance of the subagent screens (Chat-Subagents.html).
+const AUTH_ID = "5d0c4e88-auth";
+const AUTH_TOOL = "auth-subagent-1";
+addInstance(AUTH_ID, {
+	cwd: "/home/dev/work/api",
+	name: "認証まわりのレビュー",
+	updatedAgo: 5 * MIN,
+	model: { provider: "anthropic", id: "claude-opus-5-5" },
+	thinking: "high",
+	history: [
+		{
+			kind: "user",
+			entryId: eid(),
+			text: "ログインまわりの実装を読んで、構成を教えて",
+			timestamp: Date.now() - 12 * MIN,
+		},
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "認証は `src/auth/` にまとまっています。\n\n- `session.ts` がセッションの保存と期限の判定\n- `refresh.ts` がトークンの更新\n- `guard.tsx` が未ログイン時の画面の切り替え",
+			timestamp: Date.now() - 12 * MIN + 31_000,
+			toolCalls: [],
+			model: { provider: "anthropic", id: "claude-opus-5-5" },
+			usage: { input: 14_000, output: 380, cost: 0.09 },
+			stopReason: "stop",
+		},
+		{
+			kind: "user",
+			entryId: eid(),
+			text: "正しさ・テスト・複雑さの3つの観点で、並列にレビューして。バックグラウンドでいいよ",
+			timestamp: Date.now() - 5 * MIN,
+		},
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "",
+			timestamp: Date.now() - 5 * MIN + 4_000,
+			toolCalls: [{ id: AUTH_TOOL, name: "subagent", args: { agent: "reviewer", tasks: 3, async: true } }],
+			model: { provider: "anthropic", id: "claude-opus-5-5" },
+			stopReason: "toolUse",
+		},
+		{
+			kind: "tool_result",
+			entryId: eid(),
+			toolCallId: AUTH_TOOL,
+			toolName: "subagent",
+			text: "Started 3 reviewers in the background.",
+			isError: false,
+		},
+		{
+			kind: "assistant",
+			entryId: eid(),
+			text: "レビュアーを3人、バックグラウンドで起動しました。終わりしだい、指摘を重要度順にまとめて報告します。",
+			timestamp: Date.now() - 5 * MIN + 6_000,
+			toolCalls: [],
+			model: { provider: "anthropic", id: "claude-opus-5-5" },
+			usage: { input: 15_000, output: 120, cost: 0.05 },
+			stopReason: "stop",
+		},
+	],
+});
+seedPrevious(AUTH_ID);
+startParallel(AUTH_ID, AUTH_TOOL);
+
+/** /_dev/sub?kind=… */
+function devSubagents(kind, id) {
+	switch (kind) {
+		case "parallel":
+			return startParallel(id ?? AUTH_ID).id;
+		case "waiting":
+			return startWaiting(id ?? "3e8f0a55-api").id;
+		case "chain":
+			return startChain(id ?? "1f5e6a77-poc").id;
+		case "hold":
+			subHold = !subHold;
+			return subHold ? "held" : "running";
+		case "answer": {
+			for (const [iid, inst] of instances)
+				if (!id || iid === id)
+					for (const run of inst.subagents?.runs ?? [])
+						for (const c of run.children)
+							if (c.state === "waiting") {
+								c.state = "running";
+								c.question = undefined;
+								publishRun(iid, run);
+							}
+			return "ok";
+		}
+		case "finish": {
+			for (const [iid, inst] of instances)
+				if (!id || iid === id)
+					for (const run of inst.subagents?.runs ?? [])
+						if (SUB_ACTIVE.has(run.state)) {
+							for (const c of run.children)
+								while (SUB_ACTIVE.has(c.state)) {
+									c.state = "running";
+									c.question = undefined;
+									stepChild(run, c);
+								}
+							publishRun(iid, run);
+						}
+			return "ok";
+		}
+		case "reset": {
+			const iid = id ?? AUTH_ID;
+			const st = subState(iid);
+			st.runs = [];
+			emit(iid, { type: "subagents_reset", state: clone(st) });
+			instances.get(iid).summary.subagents = subCounts([]);
+			broadcastInstances();
+			return "ok";
+		}
+		default:
+			return null;
+	}
+}
+
 // ------------------------------------------------------------------ HTTP
 
 const server = createServer((req, res) => {
@@ -1119,6 +1841,11 @@ const server = createServer((req, res) => {
 				]);
 				log(`resume: ${from} -> ${session.name}`);
 				break;
+			}
+			case "sub": {
+				const result = devSubagents(url.searchParams.get("kind"), url.searchParams.get("i") ?? undefined);
+				if (!result) return reply(400, { error: "kind must be parallel|waiting|chain|answer|finish|hold|reset" });
+				return reply(200, { ok: true, result });
 			}
 			case "refuse-shutdown":
 				refuseShutdown = url.searchParams.get("on") !== "0";
