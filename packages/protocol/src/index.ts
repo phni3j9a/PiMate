@@ -12,6 +12,8 @@
  * - Nothing is retried automatically. Unknown fields must be ignored; unknown event types skipped.
  */
 
+import type { SubagentAction, SubagentCounts, SubagentRun, SubagentsState, SubagentTranscript } from "./subagents.ts";
+
 export const PROTOCOL_VERSION = 1;
 
 // ---------------------------------------------------------------- domain
@@ -170,6 +172,8 @@ export interface InstanceSnapshot {
 	/** Assistant output streamed so far in the current, not yet finished message (for late subscribers). */
 	streaming?: { text: string; thinking: string };
 	piVersion?: string;
+	/** Subagent runs of the current session (M4). Absent from older RCs. */
+	subagents?: SubagentsState;
 }
 
 /** Discovery file `<runDir>/<instanceId>.json` written by RC (0600). The socket is `<runDir>/<instanceId>.sock`. */
@@ -184,6 +188,7 @@ export interface InstanceMeta {
 	session: SessionRef | null;
 	status: InstanceStatus;
 	updatedAt: number;
+	subagents?: SubagentCounts;
 }
 
 // ---------------------------------------------------------------- events (RC -> client)
@@ -214,7 +219,11 @@ export type InstanceEvent =
 	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string }
 	| { type: "compact_done" }
 	| { type: "compact_error"; error: string }
-	/** Raw relay of another extension's pi.events channel (e.g. pi-subagents). Normalized in M4. */
+	/** A subagent run was added or changed (replace by id). */
+	| { type: "subagent_run"; run: SubagentRun }
+	/** Replace the whole subagent state (session change, backend detected, RC resync). */
+	| { type: "subagents_reset"; state: SubagentsState }
+	/** Raw relay of another extension's pi.events channel (e.g. pi-subagents). */
 	| { type: "bus"; channel: string; data: unknown };
 
 export type InstanceEventType = InstanceEvent["type"];
@@ -254,6 +263,16 @@ export interface RcMethods {
 	/** Gracefully exit this Pi (ctx.shutdown()). The instance then disappears (`instance_gone`). */
 	shutdown: { params: Record<string, never>; result: Record<string, never> };
 	/** Relay to pi-subagents' in-process RPC (`subagents:rpc:v1:*`). */
+	/** Child work record. `cursor` from a previous reply returns only newer items. */
+	subagent_transcript: {
+		params: { runId: string; childId: string; cursor?: string };
+		result: SubagentTranscript;
+	};
+	/** Must be listed in the run's/child's `actions`; otherwise rejected with `unsupported`. `text` is required for steer/follow_up/resume. */
+	subagent_control: {
+		params: { runId: string; childId?: string; action: SubagentAction; text?: string };
+		result: { message?: string; newRunId?: string };
+	};
 	subagents_rpc: {
 		params: { method: string; params?: unknown; timeoutMs?: number };
 		result: { reply: unknown };
@@ -358,3 +377,4 @@ export function encodeLine(value: unknown): string {
 }
 
 export * from "./host.ts";
+export * from "./subagents.ts";

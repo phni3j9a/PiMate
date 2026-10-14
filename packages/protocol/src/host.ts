@@ -30,6 +30,7 @@ import type {
 	ThinkingLevel,
 	TranscriptItem,
 } from "./index.ts";
+import type { SubagentCounts } from "./subagents.ts";
 
 export const HOST_PROTOCOL_VERSION = 1;
 export const DEFAULT_HOST_PORT = 47800;
@@ -81,6 +82,8 @@ export interface InstanceSummary {
 	status: InstanceStatus;
 	startedAt: number;
 	updatedAt: number;
+	/** Subagent counts (M4); absent when the RC does not report them. */
+	subagents?: SubagentCounts;
 }
 
 /** A folder offered on the "new Pi" screen (from Pi's saved sessions and running instances). */
