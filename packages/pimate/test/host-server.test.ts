@@ -316,6 +316,36 @@ it("buffers resync events, filters snapshot seq, coalesces consecutive deltas an
 	t.emit(9, { type: "text_delta", delta: "timer" });
 	expect(await client.box.next("event")).toMatchObject({ seq: 9 });
 });
+it("delivers one-shot results emitted while the snapshot was built, before subscribed", async () => {
+	const t = await setup(true);
+	t.snapshot.seq = 3;
+	t.hooks.history = (request, socket) => {
+		socket.write(encodeLine(t.event(2, { type: "session_op_done", op: "new", cancelled: false })));
+		socket.write(encodeLine(t.event(3, { type: "text_delta", delta: "already in snapshot" })));
+		socket.write(encodeLine(t.event(4, { type: "text_delta", delta: "new" })));
+		setTimeout(
+			() =>
+				socket.write(
+					encodeLine({
+						type: "response",
+						id: request.id,
+						ok: true,
+						result: { session: t.snapshot.session, items: [] },
+					}),
+				),
+			20,
+		);
+	};
+	const client = await t.authed();
+	client.send({ type: "subscribe", instanceId: "live" });
+	await client.box.next("subscribed");
+	await client.box.next("event");
+	await client.box.next("event");
+	const seen = client.box.received
+		.filter((m) => m.type === "subscribed" || m.type === "event")
+		.map((m) => (m.type === "event" ? `${m.seq}:${m.event.type}` : m.type));
+	expect(seen).toEqual(["2:session_op_done", "subscribed", "4:text_delta"]);
+});
 it("shares subscriptions, forwards guard errors unchanged, reconnects/resyncs and broadcasts disappearance", async () => {
 	const t = await setup(true);
 	const a = await t.authed();

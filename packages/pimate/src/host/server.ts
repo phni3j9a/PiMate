@@ -60,6 +60,8 @@ export async function tailscaleIps(): Promise<string[]> {
 export async function defaultListenAddresses(): Promise<string[]> {
 	return listenAddresses(networkInterfaces(), await tailscaleIps());
 }
+/** One-shot outcomes that a snapshot cannot reflect. */
+const RESULT_EVENTS: ReadonlySet<string> = new Set(["session_op_done", "compact_done", "compact_error", "notify"]);
 const MAX_BUFFER = 8 * 1024 * 1024;
 type Peer = { ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
 type Subscription = { ready: boolean; buffer: EventMessage[]; bytes: number; generation: number; seq: number };
@@ -535,6 +537,13 @@ export class HostServer {
 		if (link.subs.get(peer) !== sub || sub.generation !== generation || link.client !== client) return;
 		// A pending coalesced delta may straddle snapshot.seq: replay this subscriber's raw buffer instead.
 		this.flush(link);
+		// Result events are not part of the snapshot. Those emitted while it was built would be dropped as
+		// older than snapshot.seq, so deliver them first, in order (the app reads them by seq).
+		for (const event of sub.buffer)
+			if (event.seq > sub.seq && event.seq <= snapshot.seq && RESULT_EVENTS.has(event.event.type)) {
+				this.send(peer, event);
+				sub.seq = event.seq;
+			}
 		this.send(peer, { type: "subscribed", instanceId: link.id, snapshot, history });
 		sub.seq = snapshot.seq;
 		for (const event of sub.buffer)

@@ -116,7 +116,7 @@ npm run test:e2e -w @pimate/pimate
 npx biome check packages
 ```
 
-E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧に加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
+E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
 `test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答で、**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
@@ -145,6 +145,7 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 - subagents RPC/busは生の中継のみ。サブエージェントDTO正規化、問い合わせへの専用回答、capability依存UIはM4。第三者extension自身の実装・バージョンに依存します。
 - tool_resultの本文は32Ki文字に制限し `truncated:true` を付けます。tool details/他のメッセージは完全なサイズ制限をしません。Hostはdeltaをbatchingしbackpressureを制限しますが、history pagingは未対応。極端に遅いsocketクライアントは切断します。
 - snapshotを正とし、seqに欠落があればhello/historyを取り直します。要求を自動再送しません。Hostの生存probe失敗は `reachable:false` として返し、PIDが生きているインスタンスは掃除しません。
+- スマホから起動したPiが終了すると（アプリからの終了を含む）、abducoはattachされるまでサーバー・ソケット・systemd scopeを残します。Hostは一覧更新のたびに、終了済み（`abduco` 一覧の `+`）でHostが命名した `pimate-xxxxxxxx` のセッションだけをSIGTERMで片付けます（終了コードは確認できなくなります）。
 - 通常PC起動のPiにはabduco attachはありません（`pcAttached:null`）。PC/remote同時操作は先着、排他制御はありません。
 - SIGWINCH時の全再描画はabducoインスタンスだけに適用。Windows非対応、macOS/arm64・detachキー衝突は未検証。OS再起動後の自動復元はありません。
 

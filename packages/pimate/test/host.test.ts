@@ -90,10 +90,17 @@ describe("HostCore", () => {
 		chmodSync(dir, 0o755);
 		expect(() => privateRunDir(dir)).toThrow("not private");
 	});
-	it("parses PC attached markers", () => {
-		expect(parseAbducoList("Active sessions:\n* 123\tdate\ttime\tpimate-one\n  456\tdate\ttime\tpimate-two")).toEqual([
-			{ name: "pimate-one", attached: true },
-			{ name: "pimate-two", attached: false },
+	it("parses PC attached and terminated markers", () => {
+		const out = [
+			"Active sessions (on host server-Macmini)",
+			"* Wed\t 2026-10-14 17:46:31\t123\tpimate-one",
+			"  Wed\t 2026-10-14 17:46:32\t456\tpimate-two",
+			"+ Wed\t 2026-10-14 17:46:33\t789\tpimate-three",
+		].join("\n");
+		expect(parseAbducoList(out)).toEqual([
+			{ name: "pimate-one", pid: 123, attached: true, terminated: false },
+			{ name: "pimate-two", pid: 456, attached: false, terminated: false },
+			{ name: "pimate-three", pid: 789, attached: false, terminated: true },
 		]);
 	});
 });

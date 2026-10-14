@@ -42,12 +42,23 @@ function alive(pid: number): boolean {
 		return (e as NodeJS.ErrnoException).code === "EPERM";
 	}
 }
-export function parseAbducoList(output: string): { name: string; attached: boolean }[] {
+export interface AbducoSession {
+	name: string;
+	pid: number;
+	attached: boolean;
+	/** The command exited while no client was attached; abduco keeps the server until someone attaches. */
+	terminated: boolean;
+}
+export function parseAbducoList(output: string): AbducoSession[] {
 	return output.split("\n").flatMap((line) => {
 		const cols = line.split("\t");
-		return cols.length >= 4 ? [{ name: cols[3].trim(), attached: line.trimStart().startsWith("*") }] : [];
+		if (cols.length < 4) return [];
+		const mark = line.trimStart()[0];
+		return [{ name: cols[3].trim(), pid: Number(cols[2]), attached: mark === "*", terminated: mark === "+" }];
 	});
 }
+/** Session names created by {@link HostCore.spawn}; only these are reaped. */
+const SPAWNED_SESSION = /^pimate-[0-9a-f]{8}$/;
 function isMeta(value: unknown, id: string): value is InstanceMeta {
 	if (!value || typeof value !== "object") return false;
 	const m = value as InstanceMeta;
@@ -94,6 +105,15 @@ export class HostCore {
 		const sessions = this.abduco
 			? parseAbducoList(spawnSync(this.abduco, [], { encoding: "utf8", env: this.env, timeout: 2000 }).stdout ?? "")
 			: [];
+		// A phone-spawned Pi that exited (e.g. shut down from the app) leaves its abduco server, socket and
+		// systemd scope behind until a client attaches. Nobody is attached, so release them here.
+		for (const s of sessions)
+			if (s.terminated && SPAWNED_SESSION.test(s.name) && Number.isInteger(s.pid) && s.pid > 0)
+				try {
+					process.kill(s.pid, "SIGTERM"); // abduco's atexit handler removes the socket
+				} catch {
+					/* already gone */
+				}
 		const instances: DiscoveredInstance[] = [];
 		for (const file of readdirSync(this.runDir)) {
 			if (!file.endsWith(".json")) continue;
