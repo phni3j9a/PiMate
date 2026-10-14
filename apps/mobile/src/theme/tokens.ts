@@ -5,8 +5,6 @@
  * inline styles of the screen mocks (docs/design/mock/*.dc.html). Light theme only (docs/SPEC.md §1).
  * Separate areas with surface tone and spacing, not lines or shadows.
  */
-import { Platform } from "react-native";
-
 export const colors = {
 	/** 背景: every full screen (drawer, settings, sheets too). */
 	background: "#FFFFFF",
@@ -57,12 +55,13 @@ export const colors = {
 } as const;
 
 /**
- * Monospace family for code, paths and commands. The mock uses JetBrains Mono.
- * TODO(M1+): bundle JetBrains Mono via expo-font and switch `mono` to it; until then use the platform monospace.
+ * Monospace family for code, paths and commands: JetBrains Mono, as in the mock. Loaded in the root layout
+ * (`monoFonts`); Android cannot synthesize weights for custom fonts, so the 600 weight is its own family.
  */
 export const fontFamily = {
 	sans: undefined,
-	mono: Platform.select({ ios: "Menlo", android: "monospace", default: "ui-monospace, Menlo, monospace" }),
+	mono: "JetBrainsMono_400Regular",
+	monoBold: "JetBrainsMono_600SemiBold",
 } as const;
 
 /** Body line height is 1.5× the font size (Tokens.dc.html). */
