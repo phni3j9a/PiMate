@@ -18,7 +18,8 @@ export const turnKey = (userEntryId: string) => `turn:${userEntryId}`;
 
 type BaseRow =
 	| ({ kind: "sessionNotice"; key: string } & SessionNotice)
-	| { kind: "user"; key: string; text: string }
+	/** `caption`: small line under the bubble (subagent work record: who sent it and how). */
+	| { kind: "user"; key: string; text: string; caption?: string }
 	/** `durationMs`: measured live only (see InstanceView.thinkingMs). */
 	| { kind: "thinking"; key: string; text: string; live: boolean; durationMs?: number }
 	| { kind: "text"; key: string; text: string; live: boolean }
@@ -133,13 +134,16 @@ interface TurnInfo {
 function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 	if (!turns.length) return rows;
 	const inProgress = view.agentActive && view.phase === "ready";
+	// A `subagent` call the RC reports on stays visible: it is the way into the subagents (Chat-Subagents.html).
+	const runCalls = new Set(view.subagents.runs.map((r) => r.toolCallId).filter(Boolean));
+	const pinned = (r: Row) => r.kind === "tool" && runCalls.has(r.toolCallId);
 	const out: Row[] = [];
 	let next = 0;
 	turns.forEach((turn, index) => {
 		for (; next < turn.rowStart; next++) out.push(rows[next]!);
 		const range = rows.slice(turn.rowStart, turn.rowEnd);
 		next = turn.rowEnd;
-		const tools = range.filter((r) => r.kind === "tool").length;
+		const tools = range.filter((r) => r.kind === "tool" && !pinned(r)).length;
 		// A turn without tool calls has nothing worth folding (a lone "考えた" row stays as it is).
 		if ((index === turns.length - 1 && inProgress) || tools === 0) {
 			out.push(...range);
@@ -151,7 +155,9 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 		let summarized = false;
 		for (const row of range) {
 			const foldable =
-				row.kind === "thinking" || row.kind === "tool" || (row.kind === "text" && row.key !== turn.finalText);
+				row.kind === "thinking" ||
+				(row.kind === "tool" && !pinned(row)) ||
+				(row.kind === "text" && row.key !== turn.finalText);
 			if (!foldable) {
 				out.push(row);
 				continue;
@@ -177,7 +183,8 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 	return out;
 }
 
-export function buildRows(view: InstanceView): Row[] {
+/** `fold: false` keeps every turn open (the subagent work record shows everything). */
+export function buildRows(view: InstanceView, opts: { fold?: boolean } = {}): Row[] {
 	const rows: Row[] = [];
 	if (view.sessionNotice) rows.push({ kind: "sessionNotice", key: "session-notice", ...view.sessionNotice });
 
@@ -285,7 +292,7 @@ export function buildRows(view: InstanceView): Row[] {
 	});
 	if (view.uiNotes.length) notesAfter("");
 	closeTurn(view.items.length);
-	const folded = foldTurns(rows, view, turns);
+	const folded = opts.fold === false ? rows : foldTurns(rows, view, turns);
 	if (folded !== rows) rows.splice(0, rows.length, ...folded);
 
 	// Live tools whose assistant message has not been seen (e.g. joined mid-turn). Nested subagent tools are skipped.

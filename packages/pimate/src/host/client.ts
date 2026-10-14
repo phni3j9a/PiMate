@@ -100,7 +100,11 @@ export class RcClient {
 			request.method === "subagents_rpc" ? (request.params as { timeoutMs?: number })?.timeoutMs : undefined;
 		const wait =
 			timeoutMs ??
-			(request.method === "subagents_rpc" ? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000) : this.timeoutMs);
+			(request.method === "subagents_rpc"
+				? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000)
+				: request.method === "subagent_control"
+					? Math.max(this.timeoutMs, 17000)
+					: this.timeoutMs);
 		if (!this.socket || this.socket.destroyed) return Promise.reject(new Error("RC not connected"));
 		if (this.pending.has(request.id))
 			return Promise.resolve({

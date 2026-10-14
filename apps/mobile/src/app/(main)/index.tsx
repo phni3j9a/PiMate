@@ -1,4 +1,5 @@
 /** Chat with the selected Pi instance (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
+import type { SubagentRun } from "@pimate/protocol";
 import { router, useNavigation } from "expo-router";
 import { DrawerActions } from "expo-router/react-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,17 +17,20 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
+import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { ModelSheet } from "@/components/sheets/ModelSheet";
 import { SessionSheet } from "@/components/sheets/SessionSheet";
+import { SubagentSheet } from "@/components/sheets/SubagentSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { modelLabel } from "@/lib/sessionInfo";
 import { draftKey } from "@/lib/store";
+import { findRunByToolCall, subagentSummary, toolRowTarget } from "@/lib/subagents";
 import { buildRows, type Row, type SpacedRow, spaceRows, visibleRows } from "@/lib/transcriptRows";
 import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
 
@@ -44,7 +48,7 @@ export default function ChatScreen() {
 	const aborting = useAppState((s) => s.aborting);
 	const models = useAppState((s) => s.models);
 	const answering = useAppState((s) => s.answering);
-	const [sheet, setSheet] = useState<"session" | "model" | null>(null);
+	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | null>(null);
 	const closeSheet = useCallback(() => setSheet(null), []);
 
 	const host = hosts.find((h) => h.hostId === selection?.hostId);
@@ -64,6 +68,27 @@ export default function ChatScreen() {
 			.map((e) => ({ kind: "user" as const, key: `outbox:${e.id}`, text: e.text }));
 		return [...buildRows(view), ...delivered];
 	}, [view, outbox]);
+
+	const runs = view?.subagents.runs;
+	const watch = view?.subagentWatch;
+	const subagents = useMemo(() => (runs && watch ? subagentSummary(runs, watch) : null), [runs, watch]);
+	const instanceId = view?.instanceId;
+	const openChild = useCallback(
+		(runId: string, childId: string) => {
+			setSheet(null);
+			if (instanceId) router.push({ pathname: "/subagent", params: { instanceId, runId, childId } });
+		},
+		[instanceId],
+	);
+	// A run with one child opens it directly; several open the list.
+	const openRun = useCallback(
+		(run: SubagentRun) => {
+			const target = toolRowTarget(run);
+			if (target) openChild(run.id, target.childId);
+			else setSheet("subagents");
+		},
+		[openChild],
+	);
 
 	const key = selection ? draftKey(selection) : null;
 	const draft = key ? (drafts[key] ?? "") : "";
@@ -176,7 +201,7 @@ export default function ChatScreen() {
 				<View style={styles.flex}>
 					{selection && view && (view.phase === "ready" || view.phase === "gone" || rows.length > 0) ? (
 						<DialogContext.Provider value={dialog}>
-							<Transcript key={key} rows={rows} />
+							<Transcript key={key} rows={rows} runs={runs} onOpenRun={openRun} />
 						</DialogContext.Provider>
 					) : (
 						<EmptyState onOpenDrawer={openDrawer} />
@@ -204,6 +229,7 @@ export default function ChatScreen() {
 							contextPercent={view?.context?.percent ?? null}
 							onOpenModel={() => setSheet("model")}
 						>
+							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
 							<QueuedRows entries={queued} />
 						</Composer>
 					</View>
@@ -211,12 +237,21 @@ export default function ChatScreen() {
 			</KeyboardAvoidingView>
 			<SessionSheet visible={sheet === "session"} onClose={closeSheet} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
+			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />
 		</SafeAreaView>
 	);
 }
 
 /** Message list that follows new output only while the user is at the bottom. */
-function Transcript({ rows: allRows }: { rows: Row[] }) {
+function Transcript({
+	rows: allRows,
+	runs,
+	onOpenRun,
+}: {
+	rows: Row[];
+	runs: readonly SubagentRun[] | undefined;
+	onOpenRun: (run: SubagentRun) => void;
+}) {
 	const listRef = useRef<FlatList<SpacedRow>>(null);
 	const atBottom = useRef(true);
 	const [showJump, setShowJump] = useState(false);
@@ -284,9 +319,20 @@ function Transcript({ rows: allRows }: { rows: Row[] }) {
 				data={rows}
 				keyExtractor={(r) => r.key}
 				renderItem={({ item }) => (
-					<TranscriptRow row={item} expanded={isOpen(item)} onToggle={onToggle} onOpenReview={openReview} />
+					<TranscriptRow
+						row={item}
+						expanded={isOpen(item)}
+						onToggle={onToggle}
+						onOpenReview={openReview}
+						subagent={
+							item.kind === "tool" && item.name === "subagent" && runs?.length
+								? findRunByToolCall(runs, item.toolCallId)
+								: undefined
+						}
+						onOpenSubagent={onOpenRun}
+					/>
 				)}
-				extraData={expanded}
+				extraData={[expanded, runs]}
 				contentContainerStyle={styles.listContent}
 				onScroll={onScroll}
 				scrollEventThrottle={32}

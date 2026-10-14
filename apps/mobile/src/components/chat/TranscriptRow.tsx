@@ -1,4 +1,5 @@
 /** One row of the chat transcript (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
+import type { SubagentRun } from "@pimate/protocol";
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -7,6 +8,7 @@ import { BulbIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, SwapIcon } 
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { seconds, tailLines } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { toolRowInfo } from "@/lib/subagents";
 import type { SpacedRow } from "@/lib/transcriptRows";
 import { colors, fontFamily, radii, sizes, typography } from "@/theme/tokens";
 
@@ -31,19 +33,32 @@ type Props = {
 	onToggle: (key: string, open: boolean) => void;
 	/** Opens the Review screen for a turn (user entryId). */
 	onOpenReview: (turnId: string) => void;
+	/** The subagent run started by this `subagent` tool call, when the RC knows it (else a plain tool row). */
+	subagent?: SubagentRun;
+	onOpenSubagent?: (run: SubagentRun) => void;
 };
 
-export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onToggle, onOpenReview }: Props) {
+export const TranscriptRow = memo(function TranscriptRow({
+	row,
+	expanded,
+	onToggle,
+	onOpenReview,
+	subagent,
+	onOpenSubagent,
+}: Props) {
 	const margin = { marginTop: row.marginTop };
 	switch (row.kind) {
 		case "user":
 			return (
-				<View style={[styles.userWrap, margin]}>
-					<View style={styles.bubble}>
-						<Text style={styles.bubbleText} selectable>
-							{row.text}
-						</Text>
+				<View style={margin}>
+					<View style={styles.userWrap}>
+						<View style={styles.bubble}>
+							<Text style={styles.bubbleText} selectable>
+								{row.text}
+							</Text>
+						</View>
 					</View>
+					{row.caption ? <Text style={styles.caption}>{row.caption}</Text> : null}
 				</View>
 			);
 		case "text":
@@ -55,6 +70,15 @@ export const TranscriptRow = memo(function TranscriptRow({ row, expanded, onTogg
 		case "thinking":
 			return <ThinkingRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
 		case "tool":
+			if (subagent && onOpenSubagent)
+				return (
+					<SubagentToolRow
+						run={subagent}
+						callRunning={row.state === "running"}
+						margin={row.marginTop}
+						onPress={() => onOpenSubagent(subagent)}
+					/>
+				);
 			return <ToolRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
 		case "turnSummary":
 			return <TurnSummaryRow row={row} expanded={expanded} onToggle={onToggle} onOpenReview={onOpenReview} />;
@@ -204,6 +228,49 @@ function ToolRow({
 	);
 }
 
+/** The `subagent` tool row linked to its run: "subagent reviewer × 3 · 並列   2 実行中 ›" (Chat-Subagents). */
+function SubagentToolRow({
+	run,
+	callRunning,
+	margin,
+	onPress,
+}: {
+	run: SubagentRun;
+	callRunning: boolean;
+	margin: number;
+	onPress: () => void;
+}) {
+	const info = toolRowInfo(run);
+	// The mark is the tool call's (a background run returns at once: blue dot); waits and failures stay visible.
+	const mark = info.mark === "running" && !callRunning ? "done" : info.mark;
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityLabel={`サブエージェント ${info.subject}、${info.meta}。詳細を開く`}
+			onPress={onPress}
+			style={({ pressed }) => [styles.compactRow, { marginTop: margin }, pressed && styles.pressed]}
+		>
+			<View style={styles.markCol}>
+				<StatusMark kind={mark} />
+			</View>
+			<Text style={styles.toolName}>subagent</Text>
+			<Text style={styles.toolSubject} numberOfLines={1}>
+				{info.subject}
+			</Text>
+			<Text
+				style={[
+					styles.toolMeta,
+					info.mark === "waiting" && { color: colors.statusWaitingText },
+					info.mark === "failed" && { color: colors.statusFailedText },
+				]}
+			>
+				{info.meta}
+			</Text>
+			<ChevronRightIcon color={colors.textSecondary} size={14} />
+		</Pressable>
+	);
+}
+
 /** `+6 −2` in the diff colors (`+18` when nothing was removed). */
 export function ChangeCounts({ add, del, size = 11 }: { add: number; del: number; size?: number }) {
 	return (
@@ -303,6 +370,7 @@ const styles = StyleSheet.create({
 	summaryChanges: { paddingLeft: 10, gap: 2 },
 	summaryText: { ...typography.caption, color: colors.textSecondary },
 	meta: { ...typography.meta, color: colors.textSecondary },
+	caption: { marginTop: 4, fontSize: 11, lineHeight: 15, color: colors.textSecondary, textAlign: "right" },
 	error: { ...typography.caption, color: colors.statusFailedText },
 	note: { ...typography.caption, color: colors.textSecondary },
 	notice: { alignItems: "center", gap: 4, marginBottom: 0 },

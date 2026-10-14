@@ -724,3 +724,82 @@ describe("AppStore M2", () => {
 		expect(store.getState().selection?.instanceId).toBe("i1");
 	});
 });
+
+describe("subagent session guards", () => {
+	it("guards resume with the displayed session and reports session_changed without recording or retrying it", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const pending = store.subagentControl("i1", {
+			runId: "same-run",
+			childId: "c",
+			action: "resume",
+			text: "continue",
+		});
+		const request = opRcs(s)[0]!.request;
+		expect(request).toMatchObject({ method: "subagent_control", expectInstanceId: "i1", expectSessionId: "s1" });
+		// The PC forked to s2 (which contains the same run ID), before the phone heard about it.
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: false, error: { code: "session_changed" } },
+		});
+		expect(await pending).toMatchObject({
+			ok: false,
+			code: "session_changed",
+			text: expect.stringContaining("会話が切り替わりました"),
+		});
+		expect(store.sentToSubagent("same-run", "c")).toEqual([]);
+		expect(opRcs(s)).toHaveLength(1);
+	});
+
+	it.each(["control", "transcript"])("rejects a late %s response after the displayed session changes", async (kind) => {
+		const { store } = await setup();
+		const s = connect();
+		const pending =
+			kind === "control"
+				? store.subagentControl("i1", { runId: "same-run", childId: "c", action: "resume", text: "continue" })
+				: store.subagentTranscript("i1", "same-run", "c");
+		const request = opRcs(s)[0]!.request;
+		expect(request.expectSessionId).toBe("s1");
+		s.receive(subscribedMsg([], "s2"));
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: {
+				type: "response",
+				id: request.id,
+				ok: true,
+				result: { newRunId: "new", cursor: "old-cursor", items: [{ kind: "user", entryId: "old", text: "old" }] },
+			},
+		});
+		expect(await pending).toMatchObject({ ok: false, code: "session_changed" });
+		expect(store.sentToSubagent("same-run", "c")).toEqual([]);
+	});
+
+	it("does not apply a transcript fetched for a previously selected instance", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const pending = store.subagentTranscript("i1", "r", "c", "cursor");
+		const request = opRcs(s)[0]!.request;
+		expect(request).toMatchObject({ params: { runId: "r", childId: "c", cursor: "cursor" }, expectSessionId: "s1" });
+		store.select("h1", "i0");
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { cursor: "old-cursor", items: [] } },
+		});
+		expect(await pending).toMatchObject({ ok: false, code: "session_changed" });
+	});
+
+	it.each(["control", "transcript"])("does not send %s without a known session", async (kind) => {
+		const { store } = await setup();
+		const s = connect();
+		store.select("h1", "i0"); // Its first snapshot (and session ID) has not arrived yet.
+		const result =
+			kind === "control"
+				? await store.subagentControl("i0", { runId: "r", childId: "c", action: "resume", text: "continue" })
+				: await store.subagentTranscript("i0", "r", "c");
+		expect(result.ok).toBe(false);
+		expect(opRcs(s)).toHaveLength(0);
+	});
+});

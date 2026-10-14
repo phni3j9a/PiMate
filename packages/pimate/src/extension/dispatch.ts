@@ -25,6 +25,8 @@ const methods = [
 	"sessions",
 	"shutdown",
 	"subagents_rpc",
+	"subagent_transcript",
+	"subagent_control",
 ];
 function object(v: unknown): v is Record<string, unknown> {
 	return !!v && typeof v === "object" && !Array.isArray(v);
@@ -69,6 +71,17 @@ export function validateRequest(value: unknown): Request {
 				typeof p.op === "string" &&
 				["new", "switch", "fork", "reload"].includes(p.op) &&
 				str("arg", ["switch", "fork"].includes(p.op));
+			break;
+		case "subagent_transcript":
+			ok = str("runId", true) && str("childId", true) && str("cursor");
+			break;
+		case "subagent_control":
+			ok =
+				str("runId", true) &&
+				str("childId") &&
+				str("text") &&
+				typeof p.action === "string" &&
+				["steer", "follow_up", "interrupt", "resume", "stop", "stop_child", "abort_parent"].includes(p.action);
 			break;
 		case "subagents_rpc":
 			ok =

@@ -502,3 +502,12 @@ it("reports initial prompt uncertainty without retrying or launching a second Pi
 	expect(spawn).toHaveBeenCalledOnce();
 	expect(request).toHaveBeenCalledOnce();
 });
+
+it("pushes subagent-only count changes even when parent status stays idle", async () => {
+	const t = await setup();
+	const client = await t.authed();
+	const subagents = { active: 2, waiting: 1, paused: 0, failed: 0 };
+	writeFileSync(join(t.core.runDir, "live.json"), JSON.stringify({ ...t.snapshot, subagents }));
+	await t.server.refresh();
+	expect(await client.box.next("instances")).toMatchObject({ instances: [{ status: "idle", subagents }] });
+});

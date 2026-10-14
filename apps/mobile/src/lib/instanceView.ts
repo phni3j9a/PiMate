@@ -14,11 +14,13 @@ import type {
 	InstanceStatus,
 	ModelRef,
 	SessionRef,
+	SubagentsState,
 	ThinkingLevel,
 	TranscriptItem,
 	UIRequest,
 } from "@pimate/protocol";
 import { contentText } from "./format";
+import { clearFinishedWatch, normalizeState, upsertRun, watchRuns } from "./subagents";
 
 export type ViewPhase = "loading" | "ready" | "resyncing" | "error" | "gone";
 
@@ -89,9 +91,17 @@ export interface InstanceView {
 	turnClock: { since: number; userEntryId: string | null } | null;
 	/** Live thinking of the message being streamed: first thinking delta, and the first output after it. */
 	thinkingClock: { since: number; until: number | null } | null;
+	/** Subagent runs (M4). Empty when the RC knows no supported subagent extension. */
+	subagents: SubagentsState;
+	/**
+	 * Runs seen active since the last user prompt: the summary line above the composer stays for them after they
+	 * finish, until the next prompt.
+	 */
+	subagentWatch: string[];
 }
 
 const EMPTY_STREAMING = { text: "", thinking: "" };
+const NO_SUBAGENTS: SubagentsState = { runs: [], backends: [] };
 
 export function createView(instanceId: string): InstanceView {
 	return {
@@ -118,6 +128,8 @@ export function createView(instanceId: string): InstanceView {
 		turnMs: {},
 		turnClock: null,
 		thinkingClock: null,
+		subagents: NO_SUBAGENTS,
+		subagentWatch: [],
 	};
 }
 
@@ -220,7 +232,12 @@ function applySubscribed(
 		turnMs: prev.session?.id === session?.id ? prev.turnMs : {},
 		turnClock: null,
 		thinkingClock: null,
+		...withSubagents(prev.subagentWatch, snapshot.subagents ? normalizeState(snapshot.subagents) : NO_SUBAGENTS),
 	};
+}
+
+function withSubagents(watch: string[], subagents: SubagentsState) {
+	return { subagents, subagentWatch: watchRuns(watch, subagents.runs) };
 }
 
 function stopClock(clock: InstanceView["thinkingClock"], now: number): InstanceView["thinkingClock"] {
@@ -339,6 +356,9 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 		case "message_end": {
 			const item = event.item;
 			const next = { ...view, items: upsertItem(view.items, item) };
+			// A new prompt ends the summary of subagents that finished before it.
+			if (item.kind === "user" && !view.items.some((i) => i.entryId === item.entryId))
+				next.subagentWatch = clearFinishedWatch(view.subagentWatch, view.subagents.runs);
 			// Use one local clock, not the server's request-start timestamps. A queued user starts a new scope.
 			if (item.kind === "user" && view.turnClock) next.turnClock = { since: now, userEntryId: item.entryId };
 			if (item.kind === "assistant") {
@@ -425,6 +445,10 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 			return { ...view, uiPrompt: { kind: event.kind, title: event.title } };
 		case "context":
 			return { ...view, context: event.context };
+		case "subagent_run":
+			return { ...view, ...withSubagents(view.subagentWatch, upsertRun(view.subagents, event.run)) };
+		case "subagents_reset":
+			return { ...view, ...withSubagents(view.subagentWatch, normalizeState(event.state)) };
 		default:
 			// user_input, notify, session_op_done, compact_* (handled by the store), bus and unknown events.
 			return view;

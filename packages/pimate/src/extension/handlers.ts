@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/compat";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
+import { rpc } from "./subagents/registry.ts";
 import { normalizeBranch } from "./transcript.ts";
 
 export function createHandlers(h: Hub): Handlers {
@@ -109,32 +109,16 @@ export function createHandlers(h: Hub): Handlers {
 				.pi.getCommands()
 				.map((c) => ({ name: c.name, description: c.description, source: c.source })),
 		}),
-		subagents_rpc: (p) => {
-			const { pi } = ready();
-			const requestId = randomUUID();
-			return new Promise((resolve, reject) => {
-				const timer = setTimeout(() => {
-					off();
-					reject(new RcError("timeout", "pi-subagents RPC timed out"));
-				}, p.timeoutMs ?? 15000);
-				const off = pi.events.on(`subagents:rpc:v1:reply:${requestId}`, (reply) => {
-					clearTimeout(timer);
-					off();
-					resolve({ reply });
-				});
-				try {
-					pi.events.emit("subagents:rpc:v1:request", {
-						version: 1,
-						requestId,
-						method: p.method,
-						params: p.params ?? {},
-					});
-				} catch (e) {
-					clearTimeout(timer);
-					off();
-					reject(e);
-				}
-			});
+		subagent_transcript: (p) => {
+			ready();
+			if (!h.subagents) throw new RcError("not_ready");
+			return h.subagents.transcript(p);
 		},
+		subagent_control: (p) => {
+			ready();
+			if (!h.subagents) throw new RcError("not_ready");
+			return h.subagents.control(p);
+		},
+		subagents_rpc: async (p) => ({ reply: await rpc(ready().pi, p.method, p.params ?? {}, p.timeoutMs) }),
 	};
 }

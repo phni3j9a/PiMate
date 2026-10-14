@@ -19,6 +19,8 @@ import type {
 	SessionListItem,
 	SessionOp,
 	SpawnParams,
+	SubagentAction,
+	SubagentTranscript,
 	ThinkingLevel,
 } from "@pimate/protocol";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
@@ -32,6 +34,7 @@ import {
 	userEntryIds,
 } from "./instanceView";
 import { pairWithHost } from "./pairing";
+import { clearFinishedWatch } from "./subagents";
 
 export interface HostRuntime {
 	hostId: string;
@@ -692,6 +695,12 @@ export class AppStore {
 		if (res.ok) {
 			const deliveredAs = (res.result as { deliveredAs?: OutboxEntry["deliveredAs"] }).deliveredAs ?? "prompt";
 			this.finishSend(key, id, { clearDraft: text, deliveredAs });
+			// The subagent summary of finished runs ends with the next prompt (also when it is queued).
+			const v = this.state.view;
+			if (v && this.isCurrent(key)) {
+				const watch = clearFinishedWatch(v.subagentWatch, v.subagents.runs);
+				if (watch !== v.subagentWatch) this.set({ view: { ...v, subagentWatch: watch } });
+			}
 			return;
 		}
 		const code = res.error.code;
@@ -798,7 +807,7 @@ export class AppStore {
 	private async guardedRc<M extends RcMethod>(
 		method: M,
 		params: ParamsOf<M>,
-		opts: { session?: boolean } = {},
+		opts: { session?: boolean; discardStale?: boolean } = {},
 	): Promise<Result<Response & { ok: true }>> {
 		const { selection, view } = this.state;
 		const conn = selection && this.connections.get(selection.hostId);
@@ -814,7 +823,10 @@ export class AppStore {
 			...(opts.session !== false && sessionId ? { expectSessionId: sessionId } : {}),
 		};
 		try {
-			const res = await conn.rc(selection.instanceId, request);
+			const response = await conn.rc(selection.instanceId, request);
+			const stale =
+				opts.discardStale && (!this.isCurrent(draftKey(selection)) || this.state.view?.session?.id !== sessionId);
+			const res = stale ? { ok: false as const, error: { code: "session_changed", message: undefined } } : response;
 			if (res.ok) return { ok: true, value: res };
 			const n = rcErrorText(res.error.code, res.error.message, "操作しませんでした");
 			return { ok: false, title: n.title ?? "操作できませんでした", text: n.text, code: res.error.code };
@@ -943,6 +955,65 @@ export class AppStore {
 		const res = await this.guardedRc("sessions", { limit: 50 }, { session: false });
 		if (!res.ok) return res;
 		return { ok: true, value: (res.value.result as { sessions?: SessionListItem[] }).sessions ?? [] };
+	}
+
+	// ------------------------------------------------------------ subagents (M4)
+
+	/** Texts sent to children from this phone, per `runId/childId` (to label them in the work record). */
+	private subagentSent = new Map<string, { text: string; action: SubagentAction }[]>();
+
+	sentToSubagent(runId: string, childId: string): readonly { text: string; action: SubagentAction }[] {
+		return this.subagentSent.get(`${runId}/${childId}`) ?? [];
+	}
+
+	/** A child's work record (newer items only when `cursor` is given). Only for the selected instance. */
+	async subagentTranscript(
+		instanceId: string,
+		runId: string,
+		childId: string,
+		cursor?: string,
+	): Promise<Result<SubagentTranscript>> {
+		if (this.state.selection?.instanceId !== instanceId)
+			return { ok: false, title: "読み込めませんでした", text: "この Pi は表示されていません。" };
+		const res = await this.guardedRc(
+			"subagent_transcript",
+			{ runId, childId, ...(cursor ? { cursor } : {}) },
+			{ discardStale: true },
+		);
+		if (!res.ok) return { ...res, title: "作業記録を読み込めませんでした" };
+		const t = res.value.result as Partial<SubagentTranscript>;
+		return {
+			ok: true,
+			value: {
+				task: typeof t.task === "string" ? t.task : undefined,
+				items: Array.isArray(t.items) ? t.items : [],
+				cursor: typeof t.cursor === "string" ? t.cursor : (cursor ?? ""),
+				truncated: t.truncated === true,
+			},
+		};
+	}
+
+	/** Runs one subagent operation the RC offered (`actions`). Errors come back for inline display. */
+	async subagentControl(
+		instanceId: string,
+		params: { runId: string; childId?: string; action: SubagentAction; text?: string },
+	): Promise<Result<{ message?: string; newRunId?: string }>> {
+		if (this.state.selection?.instanceId !== instanceId)
+			return { ok: false, title: "操作しませんでした", text: "この Pi は表示されていません。" };
+		const res = await this.guardedRc("subagent_control", params, { discardStale: true });
+		if (!res.ok) return res;
+		if (params.text && params.childId) {
+			const key = `${params.runId}/${params.childId}`;
+			this.subagentSent.set(key, [...(this.subagentSent.get(key) ?? []), { text: params.text, action: params.action }]);
+		}
+		const r = (res.value.result ?? {}) as { message?: unknown; newRunId?: unknown };
+		return {
+			ok: true,
+			value: {
+				message: typeof r.message === "string" ? r.message : undefined,
+				newRunId: typeof r.newRunId === "string" ? r.newRunId : undefined,
+			},
+		};
 	}
 
 	/** Answers a dialog shown in the chat. Only for a request that is still pending in the open conversation. */

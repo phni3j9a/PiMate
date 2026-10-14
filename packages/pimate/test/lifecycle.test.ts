@@ -23,7 +23,7 @@ function setup(mobile = false, trust?: string) {
 		getThinkingLevel: () => "off",
 	} as unknown as ExtensionAPI;
 	extension(pi);
-	return { hooks, h: getHub() };
+	return { hooks, h: getHub(), pi };
 }
 it.each(["yes", "no"])("only consumes explicit Host-origin trust decision %s", (trust) => {
 	const { hooks, h } = setup(true, trust);
@@ -93,4 +93,55 @@ it.each(["agent_end", "agent_before_settle"])("keeps snapshots active while a %s
 	expect(h.snapshot()).toMatchObject({ status: "waiting_input", agentActive: false });
 	for (const d of h.pendingUI.values()) d.cancel();
 	await outside;
+});
+
+it("rebuilds branch-local subagents on session_tree, closing old watchers and clearing meta counts", async () => {
+	const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+	const { tmpdir } = await import("node:os");
+	const { join } = await import("node:path");
+	const { SubagentRegistry } = await import("../src/extension/subagents/registry.ts");
+	const { countSubagents } = await import("@pimate/protocol");
+	const dir = await mkdtemp(join(tmpdir(), "pimate-tree-"));
+	const { hooks, h, pi } = setup();
+	h.pi = pi;
+	h.session = { id: "parent" };
+	const metaCounts: number[] = [];
+	vi.spyOn(h, "writeMeta").mockImplementation(() => {
+		metaCounts.push(countSubagents(h.subagents?.snapshot().runs ?? []).active);
+	});
+	const emit = vi.spyOn(h, "emit");
+	const old = new SubagentRegistry(h);
+	h.subagents = old;
+	try {
+		await writeFile(
+			join(dir, "status.json"),
+			JSON.stringify({
+				runId: "old-branch",
+				mode: "single",
+				state: "running",
+				steps: [{ agent: "scout", status: "running" }],
+			}),
+		);
+		await old.start([{ type: "custom", customType: "pimate_subagent", data: { runId: "old-branch", asyncDir: dir } }]);
+		await vi.waitFor(() => expect(old.snapshot().runs[0]?.children).toHaveLength(1));
+		const watcher = (Reflect.get(old, "watchers") as Map<string, import("node:fs").FSWatcher>).get("old-branch")!;
+		const close = vi.spyOn(watcher, "close");
+		const dispose = vi.spyOn(old, "dispose");
+		const ctx = { hasUI: true, sessionManager: { getBranch: () => [] } } as unknown as ExtensionContext;
+		hooks.get("session_tree")?.({ oldLeafId: "after-launch", newLeafId: "before-launch" }, ctx);
+		expect(dispose).toHaveBeenCalledOnce();
+		expect(close).toHaveBeenCalledOnce();
+		expect(h.subagents).not.toBe(old);
+		expect(h.subagents?.snapshot().runs).toEqual([]);
+		expect(metaCounts).toContain(1);
+		expect(metaCounts.at(-1)).toBe(0);
+		expect(emit.mock.calls).toContainEqual([{ type: "subagents_reset", state: { runs: [], backends: [] } }]);
+		await expect(h.subagents!.control({ runId: "old-branch", action: "stop" })).rejects.toMatchObject({
+			code: "not_found",
+		});
+	} finally {
+		h.subagents?.dispose();
+		old.dispose();
+		await rm(dir, { recursive: true, force: true });
+	}
 });

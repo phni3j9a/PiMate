@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { accessSync, constants, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { InstanceMeta } from "@pimate/protocol";
+import { countSubagents, type InstanceMeta } from "@pimate/protocol";
 import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
 import { RcClient } from "./client.ts";
 
@@ -146,7 +146,12 @@ export class HostCore {
 			let reachable = false;
 			try {
 				const snapshot = await client.connect();
-				meta = { ...meta, status: snapshot.status, session: snapshot.session };
+				meta = {
+					...meta,
+					status: snapshot.status,
+					session: snapshot.session,
+					subagents: snapshot.subagents ? countSubagents(snapshot.subagents.runs) : meta.subagents,
+				};
 				reachable = true;
 			} catch {
 				/* live Pi can be starting or temporarily unreachable */
@@ -203,7 +208,7 @@ export class HostCore {
 			const child = spawn(argv[0], argv.slice(1), { cwd, env, stdio: "ignore", detached: true });
 			child.once("error", reject);
 			child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`Pi launcher exited ${code}`))));
-			child.unref();
+			// Keep the CLI alive until the launcher acknowledges success; abduco detaches Pi itself.
 		});
 		return {
 			instanceId,

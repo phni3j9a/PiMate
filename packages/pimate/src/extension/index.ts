@@ -4,6 +4,7 @@ import type { ParamsOf } from "@pimate/protocol";
 import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
+import { SubagentRegistry } from "./subagents/registry.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { patchUI } from "./ui.ts";
 import { registerWriteDiff } from "./write-diff.ts";
@@ -13,9 +14,16 @@ export default function pimate(pi: ExtensionAPI): void {
 	// Pi recreates extension runtimes on /new, /resume and /reload. The process hub survives,
 	// but old bus and lifecycle subscriptions must not.
 	for (const off of h.subscriptions) off();
+	h.subagents?.dispose();
 	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
 	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
+	const rebuildSubagents = (ctx: ExtensionContext) => {
+		h.subagents?.dispose();
+		h.subagents = new SubagentRegistry(h);
+		h.writeMeta();
+		void h.subagents.start(ctx.sessionManager.getBranch());
+	};
 	const messages: { message: unknown; ctx: ExtensionContext; sessionId: string }[] = [];
 	const flushMessages = () => {
 		for (const { message, ctx, sessionId } of messages.splice(0)) {
@@ -59,6 +67,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.writeMeta();
 			h.emit({ type: "session_changed", reason: event.reason, session: h.session });
 			h.emitContext();
+			rebuildSubagents(ctx);
 		}),
 	);
 	pi.registerCommand("pimate-session", {
@@ -85,7 +94,13 @@ export default function pimate(pi: ExtensionAPI): void {
 		},
 	});
 	h.subscriptions.push(
+		pi.on("session_tree", (_event, ctx) => {
+			if (!ctx.hasUI) return;
+			h.ctx = ctx;
+			rebuildSubagents(ctx);
+		}),
 		pi.on("session_shutdown", (e) => {
+			h.subagents?.dispose();
 			if (e.reason === "quit" && h.ctx?.hasUI) h.stop();
 		}),
 		pi.on("session_info_changed", (e) => {
@@ -123,6 +138,7 @@ export default function pimate(pi: ExtensionAPI): void {
 		}),
 		pi.on("turn_end", flushMessages),
 		pi.on("tool_execution_start", (e) => {
+			h.subagents?.toolStart(e.toolCallId);
 			flushMessages();
 			h.emit({
 				type: "tool_start",
@@ -133,9 +149,11 @@ export default function pimate(pi: ExtensionAPI): void {
 			});
 		}),
 		pi.on("tool_execution_update", (e) => {
+			h.subagents?.tool(e.toolCallId, e.partialResult.details, true);
 			h.emit({ type: "tool_update", toolCallId: e.toolCallId, toolName: e.toolName, partial: e.partialResult });
 		}),
 		pi.on("tool_execution_end", (e) => {
+			h.subagents?.tool(e.toolCallId, e.result.details, false, e.isError);
 			h.emit({
 				type: "tool_end",
 				toolCallId: e.toolCallId,
@@ -162,6 +180,9 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "ui_prompt", phase: "end", kind: e.kind, title: e.title });
 		}),
 	);
+	h.subscriptions.push(
+		pi.events.on("subagents:rpc:v1:ready", (data) => h.subagents?.bus("subagents:rpc:v1:ready", data)),
+	);
 	for (const channel of [
 		"subagent:async-started",
 		"subagent:async-complete",
@@ -173,6 +194,11 @@ export default function pimate(pi: ExtensionAPI): void {
 		"subagent:child-status",
 		"subagent:result-intercom",
 	]) {
-		h.subscriptions.push(pi.events.on(channel, (data) => h.emit({ type: "bus", channel, data })));
+		h.subscriptions.push(
+			pi.events.on(channel, (data) => {
+				h.emit({ type: "bus", channel, data });
+				h.subagents?.bus(channel, data);
+			}),
+		);
 	}
 }
