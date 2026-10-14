@@ -75,6 +75,8 @@ export class HostConnection {
 	authFailure: AuthFailure | null = null;
 	info: HostInfo | null = null;
 	instances: InstanceSummary[] = [];
+	/** True once the current connection has delivered its instance list (it arrives after auth_ok). */
+	instancesReceived = false;
 	/** Number of consecutive failed attempts since the last successful auth. */
 	attempt = 0;
 	/** Local time of the next scheduled reconnect, while offline. */
@@ -219,6 +221,7 @@ export class HostConnection {
 	private connect(): void {
 		this.teardown();
 		this.nextRetryAt = null;
+		this.instancesReceived = false;
 		this.setState("connecting");
 		let socket: SocketLike;
 		try {
@@ -277,6 +280,7 @@ export class HostConnection {
 				return;
 			case "instances":
 				this.instances = Array.isArray(msg.instances) ? msg.instances : [];
+				this.instancesReceived = true;
 				this.emitChange();
 				return;
 			case "rc_result": {

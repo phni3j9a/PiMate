@@ -2,7 +2,7 @@ import type { InstanceSummary, TranscriptItem } from "@pimate/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostRegistry, MemoryStorage } from "../src/lib/hostRegistry";
 import { AppStore } from "../src/lib/store";
-import { authenticate, FakeSocket } from "./fakes";
+import { authenticate, FakeSocket, hostInfo } from "./fakes";
 
 const instance = (id: string, updatedAt = 1): InstanceSummary => ({
 	instanceId: id,
@@ -235,6 +235,23 @@ describe("AppStore", () => {
 		expect(s2.sentOfType("rc")).toEqual([]);
 	});
 
+	it("does not treat the same text in another session as delivered", async () => {
+		vi.useFakeTimers();
+		const { store } = await setup();
+		connect();
+		store.setDraft("continue");
+		const p = store.send();
+		FakeSocket.last().drop();
+		await p;
+		vi.advanceTimersByTime(1200);
+		const s2 = FakeSocket.last();
+		authenticate(s2, [instance("i1", 5)]);
+		s2.receive(subscribedMsg([{ kind: "user", entryId: "old", text: "continue" }], "s2"));
+		const st = store.getState();
+		expect(st.outbox).toMatchObject([{ state: "unconfirmed" }]);
+		expect(st.drafts["h1/i1"]).toBe("continue");
+	});
+
 	it("re-subscribes after session_changed and flags a pending draft", async () => {
 		const { store } = await setup();
 		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
@@ -295,12 +312,41 @@ describe("AppStore", () => {
 		expect(store.getState().selection?.instanceId).toBe("i1");
 	});
 
+	it("keeps a restored selection until the instance list arrives", async () => {
+		const storage = new MemoryStorage();
+		const reg = new HostRegistry(storage);
+		await reg.save({ hostId: "h1", hostName: "srv", address: "a:1", deviceId: "d", token: "t", pairedAt: 0 });
+		await reg.saveSelection({ hostId: "h1", instanceId: "i0" });
+		const store = new AppStore({
+			storage,
+			createSocket: (url) => new FakeSocket(url),
+			fetch: async () => ({ status: 500, json: async () => ({}) }),
+			randomUUID: () => "x",
+			deviceName: () => "p",
+			app: { version: "1", platform: "android" },
+		});
+		await store.init();
+		const s = FakeSocket.last();
+		s.open();
+		s.receive({ type: "auth_ok", host: hostInfo, deviceId: "d1" });
+		expect(store.getState().selection?.instanceId).toBe("i0");
+		s.receive({ type: "instances", instances: [instance("i1", 5), instance("i0", 1)] });
+		expect(store.getState().selection?.instanceId).toBe("i0");
+	});
+
+	it("does not abort while the session is unknown", async () => {
+		const { store } = await setup();
+		authenticate(FakeSocket.last(), [instance("i1", 5)]);
+		await store.abort();
+		expect(FakeSocket.last().sentOfType("rc")).toEqual([]);
+	});
+
 	it("aborts with an instance guard", async () => {
 		const { store } = await setup();
 		const s = connect();
 		const p = store.abort();
 		const rc = s.sentOfType("rc")[0];
-		expect(rc.request).toMatchObject({ method: "abort", expectInstanceId: "i1" });
+		expect(rc.request).toMatchObject({ method: "abort", expectInstanceId: "i1", expectSessionId: "s1" });
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",

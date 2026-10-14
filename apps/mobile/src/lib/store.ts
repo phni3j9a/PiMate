@@ -32,6 +32,8 @@ export interface OutboxEntry {
 	deliveredAs?: "prompt" | "steer" | "followUp";
 	/** User entryIds present when the message was sent. */
 	known: string[];
+	/** Session the message was sent to; delivery is only matched against that session's transcript. */
+	sessionId?: string;
 	sentAt: number;
 }
 
@@ -286,7 +288,7 @@ export class AppStore {
 	private dropVanishedSelection(hostId: string): void {
 		const { selection, view } = this.state;
 		const conn = this.connections.get(hostId);
-		if (!selection || selection.hostId !== hostId || conn?.state !== "connected") return;
+		if (!selection || selection.hostId !== hostId || conn?.state !== "connected" || !conn.instancesReceived) return;
 		if (conn.instances.some((i) => i.instanceId === selection.instanceId)) return;
 		if (view && (view.phase === "loading" || view.phase === "error") && view.items.length === 0) {
 			conn.setSubscription(null);
@@ -368,7 +370,11 @@ export class AppStore {
 		let notice = this.state.notice;
 		const remaining: OutboxEntry[] = [];
 		for (const entry of outbox) {
-			if (entry.state !== "sending" && findDeliveredUserItem(view, entry.text, entry.known)) {
+			if (
+				entry.state !== "sending" &&
+				view.session?.id === entry.sessionId &&
+				findDeliveredUserItem(view, entry.text, entry.known)
+			) {
 				if (entry.state === "unconfirmed") {
 					if (sameText(drafts[key], entry.text)) drafts = { ...drafts, [key]: "" };
 					if (notice?.kind === "unconfirmed") notice = null;
@@ -420,7 +426,14 @@ export class AppStore {
 		const key = draftKey(selection);
 		const text = (this.state.drafts[key] ?? "").replace(/\s+$/, "");
 		const id = this.deps.randomUUID();
-		const entry: OutboxEntry = { id, text, state: "sending", known: userEntryIds(view), sentAt: this.now() };
+		const entry: OutboxEntry = {
+			id,
+			text,
+			state: "sending",
+			known: userEntryIds(view),
+			sessionId: view.session?.id,
+			sentAt: this.now(),
+		};
 		// A new send supersedes older unconfirmed ones (the user decided).
 		this.set({ outbox: [...this.state.outbox.filter((e) => e.state !== "unconfirmed"), entry], notice: null });
 		const request: Request<"prompt"> = {
@@ -506,8 +519,10 @@ export class AppStore {
 	}
 
 	async abort(): Promise<void> {
-		const { selection, aborting } = this.state;
-		if (!selection || aborting) return;
+		const { selection, aborting, view } = this.state;
+		// Without a known session the stop could hit a conversation the user is not looking at.
+		const sessionId = view?.session?.id;
+		if (!selection || aborting || !sessionId) return;
 		const conn = this.connections.get(selection.hostId);
 		if (conn?.state !== "connected") return;
 		this.set({ aborting: true });
@@ -517,6 +532,7 @@ export class AppStore {
 				method: "abort",
 				params: {},
 				expectInstanceId: selection.instanceId,
+				expectSessionId: sessionId,
 			});
 			if (!res.ok && this.isCurrent(draftKey(selection)))
 				this.set({
