@@ -64,12 +64,15 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 	const hasUser = view?.items.some((i) => i.kind === "user") ?? false;
 
 	const confirmShutdown = () => {
+		// Bound to the Pi on screen now: if the selection changes before the answer, nothing is shut down.
+		const target = appStore.opTarget();
+		if (!target) return;
 		Alert.alert(
 			"この Pi を終了しますか？",
 			"作業中の処理は止まります。会話はセッションに保存され、あとで開き直せます。",
 			[
 				{ text: "キャンセル", style: "cancel" },
-				{ text: "終了する", style: "destructive", onPress: () => void run(() => appStore.shutdown(), onClose) },
+				{ text: "終了する", style: "destructive", onPress: () => void run(() => appStore.shutdown(target), onClose) },
 			],
 		);
 	};

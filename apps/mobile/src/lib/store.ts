@@ -95,6 +95,12 @@ export interface ModelsState {
 
 export type OpKind = SessionOp | "compact" | "shutdown" | "model" | "thinking";
 
+export interface OpTarget {
+	hostId: string;
+	instanceId: string;
+	sessionId: string | null;
+}
+
 export interface PendingOp {
 	kind: OpKind;
 	key: string;
@@ -102,6 +108,8 @@ export interface PendingOp {
 	forkText?: string;
 	/** new / switch / fork: the session the op started from. Reaching another session also ends the op. */
 	fromSessionId?: string;
+	/** The Host accepted the request; only its result event is still awaited. */
+	accepted?: boolean;
 }
 
 export interface UIAnswer {
@@ -384,7 +392,10 @@ export class AppStore {
 			record.needsRepair = true;
 			void this.registry.save(record).catch(() => {});
 		}
-		this.set({ hosts: this.runtimes() });
+		const op = this.state.op;
+		if (op?.accepted && conn.state !== "connected" && this.state.selection?.hostId === hostId)
+			this.set({ hosts: this.runtimes(), ...this.opResultUnknown(op) });
+		else this.set({ hosts: this.runtimes() });
 		this.dropVanishedSelection(hostId);
 		this.autoSelect();
 	}
@@ -469,24 +480,32 @@ export class AppStore {
 		if (sessionChanged) {
 			const op = this.state.op;
 			// The phone switched on purpose: the draft simply follows, and the divider says who did it.
-			const byPhone = !!op && op.key === key && (op.kind === "new" || op.kind === "switch" || op.kind === "fork");
+			// Only an op started from the conversation being left counts (never a leftover one).
+			const byPhone =
+				!!op &&
+				op.key === key &&
+				(op.kind === "new" || op.kind === "switch" || op.kind === "fork") &&
+				!!op.fromSessionId &&
+				op.fromSessionId === view.session?.id;
 			const draft = this.state.drafts[key]?.trim();
 			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
-		// `session_op_done` is not part of the snapshot: when it is emitted while the Host resyncs this view it
-		// can be lost. The snapshot of another session is proof enough that the phone's switch happened.
+		// Result events are not part of the snapshot: one emitted while the Host builds it can be lost.
 		const pending = this.state.op;
-		if (
-			msg.type === "subscribed" &&
-			pending?.key === key &&
-			pending.fromSessionId &&
-			next.session &&
-			next.session.id !== pending.fromSessionId &&
-			!("op" in opPatch)
-		)
-			Object.assign(patch, this.sessionOpDone(pending, key));
+		if (msg.type === "subscribed" && pending?.key === key && !("op" in opPatch)) {
+			// After the switch we saw begin, the snapshot of another session is proof that it happened.
+			if (
+				view.phase === "resyncing" &&
+				pending.fromSessionId &&
+				next.session &&
+				next.session.id !== pending.fromSessionId
+			)
+				Object.assign(patch, this.sessionOpDone(pending, key));
+			// Otherwise an accepted op may have finished unseen: never wait for it forever.
+			else if (pending.accepted) Object.assign(patch, this.opResultUnknown(pending));
+		}
 		// An unnamed conversation is known by its first message once its history has arrived.
 		const target = patch.targetChanged ?? this.state.targetChanged;
 		if (msg.type === "subscribed" && target && !target.to) {
@@ -541,6 +560,18 @@ export class AppStore {
 		const patch: Partial<AppState> = { op: null };
 		if (op.forkText && !this.state.drafts[key]?.trim()) patch.drafts = { ...this.state.drafts, [key]: op.forkText };
 		return patch;
+	}
+
+	/** The result event of an accepted op can no longer arrive (disconnect / fresh snapshot). */
+	private opResultUnknown(op: PendingOp): Partial<AppState> {
+		return {
+			op: null,
+			notice: {
+				kind: "error",
+				title: `${OP_LABEL[op.kind]}の結果を確認できません`,
+				text: "完了の知らせを受け取れませんでした。会話の状態を確かめてください（自動で再送しません）。",
+			},
+		};
 	}
 
 	/** Removes outbox entries that now appear in the transcript. */
@@ -827,9 +858,14 @@ export class AppStore {
 
 	/**
 	 * Starts a new Pi and opens it once it appears in the Host's list. Never retried: if the outcome is unknown,
-	 * the user is told to check the list instead.
+	 * the user is told to check the list instead. `wanted` is asked at the end: when the caller has gone away
+	 * meanwhile, the new Pi is left in the list instead of replacing what the user is looking at now.
 	 */
-	async spawn(hostId: string, params: SpawnParams): Promise<Result<{ instanceId: string }>> {
+	async spawn(
+		hostId: string,
+		params: SpawnParams,
+		wanted: () => boolean = () => true,
+	): Promise<Result<{ instanceId: string }>> {
 		const conn = this.connections.get(hostId);
 		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
 		let res: Awaited<ReturnType<HostConnection["spawn"]>>;
@@ -860,7 +896,7 @@ export class AppStore {
 				title: "起動しましたが、まだ一覧にありません",
 				text: "少し待ってからドロワーの一覧を確認してください。",
 			};
-		this.select(hostId, res.instanceId);
+		if (wanted()) this.select(hostId, res.instanceId);
 		return { ok: true, value: { instanceId: res.instanceId } };
 	}
 
@@ -930,8 +966,30 @@ export class AppStore {
 		return this.startOp({ kind: "thinking" }, "set_thinking", { level }, true);
 	}
 
-	/** Ends this Pi (RC `shutdown`). The instance then disappears from the list. */
-	async shutdown(): Promise<Result<null>> {
+	/** What an operation confirmed by the user applies to (captured when the confirmation opens). */
+	opTarget(): OpTarget | null {
+		const { selection, view } = this.state;
+		if (!selection || !view) return null;
+		return { hostId: selection.hostId, instanceId: selection.instanceId, sessionId: view.session?.id ?? null };
+	}
+
+	/** Ends the Pi the user confirmed (RC `shutdown`), unless the chat moved on meanwhile. */
+	async shutdown(target: OpTarget): Promise<Result<null>> {
+		const now = this.opTarget();
+		if (
+			!now ||
+			now.hostId !== target.hostId ||
+			now.instanceId !== target.instanceId ||
+			now.sessionId !== target.sessionId
+		) {
+			const res = {
+				ok: false as const,
+				title: "終了しませんでした",
+				text: "確認しているあいだに表示中の Pi か会話が変わりました。もう一度選んでください。",
+			};
+			if (now) this.set({ notice: { kind: "error", title: res.title, text: res.text } });
+			return res;
+		}
 		return this.startOp({ kind: "shutdown" }, "shutdown", {}, true);
 	}
 
@@ -953,7 +1011,8 @@ export class AppStore {
 			return res;
 		}
 		const current = this.state.op as PendingOp | null;
-		if (finishOnResponse && current?.key === key && current.kind === op.kind) this.set({ op: null });
+		if (current?.key === key && current.kind === op.kind)
+			this.set({ op: finishOnResponse ? null : { ...current, accepted: true } });
 		return { ok: true, value: null };
 	}
 }

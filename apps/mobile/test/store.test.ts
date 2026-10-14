@@ -478,14 +478,74 @@ describe("AppStore M2", () => {
 		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "fork", byPhone: true });
 	});
 
-	it("keeps a session op pending while the snapshot still shows the old session", async () => {
+	it("gives up an accepted op whose result can no longer arrive after a fresh snapshot", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const op = store.compact();
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await op;
+		expect(store.getState().op?.kind).toBe("compact");
+		s.receive(subscribedMsg([], "s1"));
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice).toMatchObject({ kind: "error", title: "圧縮の結果を確認できません" });
+		// Other operations are possible again.
+		void store.setThinking("low");
+		expect(store.getState().op?.kind).toBe("thinking");
+	});
+
+	it("clears an accepted op on disconnect and asks before the draft follows a later session change", async () => {
+		vi.useFakeTimers();
 		const { store } = await setup();
 		const s = connect();
 		const op = store.sessionOp("new");
 		rcReply(s, opRcs(s)[0].request.id, true);
 		await op;
-		s.receive(subscribedMsg([], "s1"));
-		expect(store.getState().op?.kind).toBe("new");
+		store.setDraft("古い下書き");
+		s.drop();
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice).toMatchObject({ title: "新しいセッションの結果を確認できません" });
+		// Reconnect into another conversation: not known to be the phone's doing, so the draft needs confirmation.
+		vi.advanceTimersByTime(1200);
+		const s2 = FakeSocket.last();
+		authenticate(s2, [instance("i1", 5)]);
+		s2.receive(subscribedMsg([], "s9"));
+		expect(store.getState().targetChanged).toEqual({ to: "s9" });
+		expect(store.sendBlocker()).toBe("target_changed");
+	});
+
+	it("shuts down only the Pi that was on screen when the confirmation opened", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const target = store.opTarget();
+		expect(target).toEqual({ hostId: "h1", instanceId: "i1", sessionId: "s1" });
+		store.select("h1", "i0");
+		const res = await store.shutdown(target!);
+		expect(res).toMatchObject({ ok: false, title: "終了しませんでした" });
+		expect(opRcs(s).filter((m) => m.request.method === "shutdown")).toHaveLength(0);
+		// Same Pi but another conversation: also refused.
+		store.select("h1", "i1");
+		s.receive(subscribedMsg([], "s2"));
+		await store.shutdown(target!);
+		expect(opRcs(s).filter((m) => m.request.method === "shutdown")).toHaveLength(0);
+		const ok = store.shutdown(store.opTarget()!);
+		expect(opRcs(s).filter((m) => m.request.method === "shutdown")).toHaveLength(1);
+		rcReply(s, opRcs(s).at(-1)!.request.id, true);
+		expect(await ok).toEqual({ ok: true, value: null });
+	});
+
+	it("never lets a leftover session op waive the retarget confirmation", async () => {
+		const { store } = await setup();
+		const s = connect();
+		const op = store.sessionOp("new");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await op;
+		// The phone's switch finished (its result event lost), then the PC switches again.
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }));
+		s.receive(subscribedMsg([], "s2", "idle", { seq: 8 }));
+		expect(store.getState().op).toBeNull();
+		store.setDraft("下書き");
+		s.receive(event(9, { type: "session_changed", reason: "resume", session: { id: "s3", name: "s3" } }));
+		expect(store.getState().targetChanged).toEqual({ to: "s3" });
 	});
 
 	it("requires confirmation before a draft goes to a session switched on the PC", async () => {
@@ -560,6 +620,21 @@ describe("AppStore M2", () => {
 		s.receive({ type: "instances", instances: [instance("i1", 5), { ...instance("i9", 9), origin: "mobile" }] });
 		expect(await p).toEqual({ ok: true, value: { instanceId: "i9" } });
 		expect(store.getState().selection).toEqual({ hostId: "h1", instanceId: "i9" });
+	});
+
+	it("leaves the chat alone when the spawn finishes after its screen was closed", async () => {
+		const { store } = await setup();
+		const s = connect();
+		let open = true;
+		const p = store.spawn("h1", { cwd: "~/code/x" }, () => open);
+		const [msg] = s.sentOfType("spawn");
+		open = false;
+		s.receive({ type: "spawn_result", requestId: msg.requestId, ok: true, instanceId: "i9", abducoSession: "a9" });
+		await flush();
+		s.receive({ type: "instances", instances: [instance("i1", 5), { ...instance("i9", 9), origin: "mobile" }] });
+		expect(await p).toEqual({ ok: true, value: { instanceId: "i9" } });
+		expect(store.getState().selection).toEqual({ hostId: "h1", instanceId: "i1" });
+		expect(s.sentOfType("spawn")).toHaveLength(1);
 	});
 
 	it("reports spawn errors and never retries", async () => {

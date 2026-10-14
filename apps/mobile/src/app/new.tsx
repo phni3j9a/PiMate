@@ -1,7 +1,7 @@
 /** Start a new Pi on a paired machine (docs/design/html/New-Pi.html). */
 import type { FolderInfo, ModelInfo, ModelRef, ThinkingLevel } from "@pimate/protocol";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -48,6 +48,14 @@ export default function NewPiScreen() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<{ title: string; text: string } | null>(null);
 	const [now] = useState(() => Date.now());
+	// A spawn keeps running after the screen is closed; its result then must not navigate or switch the chat.
+	const mounted = useRef(true);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
 
 	// Folders and models of the chosen machine (reloaded when it changes or reconnects).
 	useEffect(() => {
@@ -90,13 +98,18 @@ export default function NewPiScreen() {
 		if (!hostId || !canStart) return;
 		setBusy(true);
 		setError(null);
-		const res = await appStore.spawn(hostId, {
-			cwd,
-			trust,
-			...(model ? { model } : {}),
-			...(model && thinking ? { thinking } : {}),
-			...(message.trim() ? { message: message.trim() } : {}),
-		});
+		const res = await appStore.spawn(
+			hostId,
+			{
+				cwd,
+				trust,
+				...(model ? { model } : {}),
+				...(model && thinking ? { thinking } : {}),
+				...(message.trim() ? { message: message.trim() } : {}),
+			},
+			() => mounted.current,
+		);
+		if (!mounted.current) return;
 		setBusy(false);
 		if (res.ok) close();
 		else setError({ title: res.title, text: res.text });
