@@ -20,11 +20,7 @@ export default function pimate(pi: ExtensionAPI): void {
 		for (const { message, ctx, sessionId } of messages.splice(0)) {
 			if (h.session?.id !== sessionId) continue;
 			const entry = findMessageEntry(ctx.sessionManager.getBranch(), message);
-			const item = normalizeMessage(
-				message,
-				entry?.id ?? `live-${randomUUID()}`,
-				h.abortRequested || !!ctx.signal?.aborted,
-			);
+			const item = normalizeMessage(message, entry?.id ?? `live-${randomUUID()}`);
 			if (item) h.emit({ type: "message_end", item });
 			if (item?.kind === "assistant") h.emitContext();
 		}
@@ -35,7 +31,6 @@ export default function pimate(pi: ExtensionAPI): void {
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
 			h.pcPrompt = null;
-			h.abortRequested = false;
 			h.ctx = ctx;
 			for (const pending of h.pendingUI.values()) pending.cancel();
 			h.session = {
@@ -96,12 +91,10 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "session_info", name: e.name });
 		}),
 		pi.on("agent_start", () => {
-			h.abortRequested = false;
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "running");
 			h.emit({ type: "agent_start" });
 		}),
 		pi.on("agent_settled", (e) => {
-			h.abortRequested ||= e.aborted;
 			flushMessages();
 			h.setStatus(h.pendingUI.size ? "waiting_input" : "idle");
 			h.emit({ type: "agent_settled", aborted: e.aborted });

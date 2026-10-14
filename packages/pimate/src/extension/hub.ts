@@ -40,7 +40,6 @@ export class Hub {
 	subscriptions: (() => void)[] = [];
 	tui?: { requestRender(force?: boolean): void };
 	winchInstalled = false;
-	abortRequested = false;
 	pcPrompt: PcPrompt | null = null;
 	trust?: "yes" | "no";
 	constructor() {

@@ -25,7 +25,6 @@ export function createHandlers(h: Hub): Handlers {
 		},
 		abort: () => {
 			const { ctx } = ready();
-			h.abortRequested = !ctx.isIdle();
 			ctx.abort();
 			return {};
 		},

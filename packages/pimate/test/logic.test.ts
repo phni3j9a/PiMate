@@ -195,9 +195,9 @@ it("normalizes known abort errors in live/history without hiding genuine failure
 		stopReason: "error",
 	});
 	expect(
-		normalizeMessage({ role: "assistant", stopReason: "error", errorMessage: "Provider cancelled" }, "a", true),
-	).toMatchObject({ stopReason: "aborted" });
-	expect(normalizeMessage({ role: "assistant", stopReason: "stop" }, "a", true)).toMatchObject({ stopReason: "stop" });
+		normalizeMessage({ role: "assistant", stopReason: "error", errorMessage: "Provider cancelled" }, "a"),
+	).toMatchObject({ stopReason: "error" });
+	expect(normalizeMessage({ role: "assistant", stopReason: "stop" }, "a")).toMatchObject({ stopReason: "stop" });
 });
 it("validates M2 methods and bounded positive session limits", () => {
 	for (const method of ["models", "sessions", "shutdown"])
