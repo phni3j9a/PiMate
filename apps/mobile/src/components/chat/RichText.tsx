@@ -1,62 +1,178 @@
-import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import * as WebBrowser from "expo-web-browser";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
 
-import { parseBlocks, type Span } from "@/lib/richText";
+import { CheckIcon, CopyIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui";
+import { type Align, type Block, cellWidth, parseBlocks, type Span } from "@/lib/richText";
 import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+
+function spanStyle(span: Span): TextStyle[] {
+	const s: TextStyle[] = [];
+	if (span.bold) s.push(styles.bold);
+	if (span.italic) s.push(styles.italic);
+	if (span.strike) s.push(styles.strike);
+	if (span.href) s.push(styles.link);
+	return s;
+}
 
 function Spans({ spans }: { spans: Span[] }) {
 	return spans.map((span, i) => {
 		const key = `${i}:${span.text.length}`;
 		if (span.code)
 			return (
-				<Text key={key} style={styles.inlineCode}>
+				<Text key={key} style={[styles.inlineCode, ...spanStyle(span)]}>
 					{` ${span.text} `}
 				</Text>
 			);
-		if (span.bold)
+		if (span.href) {
+			const href = span.href;
 			return (
-				<Text key={key} style={styles.bold}>
+				<Text
+					key={key}
+					style={spanStyle(span)}
+					accessibilityRole="link"
+					onPress={() => void WebBrowser.openBrowserAsync(href)}
+				>
 					{span.text}
 				</Text>
 			);
-		return span.text;
+		}
+		const style = spanStyle(span);
+		return style.length ? (
+			<Text key={key} style={style}>
+				{span.text}
+			</Text>
+		) : (
+			<Fragment key={key}>{span.text}</Fragment>
+		);
 	});
 }
 
-/** Assistant text: paragraphs, fenced code blocks and inline code spans (Main.html <p>/<code>). */
-export function RichText({ text }: { text: string }) {
-	const blocks = useMemo(() => parseBlocks(text), [text]);
+function CodeBlock({ text, lang }: { text: string; lang?: string }) {
+	const [copied, setCopied] = useState(false);
+	useEffect(() => {
+		if (!copied) return;
+		const t = setTimeout(() => setCopied(false), 1500);
+		return () => clearTimeout(t);
+	}, [copied]);
 	return (
-		<View style={styles.root}>
-			{blocks.map((block, i) =>
-				block.type === "code" ? (
-					// biome-ignore lint/suspicious/noArrayIndexKey: blocks have no identity beyond their position
-					<View key={i} style={styles.codeBlock}>
-						<Text style={styles.codeText} selectable>
-							{block.text}
-						</Text>
-					</View>
-				) : block.type === "item" ? (
-					// biome-ignore lint/suspicious/noArrayIndexKey: blocks have no identity beyond their position
-					<View key={i} style={[styles.item, { paddingLeft: block.depth * 16 }]}>
-						{block.marker === "•" ? (
+		<View style={styles.codeBlock}>
+			<View style={styles.codeHead}>
+				<Text style={styles.codeLang}>{lang ?? ""}</Text>
+				<IconButton
+					label={copied ? "コピーしました" : "コードをコピー"}
+					onPress={() => void Clipboard.setStringAsync(text).then(() => setCopied(true))}
+					size={32}
+				>
+					{copied ? <CheckIcon size={16} /> : <CopyIcon size={16} color={colors.textSecondary} />}
+				</IconButton>
+			</View>
+			<Text style={styles.codeText}>{text}</Text>
+		</View>
+	);
+}
+
+const ALIGN: Record<string, TextStyle["textAlign"]> = { left: "left", center: "center", right: "right" };
+
+function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows: Span[][][] }) {
+	// Column widths from the longest cell (no table layout in RN); wide tables scroll sideways.
+	const widths = header.map((h, c) =>
+		Math.min(240, Math.max(56, Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? []))) * 7.5 + 24)),
+	);
+	const row = (cells: Span[][], head: boolean, key: string) => (
+		<View key={key} style={[styles.tableRow, !head && styles.tableBodyRow]}>
+			{widths.map((w, c) => (
+				<Text
+					// biome-ignore lint/suspicious/noArrayIndexKey: columns have no identity beyond their position
+					key={c}
+					style={[styles.cell, head && styles.bold, { width: w, textAlign: ALIGN[align[c] ?? ""] ?? "left" }]}
+				>
+					<Spans spans={cells[c] ?? []} />
+				</Text>
+			))}
+		</View>
+	);
+	return (
+		<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.table}>
+			<View>
+				{row(header, true, "h")}
+				{rows.map((r, i) => row(r, false, `r${i}`))}
+			</View>
+		</ScrollView>
+	);
+}
+
+const HEADING: TextStyle[] = [
+	{ fontSize: 18, lineHeight: 26 },
+	{ fontSize: 16, lineHeight: 24 },
+	{ fontSize: 15, lineHeight: 22 },
+];
+
+function Blocks({ blocks }: { blocks: Block[] }) {
+	return blocks.map((block, i) => {
+		const key = i; // blocks have no identity beyond their position
+		switch (block.type) {
+			case "code":
+				return <CodeBlock key={key} text={block.text} lang={block.lang} />;
+			case "item":
+				return (
+					<View key={key} style={[styles.item, { paddingLeft: block.depth * 16 }]}>
+						{block.checked !== undefined ? (
+							<View style={styles.markerCol}>
+								<View style={[styles.box, block.checked && styles.boxOn]}>
+									{block.checked ? <CheckIcon size={11} color={colors.onAccent} strokeWidth={3} /> : null}
+								</View>
+							</View>
+						) : block.marker === "•" ? (
 							<View style={styles.markerCol}>
 								<View style={styles.dot} />
 							</View>
 						) : (
 							<Text style={[styles.paragraph, styles.markerCol]}>{block.marker}</Text>
 						)}
-						<Text style={[styles.paragraph, styles.itemText]} selectable>
+						<Text style={[styles.paragraph, styles.itemText]}>
 							<Spans spans={block.spans} />
 						</Text>
 					</View>
-				) : (
-					// biome-ignore lint/suspicious/noArrayIndexKey: blocks have no identity beyond their position
-					<Text key={i} style={styles.paragraph} selectable>
+				);
+			case "heading":
+				return (
+					<Text
+						key={key}
+						accessibilityRole="header"
+						style={[styles.paragraph, styles.bold, styles.heading, HEADING[Math.min(block.level, 3) - 1]]}
+					>
 						<Spans spans={block.spans} />
 					</Text>
-				),
-			)}
+				);
+			case "quote":
+				return (
+					<View key={key} style={styles.quote}>
+						<Blocks blocks={block.blocks} />
+					</View>
+				);
+			case "table":
+				return <Table key={key} align={block.align} header={block.header} rows={block.rows} />;
+			case "rule":
+				return <View key={key} style={styles.rule} />;
+			default:
+				return (
+					<Text key={key} style={styles.paragraph}>
+						<Spans spans={block.spans} />
+					</Text>
+				);
+		}
+	});
+}
+
+/** Assistant Markdown (Main.html <p>/<code>): headings, lists, code, quotes, tables, links. */
+export function RichText({ text }: { text: string }) {
+	const blocks = useMemo(() => parseBlocks(text), [text]);
+	return (
+		<View style={styles.root}>
+			<Blocks blocks={blocks} />
 		</View>
 	);
 }
@@ -65,10 +181,25 @@ const styles = StyleSheet.create({
 	root: { gap: 8 },
 	paragraph: { ...typography.body, color: colors.text },
 	bold: { fontWeight: "600" },
+	italic: { fontStyle: "italic" },
+	strike: { textDecorationLine: "line-through" },
+	link: { color: colors.accentText, textDecorationLine: "underline" },
+	heading: { marginTop: 6 },
 	item: { flexDirection: "row" },
 	markerCol: { minWidth: 22, paddingLeft: 4 },
 	/** Bullet as a drawn dot: the "•" glyph renders tiny next to Japanese text on Android. */
 	dot: { width: 5, height: 5, borderRadius: 3, marginTop: 8, marginLeft: 2, backgroundColor: colors.text },
+	box: {
+		width: 14,
+		height: 14,
+		marginTop: 4,
+		borderRadius: 4,
+		borderWidth: 1.5,
+		borderColor: colors.textTertiary,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	boxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
 	itemText: { flex: 1, minWidth: 0 },
 	inlineCode: {
 		fontFamily: fontFamily.mono,
@@ -76,6 +207,27 @@ const styles = StyleSheet.create({
 		color: colors.text,
 		backgroundColor: colors.surface,
 	},
-	codeBlock: { borderRadius: radii.code, backgroundColor: colors.surface, paddingVertical: 10, paddingHorizontal: 12 },
+	codeBlock: { borderRadius: radii.code, backgroundColor: colors.surface, paddingBottom: 10, paddingHorizontal: 12 },
+	codeHead: {
+		height: 32,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginRight: -8,
+	},
+	codeLang: { ...typography.meta, fontFamily: fontFamily.mono, color: colors.textSecondary },
 	codeText: { fontFamily: fontFamily.mono, fontSize: 12, lineHeight: 18, color: colors.textCode },
+	quote: { gap: 8, paddingLeft: 12, borderLeftWidth: 3, borderLeftColor: colors.control },
+	table: { borderRadius: radii.code, backgroundColor: colors.surface },
+	tableRow: { flexDirection: "row" },
+	tableBodyRow: { borderTopWidth: 1, borderTopColor: colors.background },
+	cell: {
+		...typography.caption,
+		fontSize: 13,
+		lineHeight: 19,
+		color: colors.text,
+		paddingVertical: 8,
+		paddingHorizontal: 12,
+	},
+	rule: { height: 1, marginVertical: 4, backgroundColor: colors.surfaceStrong },
 });

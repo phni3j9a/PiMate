@@ -52,7 +52,13 @@ M5c（アプリ / Host 0.1.1）:
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
 
-今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
+UI/UX 改善（[#23](https://github.com/phni3j9a/PiMate/issues/23)）:
+
+- 回答の Markdown は `marked` の lexer で解析し、表示は自作（`src/lib/richText.ts` / `src/components/chat/RichText.tsx`）。見出し（h1〜h3 の大きさ）、リスト（入れ子・番号・チェックボックス）、引用、表（横スクロール）、区切り線、太字・斜体・取り消し線、インラインコード、http(s) リンク（アプリ内ブラウザ）。`これは**「太字」**です` のように CommonMark が太字にしない日本語の書き方も太字にする
+- コードブロックは折り返し表示で、言語名とコピーボタンつき。ストリーミング中の閉じていない ``` もコードとして表示
+- 回答を長押しで全文（Markdown）をコピー。部分選択はできない
+
+今後: `/tree`、画像の添付、作業中の「割り込む」。
 
 ## Android APK のビルドと配布（M5b）
 
