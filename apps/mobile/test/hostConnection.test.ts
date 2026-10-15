@@ -226,3 +226,25 @@ describe("HostConnection", () => {
 		expect(c.state).toBe("idle");
 	});
 });
+
+it("negotiates alerts only with capable Hosts and restores opt-in after reconnect", () => {
+	const c = connection();
+	c.setAlertsEnabled(true);
+	c.start();
+	const old = FakeSocket.last();
+	authenticate(old);
+	expect(old.sentOfType("watch_alerts")).toEqual([]);
+	old.drop();
+	vi.advanceTimersByTime(1000);
+	const current = FakeSocket.last();
+	current.open();
+	current.receive({
+		type: "auth_ok",
+		host: { hostId: "h", name: "h", protocol: 1, version: "0.1.1", platform: "linux", alerts: true },
+		deviceId: "d",
+	});
+	expect(current.sentOfType("watch_alerts")).toEqual([{ type: "watch_alerts", enabled: true }]);
+	c.setAlertsEnabled(false);
+	expect(current.sentOfType("watch_alerts").at(-1)).toEqual({ type: "watch_alerts", enabled: false });
+	c.stop();
+});

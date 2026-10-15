@@ -519,3 +519,25 @@ it("pushes subagent-only count changes even when parent status stays idle", asyn
 	await t.server.refresh();
 	expect(await client.box.next("instances")).toMatchObject({ instances: [{ status: "idle", subagents }] });
 });
+
+it("opt-in alert watchers see unselected instances without history and can opt out", async () => {
+	const s = await setup(true);
+	const a = await s.authed();
+	const b = await s.authed();
+	a.send({ type: "watch_alerts", enabled: true });
+	await vi.waitFor(() => expect(s.requests.some((r) => r.method === "hello")).toBe(true));
+	// Wait for the initial hello to have settled using an RC ping-independent state boundary.
+	await new Promise((r) => setTimeout(r, 30));
+	expect(s.requests.some((r) => r.method === "history")).toBe(false);
+	s.emit(1, { type: "status", status: "waiting_input" });
+	expect(await a.box.next("alert")).toMatchObject({ alert: { kind: "input", sessionId: "session" } });
+	expect(b.box.received.some((m) => m.type === "alert")).toBe(false);
+	a.send({ type: "watch_alerts", enabled: false });
+	a.send({ type: "ping", t: 1 });
+	await a.box.next("pong");
+	s.emit(2, { type: "status", status: "running" });
+	s.emit(3, { type: "status", status: "waiting_input" });
+	a.send({ type: "ping", t: 2 });
+	await a.box.next("pong");
+	expect(a.box.received.filter((m) => m.type === "alert")).toHaveLength(1);
+});

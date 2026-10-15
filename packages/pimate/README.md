@@ -229,3 +229,9 @@ PIMATE_E2E_REAL_MODEL=1 PIMATE_E2E_REQUIRED=1 npm run test:e2e -w @pimate/pimate
 ```
 
 `openai/gpt-6-luna --thinking off` を使い、一時agentDirから既存auth.jsonを参照して短い1応答を検証します。通常のE2E/CIは引き続きfaux providerで無課金です。実モデル用認証が必要です。テストで起動したPi/abducoと一時ディレクトリはfinallyで清掃します。
+
+## 接続中のローカル通知（M5c、Host 0.1.1）
+
+Host は認証後に `alerts:true` capability を通知し、アプリが `watch_alerts` をオンにしている間だけ全 Pi のライブ RC イベントを監視します。初回 snapshot は基準として使うだけで、未選択 Pi の history は取りません。アプリへの通知には本文を含めません。通常の selected subscription は従来どおりです。
+
+RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつないだ場合は通知なし・チャットのみ。更新後 `/pimate restart` を実行してください。[通知対象と制限](../../docs/notifications.md)。
