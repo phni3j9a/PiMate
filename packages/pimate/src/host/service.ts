@@ -44,13 +44,15 @@ export function hostEnv(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd(
 	}
 	return out;
 }
-/** Commands/keywords without a slash (`pi`, `abduco`, `none`) are looked up or interpreted later and stay as is. */
-const COMMAND_KEYS = new Set(["PIMATE_PI", "PIMATE_ABDUCO", "PIMATE_EXTENSION"]);
+/** Command names without a slash (`pi`, `abduco`) are looked up in PATH later and stay as is. */
+const COMMAND_KEYS = new Set(["PIMATE_PI", "PIMATE_ABDUCO"]);
 /** Resolves like the reader of each variable does: Pi expands `~` in its agent dir, PiMate resolves against cwd. */
 function absolutePath(value: string, cwd: string, key: string): string {
 	if (key === "PI_CODING_AGENT_DIR" && (value === "~" || value.startsWith("~/")))
 		return join(homedir(), value.slice(1));
 	if (isAbsolute(value) || (COMMAND_KEYS.has(key) && !value.includes("/"))) return value;
+	// Pi package sources (`npm:x`, `git:…`, URLs) and the `none` keyword are not file paths.
+	if (key === "PIMATE_EXTENSION" && (value === "none" || /^[a-z][a-z0-9+.-]*:/i.test(value))) return value;
 	return resolve(cwd, value);
 }
 /** systemd expands `$VAR` in command arguments (also for systemd-run); keep them literal. The executable path is not expanded. */

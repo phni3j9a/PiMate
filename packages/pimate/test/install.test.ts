@@ -96,6 +96,10 @@ it("hands the Host absolute paths and literal command arguments", () => {
 		PI_CODING_AGENT_DIR: join(homedir(), ".pi/agent"),
 		XDG_RUNTIME_DIR: "/run/user/1000",
 	});
+	const ext = (v: string) => Object.fromEntries(hostEnv({ PIMATE_EXTENSION: v }, "/repo")).PIMATE_EXTENSION;
+	expect(ext("rc.ts")).toBe("/repo/rc.ts");
+	expect(ext("npm:pimate")).toBe("npm:pimate");
+	expect(ext("none")).toBe("none");
 	expect(serviceUnit({ PIMATE_RUN_DIR: "./run", PIMATE_CONFIG_DIR: "/c" }, "/repo")).toContain(
 		'Environment="PIMATE_RUN_DIR=/repo/run"',
 	);
