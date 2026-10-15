@@ -21,7 +21,8 @@ export default function MainLayout() {
 				drawerStyle: { width: Math.min(Math.round(width * 0.846), 360), backgroundColor: colors.background },
 				overlayColor: "rgba(16, 24, 28, 0.30)",
 				overlayAccessibilityLabel: "一覧を閉じる",
-				swipeEdgeWidth: 48,
+				// ChatGPT-style: a rightward swipe anywhere in the chat opens the list (the screen edge is Android's back gesture).
+				swipeEdgeWidth: width,
 				sceneStyle: { backgroundColor: colors.background },
 			}}
 		/>

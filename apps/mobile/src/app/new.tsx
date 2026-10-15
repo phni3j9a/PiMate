@@ -174,7 +174,7 @@ export default function NewPiScreen() {
 							onValueChange={setTrust}
 							accessibilityLabel="このフォルダを信頼する"
 							trackColor={{ false: colors.control, true: colors.accent }}
-							thumbColor={colors.background}
+							thumbColor={colors.onAccent}
 						/>
 					</View>
 

@@ -14,7 +14,7 @@ import { colors, fontFamily, typography } from "@/theme/tokens";
 
 import { BellIcon, GearIcon, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
-import { IconButton, TextButton } from "./ui";
+import { TextButton } from "./ui";
 
 export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
@@ -59,16 +59,19 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 						returnKeyType="search"
 					/>
 				</View>
-				<IconButton
-					label="新しい Pi を起動"
-					onPress={() => {
-						navigation.closeDrawer();
-						router.push("/new");
-					}}
-				>
-					<PencilIcon />
-				</IconButton>
 			</View>
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel="新しい Pi を起動"
+				onPress={() => {
+					navigation.closeDrawer();
+					router.push("/new");
+				}}
+				style={({ pressed }) => [styles.settings, styles.newPi, pressed && styles.rowPressed]}
+			>
+				<PencilIcon />
+				<Text style={styles.settingsText}>新しい Pi を起動</Text>
+			</Pressable>
 
 			<ScrollView style={styles.list} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
 				{groups.attention.length > 0 ? (
@@ -278,4 +281,5 @@ const styles = StyleSheet.create({
 		marginTop: 12,
 	},
 	settingsText: { fontSize: 14, color: colors.text },
+	newPi: { marginTop: 6 },
 });

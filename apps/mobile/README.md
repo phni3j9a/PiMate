@@ -52,6 +52,12 @@ M5c（アプリ / Host 0.1.1）:
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
 
+UI/UX 改善（[#23](https://github.com/phni3j9a/PiMate/issues/23)）:
+
+- チャットのどこからでも右へスワイプするとドロワーが開く（ChatGPT 風。画面端は Android の「戻る」ジェスチャーと競合するため）
+- 新しい Pi の起動はドロワー上部の「新しい Pi を起動」行から
+- Switch はアクセント色のトラックに白いつまみ（端末既定の緑系にしない）
+
 今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
 
 ## Android APK のビルドと配布（M5b）
