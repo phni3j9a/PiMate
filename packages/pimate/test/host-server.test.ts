@@ -18,6 +18,7 @@ import { Hub } from "../src/extension/hub.ts";
 import { HostConfig } from "../src/host/config.ts";
 import { HostCore } from "../src/host/index.ts";
 import { HostServer, listenAddresses } from "../src/host/server.ts";
+import { PACKAGE_VERSION } from "../src/package.ts";
 
 const cleanup: (() => void | Promise<void>)[] = [];
 afterEach(async () => {
@@ -249,7 +250,14 @@ it("rejects malformed/oversized pairing bodies, content types and browser origin
 			})
 		).status,
 	).toBe(400);
-	expect(await (await fetch(`${t.base}/health`)).json()).toEqual({ ok: true, protocol: 1 });
+	expect(await (await fetch(`${t.base}/health`)).json()).toMatchObject({
+		ok: true,
+		protocol: 1,
+		rcProtocol: 1,
+		version: PACKAGE_VERSION,
+		pid: process.pid,
+		incompatible: {},
+	});
 	expect((await fetch(`${t.base}/missing`)).status).toBe(404);
 });
 it("authenticates, handles ping, rejects wrong tokens/protocol, times out unauthenticated sockets and revokes", async () => {

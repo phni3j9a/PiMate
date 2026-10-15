@@ -34,3 +34,16 @@ jobs:
       - run: npm run test:e2e -w @pimate/pimate
         env:
           PIMATE_E2E_REQUIRED: "1"
+
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: packages/pimate/scripts/build-abduco-linux.sh amd64
+      - run: npm run build -w @pimate/pimate
+      - run: npm run test:pack -w @pimate/pimate

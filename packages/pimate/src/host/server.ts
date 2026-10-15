@@ -11,9 +11,11 @@ import {
 	HostCloseCode,
 	type HostMessage,
 	type InstanceSummary,
+	PROTOCOL_VERSION,
 	type Request,
 } from "@pimate/protocol";
 import { WebSocket, WebSocketServer } from "ws";
+import { PACKAGE_VERSION } from "../package.ts";
 import { validInstanceId } from "../runtime.ts";
 import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
@@ -151,7 +153,17 @@ export class HostServer {
 			res.end(JSON.stringify(body));
 		};
 		if (req.method === "GET" && req.url === "/health") {
-			reply(200, { ok: true, protocol: HOST_PROTOCOL_VERSION });
+			reply(200, {
+				ok: true,
+				protocol: HOST_PROTOCOL_VERSION,
+				rcProtocol: PROTOCOL_VERSION,
+				version: PACKAGE_VERSION,
+				hostId: this.config.host.hostId,
+				pid: process.pid,
+				abduco: this.core.abduco ?? null,
+				addresses: this.servers.map((s) => s.address()),
+				incompatible: Object.fromEntries(this.core.incompatible),
+			});
 			return;
 		}
 		if (req.method !== "POST" || req.url !== "/pair") {
@@ -254,7 +266,7 @@ export class HostServer {
 						host: {
 							...this.config.host,
 							protocol: HOST_PROTOCOL_VERSION,
-							version: "0.0.0",
+							version: PACKAGE_VERSION,
 							platform: process.platform,
 						},
 					});

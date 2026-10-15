@@ -10,6 +10,10 @@ const usage =
 	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text> [--steer|--follow-up] | abort <id> | history <id> | watch <id> | ui <id> <requestId> <value|--confirm|--cancel>";
 async function main(): Promise<void> {
 	const [command, ...args] = process.argv.slice(2);
+	if (command === "--help" || command === "-h") {
+		console.log(usage);
+		return;
+	}
 	if (["serve", "pair", "devices", "revoke"].includes(command)) {
 		const config = new HostConfig();
 		if (command === "devices") {

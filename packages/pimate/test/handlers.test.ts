@@ -148,3 +148,12 @@ it("lists sessions from Pi's actual session dir, sorts dates and marks current; 
 	await handlers.shutdown({});
 	expect(shutdown).toHaveBeenCalledOnce();
 });
+
+it.each(["/pimate", "/pimate setup", "  /pimate pair", "/PIMATE\tdevices", "/pimate:1 pair", "/pimate:2"])(
+	"rejects remote management prompt %s before dispatch",
+	(text) => {
+		const { handlers, pi } = setup();
+		expect(() => handlers.prompt({ text, expandTemplates: true })).toThrow("PC TUI only");
+		expect(pi.sendUserMessage).not.toHaveBeenCalled();
+	},
+);

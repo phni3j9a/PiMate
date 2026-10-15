@@ -12,7 +12,7 @@ import type {
 	ResultOf,
 	ServerMessage,
 } from "@pimate/protocol";
-import { encodeLine, LineDecoder } from "@pimate/protocol";
+import { encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
 import { RcError } from "../extension/dispatch.ts";
 import { privateRunDir, validInstanceId } from "../runtime.ts";
 
@@ -75,7 +75,7 @@ export class RcClient {
 				sock.once("close", onClose);
 			});
 			const { snapshot } = await this.request("hello", {});
-			if (snapshot.instanceId !== this.instanceId || snapshot.protocol !== 1)
+			if (snapshot.instanceId !== this.instanceId || snapshot.protocol !== PROTOCOL_VERSION)
 				throw new RcError("unsupported", "Unexpected RC identity or protocol");
 			this.snapshot = snapshot;
 			return snapshot;

@@ -1,13 +1,13 @@
-# @pimate/pimate — Remote Control / M2 Host
+# @pimate/pimate — Remote Control / Host / M5a install
 
-通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・開発用CLIです。
+通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・CLIです。開発workspaceはprivateの `@pimate/pimate`、配布名は `pimate` です。
 Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。Host は Tailscale 上のスマホへ認証付き HTTP/WebSocket を提供します。
 
 ## 前提
 
 - Node.js 22.23 以降（TypeScriptの型除去）、Pi **1.2.0**、Unix-domain socket 対応OS。
 - リポジトリルートで `npm install` 済み。Pi関連パッケージは peer dependency（開発時の型は1.2.0固定）。
-- 起動機能には abduco。`PIMATE_ABDUCO` → `packages/pimate/bin/<platform>-<arch>/abduco` → `PATH` の順に解決します。
+- 起動機能には abduco。`PIMATE_ABDUCO`（利用者が信頼するoverride）→ 同梱 `bin/<platform>-<arch>/abduco`（SHA-256照合）→ `PATH` の順に解決します。同梱が不在/不一致/未対応archなら警告してPATHへfallbackします。
 - Linuxでは user systemd manager が利用可能なら `systemd-run --user --scope` を使用し、Hostのcgroupから分離します。それ以外は detached spawn。後者はHostのサービス終了時に同じcgroupごと終了される可能性があります。ログアウト後の生存には別途 linger 設定が必要です。
 
 ## 実行例（リポジトリルート）
@@ -83,7 +83,7 @@ Hostの環境変数で起動設定を変更できます（shell評価なし）�
 | 変数 | 既定 / 用途 |
 | --- | --- |
 | `PIMATE_PI` | PATH上の `pi`。別バイナリ/ローカルwrapperのパスも可。引数を混ぜない |
-| `PIMATE_EXTENSION` | このpackageの絶対パス `src/extension/index.ts` を `-e` で追加。別パスへ変更可能。`none` は追加しない（ユーザー設定でRC登録済みの場合のみ） |
+| `PIMATE_EXTENSION` | このpackageの絶対パス `dist/extension.js`（開発時 `src/extension/index.ts`）を `-e` で追加。別パスへ変更可能。`none` は追加しない（ユーザー設定でRC登録済みの場合のみ） |
 | `PIMATE_ABDUCO` | 使用するabduco実行ファイル（既存解決順は前述） |
 
 開発時の既定は `pi -e <repo>/packages/pimate/src/extension/index.ts` です。二重ロードしないようRCのglobal登録と `-e` はどちらか一方にしてください。
@@ -142,7 +142,73 @@ packages/pimate/scripts/build-abduco-linux.sh amd64
 # arm64: packages/pimate/scripts/build-abduco-linux.sh arm64
 ```
 
-DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bin/linux-x64/abduco` または `bin/linux-arm64/abduco` とISCの `LICENSE.abduco` を出力します。`bin/` はgit管理外。バイナリ配布時はライセンスを必ず同梱してください。arm64は対応ホスト/QEMUが必要、macOSビルド・署名は未対応です。
+DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bin/linux-x64/abduco` または `bin/linux-arm64/abduco` とISCの `LICENSE.abduco` を出力します。`bin/` はgit管理外。バイナリ配布時はライセンスを必ず同梱してください。ビルド後に `bin/SHA256SUMS.json` も生成します。arm64はネイティブホストを推奨（release CIは `ubuntu-24.04-arm`）、この作業のためにQEMU/binfmtを導入しません。macOSビルド・署名は未対応です。
+
+## 配布パッケージとリリース（M5a）
+
+```sh
+packages/pimate/scripts/build-abduco-linux.sh amd64
+npm run build -w @pimate/pimate          # dist/package/ を再生成
+npm run test:pack -w @pimate/pimate      # clean npm install + 実Pi 1.2.0のロード/faux会話
+cd packages/pimate/dist/package && npm pack
+```
+
+esbuildでRC/CLIと `@pimate/protocol` / ws / qrcode / diffをinlineし、Piのパッケージはexternal + peer `*` にします。
+バージョン・ライセンスの正本は `packages/pimate/package.json`。生成manifestは `pimate`、Node >=22、
+`pi.extensions: ["./dist/extension.js"]`、`bin.pimate: ./dist/cli.js`。
+利用者READMEは `PACKAGE_README.md`、MITのroot `LICENSE`、abduco ISCとbundle依存ライセンスを
+`THIRD_PARTY_NOTICES` に同梱します。`npm publish` はprivateなworkspaceではなく生成tarballに対して実行します。
+
+ローカルbuildは存在するarchだけで検証でき、不足を警告します。**公開用は `npm run build -w @pimate/pimate -- --release`**
+でx64/arm64両方が必須。各binaryのSHA-256 manifestを生成します（署名ではなく破損/差し替え検知）。
+通常CIはx64をビルドしてpack smoke、tag `v*` のrelease CIは各ネイティブrunnerで両archをビルドします。
+
+### 公開手順
+
+1. `packages/pimate/package.json` のversionを更新し、`npm install --package-lock-only` でlockも同期。
+2. lint / typecheck / unit / E2E / pack smoke、レビューを通し、通常の承認手順で統合。
+3. versionと一致するtag（例: `v0.1.0`）をpush。`.github/workflows/release.yml` が両archを集約しGitHub Releaseへtarballをupload。
+4. Releaseの `pimate-<version>.tgz` を取得し内容確認、**人が `npm publish ./pimate-<version>.tgz --access public`**。
+   CIはnpmへpublishしません。tagとmanifest不一致や片arch不足は失敗します。
+5. `pi install npm:pimate` → `/pimate setup` を確認。更新時は `pi update npm:pimate` とPi再ロード後、
+   `/pimate status` の不一致表示からHostを再起動（unitの絶対Node/CLIパスも更新）。
+
+### 未公開tarballを隔離Piで検証
+
+Pi 1.2.0のlocal installは**ディレクトリ**を指定します。tarballは先にnpmで展開します。
+
+```sh
+VERIFY=$(mktemp -d)
+npm install --prefix "$VERIFY" --ignore-scripts --legacy-peer-deps /absolute/path/pimate-0.1.0.tgz
+export PI_CODING_AGENT_DIR="$VERIFY/agent" PIMATE_CONFIG_DIR="$VERIFY/config" PIMATE_RUN_DIR="$VERIFY/run"
+pi install "$VERIFY/node_modules/pimate"
+pi                                  # /pimate setup, pair, devices, status, restart, uninstall
+# cleanup: /pimate uninstall を実行してから
+pi remove "$VERIFY/node_modules/pimate"
+rm -rf "$VERIFY"
+unset PI_CODING_AGENT_DIR PIMATE_CONFIG_DIR PIMATE_RUN_DIR
+```
+
+47800を使う既存Host・`pimate-host.service`がないことを先に確認してください。
+user unitは実際の `~/.config/systemd/user/pimate-host.service` に作成されます（XDG_CONFIG_HOMEで変更可）。
+setupは既存Hostを検出すると追加pairingのみを提案。別configのHostや管理外unitは勝手に変更しません。
+登録を断ると `systemd-run --user --collect --unit=pimate-host-…`、user managerがなければdetached起動。
+停止用状態はconfig内 `host-process.json`、detachedログは `host.log`。
+`/pimate stop` はHostだけを停止、`/pimate uninstall` はunitも削除します。
+手動で `pimate serve` したHostは元のターミナルで停止してください。
+
+`/pimate` はPC TUIのみ。RCのremote promptでは拒否し、セットアップの同意・QR・通知はremote UI bridgeを通しません。
+Host/RCはpackage versionとprotocolを送信し、未知の追加fieldは許容、異なるRC protocolはログとstatusに表示してskipします。
+管理UIは既定ポート47800専用。カスタムport/listenを使う開発Hostは従来CLIで管理してください。
+
+### M5a実機確認
+
+Linux x64 / Pi 1.2.0 / tarballの隔離installからtmux内の実TUIで、service登録・active、loopback/Tailscale両health、
+QR表示とHTTP `/pair`（200、同一codeの再利用401）、devicesから失効、status、restart、uninstallを確認。
+登録拒否のtransient HostがPi終了後も生存し、別Piからstopできることも確認しています。
+旧Host version 0.1.1 / Extension 0.1.0の不一致からの再起動、protocol 99のRCをskipしてlog/statusに表示、
+setup再実行時のpairingのみの提案も確認。作成したunit/transient/一時設定は削除し、47800の解放を確認しました。
+arm64はrelease CIによるbuildのみ、macOSの常駐と実機動作・Android QRスキャンのこの変更での再検証は未実施です。
 
 ## 既知の制約（PoCから継承）
 

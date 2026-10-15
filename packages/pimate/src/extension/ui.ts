@@ -62,11 +62,16 @@ export function raceUI<T>(
 		}
 	});
 }
+const localUI = Symbol.for("pimate.ui.local");
+export function getLocalUI(ctx: ExtensionContext): ExtensionContext["ui"] {
+	return (ctx.ui as ExtensionContext["ui"] & { [localUI]?: ExtensionContext["ui"] })[localUI] ?? ctx.ui;
+}
 const patched = Symbol.for("pimate.ui.patched");
 export function patchUI(ctx: ExtensionContext, state: UIState): void {
-	const ui = ctx.ui as ExtensionContext["ui"] & { [patched]?: boolean };
+	const ui = ctx.ui as ExtensionContext["ui"] & { [patched]?: boolean; [localUI]?: ExtensionContext["ui"] };
 	if (ui[patched]) return;
 	const { select, confirm, input, editor, notify } = ui;
+	ui[localUI] = { ...ui, select, confirm, input, editor, notify };
 	ui.select = (title, options, opts) =>
 		raceUI(
 			state,
