@@ -23,10 +23,10 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`pimate`**（内部workspace名 `@pimate/pimate` とは別）。npm公開後は次の手順で導入できます。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリは0.1.1と互換）。
 
 ```sh
-pi install npm:pimate
+pi install npm:@phni3j9a/pimate
 pi
 ```
 
@@ -48,11 +48,11 @@ APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.m
 - `/pimate devices` — 接続済み端末一覧・失効
 - `/pimate status` — Host/Extensionのバージョン、互換性、公開先、常駐状態、abduco
 - `/pimate start` / `stop` / `restart` — Host制御（Piセッションは終了しません）
-- 更新: `pi update npm:pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。
+- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。
 
 ### 削除
 
-PCのPiで `/pimate uninstall` → ターミナルで `pi remove npm:pimate`。
+PCのPiで `/pimate uninstall` → ターミナルで `pi remove npm:@phni3j9a/pimate`。
 Host停止・今回のuser unit削除だけを行い、設定・他のサービス・lingerは変更しません。
 ペアリングも忘れる場合は `~/.config/pimate`（環境変数で変更した場合はその場所）を手動削除します。
 開発/未公開tarballからの導入とリリース方法は [packages/pimate/README.md](packages/pimate/README.md#配布パッケージとリリースm5a) を参照してください。

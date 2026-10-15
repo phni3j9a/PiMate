@@ -5,7 +5,7 @@ Linux x64 / arm64、Node.js 22以上、Pi 1.2.0以上、PCとスマホのTailsca
 macOSの常駐登録は未対応です。
 
 ```sh
-pi install npm:pimate
+pi install npm:@phni3j9a/pimate
 pi
 ```
 
@@ -16,7 +16,7 @@ lingerは表示するだけで変更しません。Tailscaleがない場合はlo
 
 表示されるQRまたは `pimate://` リンクをPiMate Androidアプリで開いてペアリングします。
 コードは10分・1回限りです。ペアリング済み端末はPiの操作権限を持つため、リンクを公開しないでください。
-Androidアプリの配布は別マイルストーンです（開発版はリポジトリ参照）。
+Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j9a/PiMate/releases) から取得できます。PCパッケージ0.1.2はアプリ0.1.1と互換です。
 
 - `/pimate pair`: 新しいQRを表示
 - `/pimate devices`: 一覧・失効
@@ -24,10 +24,10 @@ Androidアプリの配布は別マイルストーンです（開発版はリポ�
 - `/pimate start` / `stop` / `restart`: Hostを操作
 - `/pimate uninstall`: Host停止とサービス削除（設定は保持）
 
-更新: `pi update npm:pimate` → Pi再起動または `/reload` → `/pimate status`。
+更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
 旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
 
-削除: `/pimate uninstall` の後、ターミナルで `pi remove npm:pimate`。
+削除: `/pimate uninstall` の後、ターミナルで `pi remove npm:@phni3j9a/pimate`。
 ペアリングも忘れる場合は `~/.config/pimate`（`PIMATE_CONFIG_DIR`を指定した場合はその場所）を削除します。
 他のsystemdサービスやlingerは変更しません。
 

@@ -17,6 +17,7 @@ const env = {
 const run = (command, args, cwd = temp) => execFileSync(command, args, { cwd, env, encoding: "utf8", timeout: 180000 });
 try {
 	const [packed] = JSON.parse(run("npm", ["pack", "--json", "--pack-destination", temp], `${root}/dist/package`));
+	assert.equal(packed.name, "@phni3j9a/pimate");
 	writeFileSync(join(temp, "package.json"), '{"private":true,"type":"module"}');
 	run("npm", [
 		"install",
@@ -25,7 +26,10 @@ try {
 		join(temp, packed.filename),
 		"@earendil-works/pi-coding-agent@1.2.0",
 	]);
-	const installed = join(temp, "node_modules/pimate");
+	const installed = join(temp, "node_modules/@phni3j9a/pimate");
+	const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
+	assert.deepEqual(manifest.bin, { pimate: "./dist/cli.js" });
+	assert.deepEqual(manifest.pi.extensions, ["./dist/extension.js"]);
 	assert.match(run(process.execPath, [join(installed, "dist/cli.js"), "--help"]), /Usage: pimate/);
 	const pi = join(temp, "node_modules/.bin/pi");
 	// Pi local packages are directories, not tarballs. Extract/install the tarball with npm first.
