@@ -39,16 +39,24 @@ export function hostEnv(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd(
 	for (const key of ENV_KEYS) {
 		let value = key === "PIMATE_CONFIG_DIR" && !env.PIMATE_CONFIG_DIR ? resolveConfigDir(env) : env[key];
 		if (!value) continue;
-		if (PATH_KEYS.has(key) && !isAbsolute(value) && (key !== "PIMATE_PI" || value.includes("/")))
-			value = resolve(cwd, value);
+		if (PATH_KEYS.has(key)) value = absolutePath(value, cwd, key);
 		out.push([key, value]);
 	}
 	return out;
 }
-/** systemd expands `$VAR` in command lines (also for systemd-run); keep our arguments literal. */
+/** Commands/keywords without a slash (`pi`, `abduco`, `none`) are looked up or interpreted later and stay as is. */
+const COMMAND_KEYS = new Set(["PIMATE_PI", "PIMATE_ABDUCO", "PIMATE_EXTENSION"]);
+/** Resolves like the reader of each variable does: Pi expands `~` in its agent dir, PiMate resolves against cwd. */
+function absolutePath(value: string, cwd: string, key: string): string {
+	if (key === "PI_CODING_AGENT_DIR" && (value === "~" || value.startsWith("~/")))
+		return join(homedir(), value.slice(1));
+	if (isAbsolute(value) || (COMMAND_KEYS.has(key) && !value.includes("/"))) return value;
+	return resolve(cwd, value);
+}
+/** systemd expands `$VAR` in command arguments (also for systemd-run); keep them literal. The executable path is not expanded. */
 const literalArg = (value: string) => value.replaceAll("$", "$$$$");
 export function serviceUnit(env = process.env, cwd = process.cwd()): string {
-	return `${MARKER}[Unit]\nDescription=PiMate Host\n\n[Service]\nType=simple\nExecStart=${literalArg(systemdQuote(process.execPath))} ${literalArg(systemdQuote(cliPath))} serve\nRestart=on-failure\nRestartSec=3\nUMask=0077\n${hostEnv(
+	return `${MARKER}[Unit]\nDescription=PiMate Host\n\n[Service]\nType=simple\nExecStart=${systemdQuote(process.execPath)} ${literalArg(systemdQuote(cliPath))} serve\nRestart=on-failure\nRestartSec=3\nUMask=0077\n${hostEnv(
 		env,
 		cwd,
 	)
@@ -165,7 +173,7 @@ export async function startHost(): Promise<void> {
 				"--collect",
 				`--unit=${unit}`,
 				...hostEnv().map(([k, v]) => `--setenv=${k}=${v}`),
-				literalArg(process.execPath),
+				process.execPath,
 				literalArg(cliPath),
 				"serve",
 			],

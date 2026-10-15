@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, it, vi } from "vitest";
@@ -74,7 +74,16 @@ it("quotes systemd paths and environment without accepting injected directives",
 });
 it("hands the Host absolute paths and literal command arguments", () => {
 	const env = hostEnv(
-		{ PATH: "/bin", PIMATE_CONFIG_DIR: "cfg", PIMATE_RUN_DIR: "./run", PIMATE_PI: "pi", PIMATE_ABDUCO: "bin/abduco" },
+		{
+			PATH: "/bin",
+			PIMATE_CONFIG_DIR: "cfg",
+			PIMATE_RUN_DIR: "./run",
+			PIMATE_PI: "pi",
+			PIMATE_ABDUCO: "abduco",
+			PIMATE_EXTENSION: "none",
+			PI_CODING_AGENT_DIR: "~/.pi/agent",
+			XDG_RUNTIME_DIR: "/run/user/1000",
+		},
 		"/repo",
 	);
 	expect(Object.fromEntries(env)).toEqual({
@@ -82,7 +91,10 @@ it("hands the Host absolute paths and literal command arguments", () => {
 		PIMATE_CONFIG_DIR: "/repo/cfg",
 		PIMATE_RUN_DIR: "/repo/run",
 		PIMATE_PI: "pi",
-		PIMATE_ABDUCO: "/repo/bin/abduco",
+		PIMATE_ABDUCO: "abduco",
+		PIMATE_EXTENSION: "none",
+		PI_CODING_AGENT_DIR: join(homedir(), ".pi/agent"),
+		XDG_RUNTIME_DIR: "/run/user/1000",
 	});
 	expect(serviceUnit({ PIMATE_RUN_DIR: "./run", PIMATE_CONFIG_DIR: "/c" }, "/repo")).toContain(
 		'Environment="PIMATE_RUN_DIR=/repo/run"',
