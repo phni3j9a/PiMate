@@ -14,6 +14,7 @@ import type {
 	SessionRef,
 } from "@pimate/protocol";
 import { countSubagents, encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
+import { PACKAGE_VERSION } from "../package.ts";
 import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
 import type { Handlers } from "./dispatch.ts";
 import { dispatch } from "./dispatch.ts";
@@ -93,6 +94,7 @@ export class Hub {
 	snapshot(): InstanceSnapshot {
 		return {
 			protocol: PROTOCOL_VERSION,
+			version: PACKAGE_VERSION,
 			instanceId: this.instanceId,
 			pid: process.pid,
 			cwd: this.ctx?.cwd ?? process.cwd(),

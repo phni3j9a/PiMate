@@ -149,6 +149,8 @@ export interface SessionListItem {
 }
 
 export interface InstanceSnapshot {
+	/** PiMate package version; absent on pre-M5 RCs. */
+	version?: string;
 	protocol: number;
 	instanceId: string;
 	pid: number;
@@ -178,6 +180,7 @@ export interface InstanceSnapshot {
 
 /** Discovery file `<runDir>/<instanceId>.json` written by RC (0600). The socket is `<runDir>/<instanceId>.sock`. */
 export interface InstanceMeta {
+	version?: string;
 	protocol: number;
 	instanceId: string;
 	pid: number;

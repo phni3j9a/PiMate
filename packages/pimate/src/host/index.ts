@@ -1,9 +1,9 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { accessSync, constants, lstatSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { delimiter, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { countSubagents, type InstanceMeta } from "@pimate/protocol";
+import { delimiter, join, resolve } from "node:path";
+import { countSubagents, type InstanceMeta, PROTOCOL_VERSION } from "@pimate/protocol";
+import { extensionPath, packageDir } from "../package.ts";
 import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
 import { RcClient } from "./client.ts";
 
@@ -12,7 +12,6 @@ export { RcClient } from "./client.ts";
 export { HostConfig, resolveConfigDir } from "./config.ts";
 export { defaultListenAddresses, HostServer, listenAddresses, tailscaleIps } from "./server.ts";
 
-const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export function findExecutable(
 	name: string,
 	path = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
@@ -27,12 +26,22 @@ export function findExecutable(
 	}
 	return undefined;
 }
-export function resolveAbduco(env = process.env): string | undefined {
+export function resolveAbduco(env = process.env, root = packageDir, warn = console.warn): string | undefined {
 	if (env.PIMATE_ABDUCO) return findExecutable(env.PIMATE_ABDUCO, env.PATH);
-	return (
-		findExecutable(join(packageDir, "bin", `${process.platform}-${process.arch}`, "abduco")) ??
-		findExecutable("abduco", env.PATH)
-	);
+	const relative = `bin/${process.platform}-${process.arch}/abduco`;
+	const bundled = join(root, relative);
+	try {
+		const checksums = JSON.parse(readFileSync(join(root, "bin/SHA256SUMS.json"), "utf8"));
+		if (
+			findExecutable(bundled) &&
+			checksums[relative] === createHash("sha256").update(readFileSync(bundled)).digest("hex")
+		)
+			return bundled;
+	} catch {
+		/* Missing or invalid bundles must never be executed. */
+	}
+	warn("PiMate: bundled abduco missing, unsupported, or checksum mismatch; falling back to system abduco (PATH).");
+	return findExecutable("abduco", env.PATH);
 }
 function alive(pid: number): boolean {
 	try {
@@ -63,7 +72,7 @@ function isMeta(value: unknown, id: string): value is InstanceMeta {
 	if (!value || typeof value !== "object") return false;
 	const m = value as InstanceMeta;
 	return (
-		m.protocol === 1 &&
+		m.protocol === PROTOCOL_VERSION &&
 		m.instanceId === id &&
 		Number.isInteger(m.pid) &&
 		m.pid > 0 &&
@@ -89,6 +98,7 @@ export class HostCore {
 	readonly env: NodeJS.ProcessEnv;
 	readonly abduco?: string;
 	readonly probeTimeoutMs: number;
+	readonly incompatible = new Map<string, number>();
 	constructor(options: HostOptions = {}) {
 		this.env = { ...process.env, ...options.env };
 		this.env.PATH ||= "/usr/local/bin:/usr/bin:/bin";
@@ -115,7 +125,9 @@ export class HostCore {
 					/* already gone */
 				}
 		const instances: DiscoveredInstance[] = [];
-		for (const file of readdirSync(this.runDir)) {
+		const files = readdirSync(this.runDir);
+		for (const id of this.incompatible.keys()) if (!files.includes(`${id}.json`)) this.incompatible.delete(id);
+		for (const file of files) {
 			if (!file.endsWith(".json")) continue;
 			const id = file.slice(0, -5);
 			if (!validInstanceId(id)) continue;
@@ -126,6 +138,19 @@ export class HostCore {
 				const st = lstatSync(metaPath);
 				if (!st.isFile() || st.size > 1024 * 1024) continue;
 				const value: unknown = JSON.parse(readFileSync(metaPath, "utf8"));
+				if (
+					value &&
+					typeof value === "object" &&
+					"protocol" in value &&
+					typeof value.protocol === "number" &&
+					value.protocol !== PROTOCOL_VERSION
+				) {
+					if (this.incompatible.get(id) !== value.protocol)
+						console.warn(`PiMate: skipping RC ${id}: protocol ${value.protocol}, expected ${PROTOCOL_VERSION}`);
+					this.incompatible.set(id, value.protocol);
+					continue;
+				}
+				this.incompatible.delete(id);
 				if (!isMeta(value, id)) continue;
 				meta = value;
 			} catch {
@@ -193,9 +218,7 @@ export class HostCore {
 			"-n",
 			name,
 			pi,
-			...(this.env.PIMATE_EXTENSION === "none"
-				? []
-				: ["-e", this.env.PIMATE_EXTENSION || join(packageDir, "src/extension/index.ts")]),
+			...(this.env.PIMATE_EXTENSION === "none" ? [] : ["-e", this.env.PIMATE_EXTENSION || extensionPath]),
 			...(options.args ?? []),
 		];
 		const systemd = findExecutable("systemd-run", env.PATH);

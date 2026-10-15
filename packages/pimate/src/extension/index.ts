@@ -4,12 +4,14 @@ import type { ParamsOf } from "@pimate/protocol";
 import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
+import { registerSetup } from "./setup.ts";
 import { SubagentRegistry } from "./subagents/registry.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { patchUI } from "./ui.ts";
 import { registerWriteDiff } from "./write-diff.ts";
 
 export default function pimate(pi: ExtensionAPI): void {
+	registerSetup(pi);
 	const h = getHub();
 	// Pi recreates extension runtimes on /new, /resume and /reload. The process hub survives,
 	// but old bus and lifecycle subscriptions must not.

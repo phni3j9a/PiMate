@@ -1,0 +1,55 @@
+name: Release package
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  abduco:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+            node-arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            node-arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: packages/pimate/scripts/build-abduco-linux.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abduco-${{ matrix.node-arch }}
+          path: packages/pimate/bin/linux-${{ matrix.node-arch }}/
+  package:
+    needs: abduco
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: abduco-x64
+          path: packages/pimate/bin/linux-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: abduco-arm64
+          path: packages/pimate/bin/linux-arm64
+      - run: chmod +x packages/pimate/bin/linux-*/abduco
+      - run: node -e 'if ("v" + JSON.parse(require("fs").readFileSync("packages/pimate/package.json")).version !== process.env.GITHUB_REF_NAME) process.exit(1)'
+      - run: npm run lint && npm run typecheck && npm test
+      - run: npm run build -w @pimate/pimate -- --release
+      - run: npm run test:pack -w @pimate/pimate
+      - run: cd packages/pimate/dist/package && npm pack
+      - run: gh release create "$GITHUB_REF_NAME" packages/pimate/dist/package/*.tgz --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

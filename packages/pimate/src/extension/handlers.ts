@@ -15,6 +15,7 @@ export function createHandlers(h: Hub): Handlers {
 		hello: () => ({ snapshot: h.snapshot() }),
 		history: () => ({ session: h.session, items: normalizeBranch(ready().ctx.sessionManager.getBranch()) }),
 		prompt: (p) => {
+			if (/^\s*\/pimate(?:\s|$)/i.test(p.text)) throw new RcError("unsupported", "/pimate is PC TUI only");
 			const { pi, ctx } = ready();
 			const deliverAs = p.deliverAs ?? (ctx.isIdle() ? undefined : "followUp");
 			pi.sendUserMessage(p.text, {

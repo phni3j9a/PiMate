@@ -20,3 +20,15 @@ docker run --rm --platform "linux/$ARCH" -v "$out:/out" -e HOST_UID="$(id -u)" -
 "
 file "$out/abduco" 2>/dev/null || true
 sha256sum "$out/abduco"
+
+node --input-type=module - "$here/.." <<'JS'
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const root = process.argv[2];
+const sums = {};
+for (const arch of ["x64", "arm64"]) {
+  const path = `bin/linux-${arch}/abduco`;
+  if (existsSync(`${root}/${path}`)) sums[path] = createHash("sha256").update(readFileSync(`${root}/${path}`)).digest("hex");
+}
+writeFileSync(`${root}/bin/SHA256SUMS.json`, JSON.stringify(sums, null, 2) + "\n");
+JS
