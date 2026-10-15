@@ -1,4 +1,4 @@
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, it, vi } from "vitest";
 import { createHandlers } from "../src/extension/handlers.ts";
 import type { Hub } from "../src/extension/hub.ts";
@@ -79,9 +79,11 @@ it("subagents RPC reply removes listener and timer", async () => {
 });
 
 it("lists authenticated models with Pi-compatible reasoning levels and current model", async () => {
+	vi.spyOn(SettingsManager, "create").mockReturnValue({ getEnabledModels: () => undefined } as never);
 	const h = {
 		ctx: {
 			hasUI: true,
+			scopedModels: [],
 			model: { provider: "faux", id: "reasoning" },
 			modelRegistry: {
 				getAvailable: () => [
@@ -96,7 +98,7 @@ it("lists authenticated models with Pi-compatible reasoning levels and current m
 				],
 			},
 		},
-		pi: {},
+		pi: { getSettings: () => ({}) },
 	} as unknown as Hub;
 	const result = await createHandlers(h).models({});
 	expect(result.current).toEqual({ provider: "faux", id: "reasoning" });
@@ -157,3 +159,52 @@ it.each(["/pimate", "/pimate setup", "  /pimate pair", "/PIMATE\tdevices", "/pim
 		expect(pi.sendUserMessage).not.toHaveBeenCalled();
 	},
 );
+
+function scopedSetup(memory: string[] | undefined, disk: string[] | undefined) {
+	const store = { enabled: disk };
+	const settings = {
+		getEnabledModels: () => store.enabled,
+		setEnabledModels: vi.fn((v: string[] | undefined) => {
+			store.enabled = v;
+		}),
+		flush: vi.fn(async () => {}),
+	};
+	vi.spyOn(SettingsManager, "create").mockReturnValue(settings as unknown as SettingsManager);
+	const models = ["a", "b", "c"].map((id) => ({ provider: "faux", id, name: id, reasoning: false }));
+	const h = {
+		ctx: {
+			hasUI: true,
+			cwd: "/cwd",
+			model: models[0],
+			scopedModels: [{ model: models[2] }],
+			modelRegistry: { getAvailable: () => models },
+		},
+		pi: { getSettings: () => ({ enabledModels: memory }) },
+	} as unknown as Hub;
+	return { settings, handlers: createHandlers(h) };
+}
+it("reports the live scoped models until enabledModels changes on disk", async () => {
+	expect((await scopedSetup(["faux/c"], ["faux/c"]).handlers.models({})).scoped).toEqual([
+		{ provider: "faux", id: "c" },
+	]);
+	expect((await scopedSetup(["faux/c"], ["faux/a", "faux/b"]).handlers.models({})).scoped).toEqual([
+		{ provider: "faux", id: "a" },
+		{ provider: "faux", id: "b" },
+	]);
+	expect((await scopedSetup(["faux/c"], undefined).handlers.models({})).scoped).toEqual([]);
+});
+it("saves scoped models like /scoped-models (all = no filter) and rejects unknown models", async () => {
+	const { settings, handlers } = scopedSetup(undefined, undefined);
+	expect(await handlers.set_scoped_models({ models: [{ provider: "faux", id: "b" }] })).toEqual({
+		scoped: [{ provider: "faux", id: "b" }],
+	});
+	expect(settings.setEnabledModels).toHaveBeenLastCalledWith(["faux/b"]);
+	expect(settings.flush).toHaveBeenCalled();
+	await handlers.set_scoped_models({ models: ["a", "b", "c"].map((id) => ({ provider: "faux", id })) });
+	expect(settings.setEnabledModels).toHaveBeenLastCalledWith(undefined);
+	await handlers.set_scoped_models({ models: [] });
+	expect(settings.setEnabledModels).toHaveBeenLastCalledWith(undefined);
+	await expect(handlers.set_scoped_models({ models: [{ provider: "faux", id: "zz" }] })).rejects.toMatchObject({
+		code: "not_found",
+	});
+});

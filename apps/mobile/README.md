@@ -52,6 +52,10 @@ M5c（アプリ / Host 0.1.1）:
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
 
+UI/UX 改善（[#23](https://github.com/phni3j9a/PiMate/issues/23)）:
+
+- モデルの「お気に入り」= PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）。モデルシートは PC の `/model` と同じく、お気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。古い PC パッケージでは ☆ を出さない
+
 今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
 
 ## Android APK のビルドと配布（M5b）

@@ -123,6 +123,18 @@ export const FolderIcon = (p: IconProps) => (
 export const PencilIcon = (p: IconProps) => (
 	<Line d="M12 20h8M4 20l1-4L16 5l3 3L8 19z" size={22} strokeWidth={1.9} {...p} />
 );
+/** Favorite model (Pi's scoped models): outline, filled when on. */
+export const StarIcon = ({ size = 20, color = colors.textSecondary, filled }: IconProps & { filled?: boolean }) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+		<Path
+			d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"
+			stroke={color}
+			strokeWidth={1.8}
+			strokeLinejoin="round"
+			fill={filled ? color : "none"}
+		/>
+	</Svg>
+);
 
 /** Context usage ring (Chat-Waiting composer). */
 export function RingIcon({ percent, size = 14 }: { percent: number; size?: number }) {

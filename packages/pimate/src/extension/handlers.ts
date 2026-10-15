@@ -1,10 +1,35 @@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/compat";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	getAgentDir,
+	resolveModelScopeWithDiagnostics,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import type { ModelRef } from "@pimate/protocol";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
 import { rpc } from "./subagents/registry.ts";
 import { normalizeBranch } from "./transcript.ts";
+
+const ref = (m: ModelRef): ModelRef => ({ provider: m.provider, id: m.id });
+
+/**
+ * Pi's scoped models. The live session set (`--models`, unsaved `/scoped-models`) wins unless `enabledModels` on
+ * disk changed since this Pi loaded it (saved from the phone or another Pi): a running Pi does not reload it.
+ */
+async function scopedModels(pi: ExtensionAPI, ctx: ExtensionContext): Promise<ModelRef[]> {
+	const disk = SettingsManager.create(ctx.cwd, getAgentDir()).getEnabledModels();
+	if (JSON.stringify(disk ?? []) === JSON.stringify(pi.getSettings().enabledModels ?? []))
+		return ctx.scopedModels.map((s) => ref(s.model));
+	if (!disk?.length) return [];
+	// shortcut: duck-typed ModelRuntime (the resolver only calls getAvailable); use resolveModelScopeFromModels if Pi exports it.
+	const runtime = { getAvailable: async () => ctx.modelRegistry.getAvailable() };
+	const { scopedModels } = await resolveModelScopeWithDiagnostics(disk, runtime as never);
+	return scopedModels.map((s) => ref(s.model));
+}
 
 export function createHandlers(h: Hub): Handlers {
 	const ready = () => {
@@ -70,9 +95,10 @@ export function createHandlers(h: Hub): Handlers {
 			pi.sendUserMessage(`/pimate-session ${JSON.stringify(p)}`, { expandPromptTemplates: true });
 			return {};
 		},
-		models: () => {
-			const { ctx } = ready();
+		models: async () => {
+			const { pi, ctx } = ready();
 			return {
+				scoped: await scopedModels(pi, ctx),
 				models: ctx.modelRegistry.getAvailable().map((model) => ({
 					provider: model.provider,
 					id: model.id,
@@ -82,6 +108,18 @@ export function createHandlers(h: Hub): Handlers {
 				})),
 				current: ctx.model ? { provider: ctx.model.provider, id: ctx.model.id } : null,
 			};
+		},
+		set_scoped_models: async (p) => {
+			const { pi, ctx } = ready();
+			const available = ctx.modelRegistry.getAvailable().map((m) => `${m.provider}/${m.id}`);
+			const ids = [...new Set(p.models.map((m) => `${m.provider}/${m.id}`))];
+			if (ids.some((id) => !available.includes(id))) throw new RcError("not_found", "Model not found");
+			// Same as Pi's /scoped-models: all models enabled is saved as no filter.
+			const all = available.every((id) => ids.includes(id));
+			const settings = SettingsManager.create(ctx.cwd, getAgentDir());
+			settings.setEnabledModels(ids.length && !all ? ids : undefined);
+			await settings.flush();
+			return { scoped: await scopedModels(pi, ctx) };
 		},
 		sessions: async (p) => {
 			const { ctx } = ready();

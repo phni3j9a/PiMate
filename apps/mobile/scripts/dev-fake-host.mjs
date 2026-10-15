@@ -98,6 +98,11 @@ const now = Date.now();
 const MIN = 60_000;
 const MODEL = { provider: "openai", id: "gpt-6-luna" };
 const ALL_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
+/** Pi's scoped models (favorites), shared by all fake instances like the global enabledModels. */
+let scoped = [
+	{ provider: "anthropic", id: "claude-opus-5-5" },
+	{ provider: "openai", id: "gpt-6-luna" },
+];
 const MODELS = [
 	{
 		provider: "anthropic",
@@ -646,7 +651,11 @@ function switchSession(id, reason, session, items) {
 /** Each returns { result } or { error, message }. */
 const RC = {
 	models(id) {
-		return { result: { models: MODELS, current: instances.get(id).model } };
+		return { result: { models: MODELS, current: instances.get(id).model, scoped } };
+	},
+	set_scoped_models(_id, params) {
+		scoped = params.models.map((m) => ({ provider: m.provider, id: m.id }));
+		return { result: { scoped } };
 	},
 	sessions(id) {
 		const inst = instances.get(id);
