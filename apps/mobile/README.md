@@ -45,6 +45,61 @@ M4（サブエージェント。RC が pi-subagents / 公式サンプルを正�
 
 今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
 
+## Android APK のビルドと配布（M5b）
+
+Expo Go / Metro なしで動く、署名済み universal release APK をローカルで作ります。`android/` は CNG の生成物（Git 管理外）です。ネイティブ設定は `app.json` / `app.config.js` と config plugin に置き、生成後の手編集はしません。
+
+### 準備
+
+- Node.js 22.18 以上、`npm ci`（リポジトリルート）。
+- **JDK 21**（JRE だけでは不可）。`JAVA_HOME` を JDK のディレクトリに設定。
+- Android SDK: `platform-tools`、`platforms;android-36`、`build-tools;36.0.0`、`ndk;27.1.12297006`、`cmake;3.22.1`。SDK のライセンスに同意しておく。
+- `ANDROID_HOME` を SDK の場所に設定（既定 `~/Android/Sdk`）。root 所有 SDK に不足がある場合は sudo で変更せず、ユーザー所有 SDK に cmdline-tools と必要なパッケージを入れる。
+
+```sh
+# リポジトリルート
+npm ci
+export JAVA_HOME=/path/to/jdk-21
+export ANDROID_HOME="$HOME/Android/Sdk"
+npm run build:android -w @pimate/mobile
+```
+
+スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
+
+出力は `apps/mobile/dist/pimate-0.1.0.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+
+### 署名鍵を必ずバックアップする
+
+初回のみ `~/.config/pimate-release/`（`PIMATE_SIGNING_DIR` で変更可、**リポジトリ外必須**）に次を作ります。
+
+- `pimate-release.jks`: RSA 3072 bit のリリース署名鍵
+- `signing.properties`: keystore の絶対パス、alias、ランダム生成したパスワード
+
+ディレクトリは 0700、両ファイルは 0600。パスワードはログや生成 Android プロジェクトへ書き出しません。既存の片方だけがある場合はエラーにして、鍵を勝手に再生成しません。`scripts/release-signing.gradle` がビルド時に外部 properties を読み、Expo の debug key による release 署名を置き換えます。
+
+**この2ファイルを暗号化して安全な別の場所にバックアップしてください。失くすと、公開済み APK と互換の上書き更新を署名できません。** 別 PC に復元したら `signing.properties` の `storeFile` を復元先の絶対パスへ修正します。鍵・properties・パスワードは commit、Issue、CI ログ、Release 添付に含めません。
+
+### インストール・リリース
+
+利用者は [GitHub Releases](https://github.com/phni3j9a/PiMate/releases) の `app-v…` から APK を取得します。Android の「不明なアプリのインストール」を、使ったブラウザ／ファイルアプリに対して許可し、APK を開きます。Tailscale に PC とスマホを接続したら、PC の Pi で `/pimate setup` → PiMate で QR 読み取り → マシンを確認してペアリングしてください。カメラ権限は QR 読み取り時だけ要求します。通信は Tailscale 内の HTTP/WS のため Android の cleartext 許可を明示しています。Host を公共ネットワークに公開しないでください。
+
+開発者の実機インストール:
+
+```sh
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.0.apk
+```
+
+公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
+
+```sh
+gh release create app-v0.1.0 apps/mobile/dist/pimate-0.1.0.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.0' --notes-file <リリースノート>
+```
+
+タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
+
+実機検証結果と制限は [M5b 検証記録](../../docs/m5b-android-verification.md) を参照してください。
+
 ## 構成
 
 - 画面: `src/app/`（expo-router）
