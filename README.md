@@ -16,6 +16,7 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 
 - PoCの結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)（検証コードは [poc/](poc/README.md)）
 - M5a: PC側の配布パッケージ生成・初回セットアップ・Host常駐/削除に対応（Linux x64で検証）。
+- M5b: 署名済み Android APK のローカルビルド・実機検証に対応（Android 7.0 / API 24 以上）。
 - arm64 Linuxはrelease CIでビルド、実機未検証。macOSの常駐登録・Windowsは未対応。
 
 ## PCにインストール・スマホとペアリング
@@ -28,12 +29,16 @@ pi install npm:pimate
 pi
 ```
 
-1. PCのPi TUIで **`/pimate setup`** を実行。
-2. Hostの起動を確認し、常駐する場合のみ **systemd user service登録** に同意。
+1. Android で [GitHub Releases](https://github.com/phni3j9a/PiMate/releases) の **`app-v…`** リリースから `pimate-….apk` をダウンロードしてインストール。
+   Android に確認されたら、ダウンロードに使ったブラウザ／ファイルアプリの「不明なアプリのインストール」を許可します（インストール後に許可を戻して構いません）。APK はこのリポジトリの Releases から取得してください。
+2. PCのPi TUIで **`/pimate setup`** を実行。
+3. Hostの起動を確認し、常駐する場合のみ **systemd user service登録** に同意。
    `pimate-host.service` をログイン時に起動します。断ると一時起動し、Piを閉じてもHostは動き続けます。
    linger状態は表示するだけで変更しません。ログアウト後の生存はOS側設定に依存します。
-3. QR / `pimate://` リンクをPiMate Androidアプリで開く。コードは10分・1回限りです。
-   Android配布は別マイルストーンで、現在は [開発版の手順](apps/mobile/README.md) を使用します。
+4. PiMate の「QRコードを読み取る」でカメラを許可し、PC の **`/pimate setup` が表示した QR** を読み取る。
+   マシン名・アドレスを確認してペアリングします。`pimate://` リンクの貼り付けも使えます。コードは10分・1回限りです。
+
+APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.md#android-apk-のビルドと配布m5b) を参照してください。同じ署名の新しい APK は既存アプリに上書きインストールできます。
 
 既定の公開先は **loopback + Tailscaleのみ**。Tailscaleがなければ警告しloopbackのみです。
 登録や新しいペアリングはPCのTUIだけから行えます。ペアリングはPiの操作権限を与えるため、リンクを共有しないでください。

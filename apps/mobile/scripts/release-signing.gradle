@@ -1,0 +1,18 @@
+// Applied after CNG, without editing the generated Android project or copying secrets into it.
+gradle.beforeProject { app ->
+    app.plugins.withId('com.android.application') {
+        app.androidComponents.finalizeDsl { android ->
+            def props = new Properties()
+            new File(System.getenv('PIMATE_SIGNING_PROPERTIES')).withReader('UTF-8') { props.load(it) }
+            ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { key ->
+                if (!props.getProperty(key)) throw new GradleException("Missing signing property: ${key}")
+            }
+            def signing = android.signingConfigs.create('pimateRelease')
+            signing.storeFile = new File(props.getProperty('storeFile'))
+            signing.storePassword = props.getProperty('storePassword')
+            signing.keyAlias = props.getProperty('keyAlias')
+            signing.keyPassword = props.getProperty('keyPassword')
+            android.buildTypes.release.signingConfig = signing
+        }
+    }
+}
