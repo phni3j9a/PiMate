@@ -41,7 +41,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
+    "build:android": "bash scripts/build-android-release.sh",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
