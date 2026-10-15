@@ -172,7 +172,7 @@ export function registerSetup(pi: ExtensionAPI): void {
 						) {
 							await uninstallService();
 							ui.notify(
-								`Host service removed. Run: pi remove npm:pimate\nThen optionally delete ${resolveConfigDir()} to forget all pairings. For local installs use pi remove <installed-directory>.`,
+								`Host service removed. Run: pi remove npm:@phni3j9a/pimate\nThen optionally delete ${resolveConfigDir()} to forget all pairings. For local installs use pi remove <installed-directory>.`,
 								"info",
 							);
 						}

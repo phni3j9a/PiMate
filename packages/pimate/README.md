@@ -1,6 +1,6 @@
 # @pimate/pimate — Remote Control / Host / M5a install
 
-通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・CLIです。開発workspaceはprivateの `@pimate/pimate`、配布名は `pimate` です。
+通常の Pi TUI をそのまま操作する RC Extension と、同じマシン上で動く Host ライブラリ・CLIです。開発workspaceはprivateの `@pimate/pimate`、配布名は `@phni3j9a/pimate` です。
 Pi は Host の子として使い捨てにせず、abduco の端末セッションで動かします。Host は Tailscale 上のスマホへ認証付き HTTP/WebSocket を提供します。
 
 ## 前提
@@ -154,7 +154,7 @@ cd packages/pimate/dist/package && npm pack
 ```
 
 esbuildでRC/CLIと `@pimate/protocol` / ws / qrcode / diffをinlineし、Piのパッケージはexternal + peer `*` にします。
-バージョン・ライセンスの正本は `packages/pimate/package.json`。生成manifestは `pimate`、Node >=22、
+バージョン・ライセンスの正本は `packages/pimate/package.json`。生成manifestは `@phni3j9a/pimate`、Node >=22、
 `pi.extensions: ["./dist/extension.js"]`、`bin.pimate: ./dist/cli.js`。
 利用者READMEは `PACKAGE_README.md`、MITのroot `LICENSE`、abduco ISCとbundle依存ライセンスを
 `THIRD_PARTY_NOTICES` に同梱します。`npm publish` はprivateなworkspaceではなく生成tarballに対して実行します。
@@ -167,10 +167,10 @@ esbuildでRC/CLIと `@pimate/protocol` / ws / qrcode / diffをinlineし、Piの�
 
 1. `packages/pimate/package.json` のversionを更新し、`npm install --package-lock-only` でlockも同期。
 2. lint / typecheck / unit / E2E / pack smoke、レビューを通し、通常の承認手順で統合。
-3. versionと一致するtag（例: `v0.1.0`）をpush。`.github/workflows/release.yml` が両archを集約しGitHub Releaseへtarballをupload。
-4. Releaseの `pimate-<version>.tgz` を取得し内容確認、**人が `npm publish ./pimate-<version>.tgz --access public`**。
+3. versionと一致するtag（例: `v0.1.2`）をpush。`.github/workflows/release.yml` が両archを集約しGitHub Releaseへtarballをupload。
+4. Releaseの `phni3j9a-pimate-<version>.tgz` を取得し内容確認、**明示的な承認後に `npm publish ./phni3j9a-pimate-<version>.tgz --access public`**。
    CIはnpmへpublishしません。tagとmanifest不一致や片arch不足は失敗します。
-5. `pi install npm:pimate` → `/pimate setup` を確認。更新時は `pi update npm:pimate` とPi再ロード後、
+5. `pi install npm:@phni3j9a/pimate` → `/pimate setup` を確認。更新時は `pi update npm:@phni3j9a/pimate` とPi再ロード後、
    `/pimate status` の不一致表示からHostを再起動（unitの絶対Node/CLIパスも更新）。
 
 ### 未公開tarballを隔離Piで検証
@@ -179,12 +179,12 @@ Pi 1.2.0のlocal installは**ディレクトリ**を指定します。tarballは
 
 ```sh
 VERIFY=$(mktemp -d)
-npm install --prefix "$VERIFY" --ignore-scripts --legacy-peer-deps /absolute/path/pimate-0.1.0.tgz
+npm install --prefix "$VERIFY" --ignore-scripts --legacy-peer-deps /absolute/path/phni3j9a-pimate-0.1.2.tgz
 export PI_CODING_AGENT_DIR="$VERIFY/agent" PIMATE_CONFIG_DIR="$VERIFY/config" PIMATE_RUN_DIR="$VERIFY/run"
-pi install "$VERIFY/node_modules/pimate"
+pi install "$VERIFY/node_modules/@phni3j9a/pimate"
 pi                                  # /pimate setup, pair, devices, status, restart, uninstall
 # cleanup: /pimate uninstall を実行してから
-pi remove "$VERIFY/node_modules/pimate"
+pi remove "$VERIFY/node_modules/@phni3j9a/pimate"
 rm -rf "$VERIFY"
 unset PI_CODING_AGENT_DIR PIMATE_CONFIG_DIR PIMATE_RUN_DIR
 ```

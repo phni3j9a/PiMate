@@ -46,7 +46,8 @@ writeFileSync(
 	`${out}/package.json`,
 	`${JSON.stringify(
 		{
-			name: "pimate",
+			name: "@phni3j9a/pimate",
+			publishConfig: { access: "public" },
 			version: source.version,
 			license: source.license,
 			description: "Pi on your phone, through your PC and Tailscale",
