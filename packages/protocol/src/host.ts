@@ -62,7 +62,17 @@ export interface PairError {
 	error: "invalid_code" | "expired_code" | "bad_request";
 }
 
+/** Text-free, live-only alert. Never replayed from history or snapshots. */
+export interface PiAlert {
+	id: string;
+	instanceId: string;
+	sessionId: string;
+	kind: "input" | "complete" | "failed" | "child_waiting" | "child_paused" | "child_failed";
+}
+
 export interface HostInfo {
+	/** Optional capability: only send watch_alerts when true. */
+	alerts?: boolean;
 	hostId: string;
 	name: string;
 	protocol: number;
@@ -118,6 +128,7 @@ export type SpawnErrorCode = "bad_request" | "not_found" | "not_directory" | "sp
 
 export type AppMessage =
 	| { type: "auth"; token: string; protocol: number; app: { version: string; platform: string } }
+	| { type: "watch_alerts"; enabled: boolean }
 	| { type: "subscribe"; instanceId: string }
 	| { type: "unsubscribe"; instanceId: string }
 	/** Forward an RC request to an instance. The reply is `rc_result` with the same `request.id`. */
@@ -129,6 +140,7 @@ export type AppMessage =
 // ---------------------------------------------------------------- Host -> app
 
 export type HostMessage =
+	| { type: "alert"; alert: PiAlert }
 	| { type: "auth_ok"; host: HostInfo; deviceId: string }
 	| { type: "auth_error"; code: "invalid_token" | "protocol_mismatch" | "bad_request" }
 	/** Full instance list; sent right after auth_ok and whenever it changes. */

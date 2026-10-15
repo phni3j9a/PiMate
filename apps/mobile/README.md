@@ -43,6 +43,15 @@ M4（サブエージェント。RC が pi-subagents / 公式サンプルを正�
 - チャットの `subagent` ツール行: RC が実行を知っているときは「subagent reviewer × 3 · 並列 … 2 実行中 ›」になり、終わったターンでも折りたたまない。タップで一覧（子が1人なら子の画面）。知らないときは普通のツール行
 - ドロワー: 一覧の件数から「~/work/api · サブエージェント 2 実行中」。子が待ち状態なら親が待機中でも「要対応」に出す（開いている Pi なら質問の文も）。失敗は履歴の件数なので出さない
 
+M5c（アプリ / Host 0.1.1）:
+
+- 設定で明示的にオンにした場合だけ、入力待ち・完了・失敗を端末内に通知。通知権限もその時点で要求します。子の完了は通知しません。
+- 接続中の全 Pi が対象。対象チャットを表示中は抑制。通知タップで対象の生存・セッションを確かめ、親チャットへ移動します。初期同期・履歴・再接続から通知を再発行しません。
+- **アプリ終了・OS による休止・切断中は受信できません。** プッシュ配信や常時バックグラウンドサービスはありません。
+- 古い Host ではチャットのみ。通知のためには PC パッケージを更新し Host を再起動してください。
+
+詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
+
 今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
 
 ## Android APK のビルドと配布（M5b）
@@ -66,7 +75,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.0.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.1.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -86,14 +95,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.0.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.1.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.0 apps/mobile/dist/pimate-0.1.0.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.0' --notes-file <リリースノート>
+gh release create app-v0.1.1 apps/mobile/dist/pimate-0.1.1.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.1' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。

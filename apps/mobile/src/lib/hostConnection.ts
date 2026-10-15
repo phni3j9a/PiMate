@@ -95,6 +95,13 @@ export class HostConnection {
 	private pongTimer: unknown = null;
 	private authTimer: unknown = null;
 	private subscription: string | null = null;
+	private alertsEnabled = false;
+
+	setAlertsEnabled(enabled: boolean): void {
+		this.alertsEnabled = enabled;
+		if (this.authed && this.info?.alerts) this.send({ type: "watch_alerts", enabled });
+	}
+
 	private pending = new Map<string, { resolve: (r: Response) => void; reject: (e: RcError) => void }>();
 	private hostPending = new Map<string, { resolve: (r: never) => void; reject: (e: RcError) => void }>();
 	private stateListeners = new Set<() => void>();
@@ -293,6 +300,7 @@ export class HostConnection {
 				this.attempt = 0;
 				this.authFailure = null;
 				this.info = msg.host;
+				this.setAlertsEnabled(this.alertsEnabled);
 				this.clear("authTimer");
 				this.schedulePing();
 				if (this.subscription) this.send({ type: "subscribe", instanceId: this.subscription });

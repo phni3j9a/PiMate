@@ -17,6 +17,7 @@ import {
 import { WebSocket, WebSocketServer } from "ws";
 import { PACKAGE_VERSION } from "../package.ts";
 import { validInstanceId } from "../runtime.ts";
+import { AlertTracker } from "./alerts.ts";
 import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
 import { HostCore } from "./index.ts";
@@ -65,9 +66,10 @@ export async function defaultListenAddresses(): Promise<string[]> {
 /** One-shot outcomes that a snapshot cannot reflect. */
 const RESULT_EVENTS: ReadonlySet<string> = new Set(["session_op_done", "compact_done", "compact_error", "notify"]);
 const MAX_BUFFER = 8 * 1024 * 1024;
-type Peer = { ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
+type Peer = { alerts?: boolean; ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
 type Subscription = { ready: boolean; buffer: EventMessage[]; bytes: number; generation: number; seq: number };
 type Link = {
+	alerts?: AlertTracker;
 	id: string;
 	client?: RcClient;
 	pendingClient?: RcClient;
@@ -268,9 +270,15 @@ export class HostServer {
 							protocol: HOST_PROTOCOL_VERSION,
 							version: PACKAGE_VERSION,
 							platform: process.platform,
+							alerts: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });
+					return;
+				}
+				if (message.type === "watch_alerts" && typeof message.enabled === "boolean") {
+					peer.alerts = message.enabled;
+					this.watchAlerts();
 					return;
 				}
 				if (message.type === "ping" && typeof message.t === "number") {
@@ -469,9 +477,21 @@ export class HostServer {
 				this.instances = next;
 				for (const peer of this.peers) if (peer.deviceId) this.send(peer, { type: "instances", instances: next });
 			}
+			this.watchAlerts();
 		} finally {
 			this.polling = false;
 		}
+	}
+	private watching(): boolean {
+		return [...this.peers].some((p) => p.deviceId && p.alerts && p.ws.readyState === WebSocket.OPEN);
+	}
+	private watchAlerts(): void {
+		if (this.watching()) {
+			for (const instance of this.instances) {
+				const link = this.link(instance.instanceId);
+				void this.connect(link).catch(() => this.reconnect(link));
+			}
+		} else for (const link of this.links.values()) this.idle(link);
 	}
 	private link(id: string): Link {
 		let link = this.links.get(id);
@@ -490,7 +510,8 @@ export class HostServer {
 			const client = this.core.client(link.id);
 			link.pendingClient = client;
 			client.onEvent((event) => this.event(link, event));
-			await client.connect();
+			const snapshot = await client.connect();
+			link.alerts = new AlertTracker(snapshot);
 			if (this.stopped || this.links.get(link.id) !== link) {
 				client.close();
 				throw new Error("Link closed");
@@ -500,6 +521,7 @@ export class HostServer {
 			client.onClose(() => {
 				if (link.client !== client) return;
 				link.client = undefined;
+				link.alerts = undefined;
 				this.flush(link);
 				for (const sub of link.subs.values()) {
 					sub.ready = false;
@@ -519,7 +541,8 @@ export class HostServer {
 		}
 	}
 	private reconnect(link: Link): void {
-		if (this.stopped || !link.subs.size || this.links.get(link.id) !== link || link.retryTimer) return;
+		if (this.stopped || (!link.subs.size && !this.watching()) || this.links.get(link.id) !== link || link.retryTimer)
+			return;
 		link.retryTimer = setTimeout(async () => {
 			link.retryTimer = undefined;
 			try {
@@ -582,6 +605,9 @@ export class HostServer {
 		sub.ready = true;
 	}
 	private event(link: Link, event: EventMessage): void {
+		const alert = link.alerts?.next(event);
+		if (alert)
+			for (const peer of this.peers) if (peer.deviceId && peer.alerts) this.send(peer, { type: "alert", alert });
 		for (const [peer, sub] of link.subs)
 			if (!sub.ready) {
 				sub.bytes += Buffer.byteLength(JSON.stringify(event));
@@ -653,9 +679,9 @@ export class HostServer {
 		}
 	}
 	private idle(link: Link): void {
-		if (link.subs.size || link.requests || link.idleTimer) return;
+		if (this.watching() || link.subs.size || link.requests || link.idleTimer) return;
 		link.idleTimer = setTimeout(() => {
-			if (!link.subs.size && !link.requests) this.drop(link);
+			if (!this.watching() && !link.subs.size && !link.requests) this.drop(link);
 		}, 1000);
 	}
 	private drop(link: Link): void {

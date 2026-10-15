@@ -44,6 +44,7 @@ export interface HostRuntime {
 	state: ConnectionState;
 	authFailure: AuthFailure | null;
 	platform: string | null;
+	alerts: boolean;
 	instances: InstanceSummary[];
 	nextRetryAt: number | null;
 }
@@ -126,6 +127,9 @@ export type Result<T> = { ok: true; value: T } | { ok: false; title: string; tex
 /** Wait for a spawned instance to show up in the Host's list. */
 export const SPAWN_APPEAR_TIMEOUT_MS = 20_000;
 
+import type { PiAlert } from "@pimate/protocol";
+import type { NotificationTarget } from "./notifications";
+
 type FetchLike = Parameters<typeof pairWithHost>[2];
 
 export type SendBlocker =
@@ -140,6 +144,7 @@ export type SendBlocker =
 	| "empty";
 
 export interface StoreDeps {
+	onAlert?: (hostId: string, alert: PiAlert) => void;
 	storage: KeyValueStorage;
 	createSocket(url: string): SocketLike;
 	fetch: FetchLike;
@@ -294,6 +299,61 @@ export class AppStore {
 		return this.initPromise;
 	}
 
+	private alertsEnabled = false;
+	setAlertsEnabled(enabled: boolean): void {
+		this.alertsEnabled = enabled;
+		for (const conn of this.connections.values()) conn.setAlertsEnabled(enabled);
+	}
+
+	private waitFor(check: () => boolean): Promise<void> {
+		if (check()) return Promise.resolve();
+		return new Promise((resolve, reject) => {
+			const off = this.subscribe(() => {
+				if (check()) {
+					clearTimeout(timer);
+					off();
+					resolve();
+				}
+			});
+			const timer = setTimeout(() => {
+				off();
+				reject(new Error("接続を確認できませんでした。接続後にもう一度開いてください。"));
+			}, 10000);
+		});
+	}
+
+	/** Read-only validation before navigation. Never switches the PC's session or sends a prompt. */
+	async openNotification(target: NotificationTarget, isActive: () => boolean = () => true): Promise<void> {
+		await this.init();
+		if (!this.records.has(target.hostId)) throw new Error("このマシンは登録されていません。");
+		await this.waitFor(() => {
+			const c = this.connections.get(target.hostId);
+			return !!c && c.state === "connected" && c.instancesReceived;
+		});
+		const conn = this.connections.get(target.hostId)!;
+		if (!conn.instances.some((i) => i.instanceId === target.instanceId)) throw new Error("この Pi は終了しています。");
+		const result = await conn.rc(target.instanceId, {
+			id: this.deps.randomUUID(),
+			method: "hello",
+			params: {},
+			expectInstanceId: target.instanceId,
+			expectSessionId: target.sessionId,
+		});
+		if (!result.ok) throw new Error("通知時のセッションではありません。現在の Pi は一覧から確認してください。");
+		if (!isActive()) return;
+		if (this.connections.get(target.hostId) !== conn)
+			throw new Error("マシンの登録が変わりました。もう一度確認してください。");
+		this.select(target.hostId, target.instanceId);
+		await this.waitFor(
+			() =>
+				this.state.view?.phase === "ready" &&
+				this.state.selection?.hostId === target.hostId &&
+				this.state.selection.instanceId === target.instanceId,
+		);
+		if (this.state.view?.session?.id !== target.sessionId)
+			throw new Error("通知後にセッションが切り替わりました。現在の Pi は一覧から確認してください。");
+	}
+
 	/** App came back to the foreground. */
 	foreground(): void {
 		for (const c of this.connections.values()) c.foreground();
@@ -322,6 +382,7 @@ export class AppStore {
 			state: record.needsRepair ? "auth_failed" : (c?.state ?? "idle"),
 			authFailure: c?.authFailure ?? (record.needsRepair ? "invalid_token" : null),
 			platform: c?.info?.platform ?? null,
+			alerts: c?.info?.alerts === true,
 			instances: c?.instances ?? [],
 			nextRetryAt: c?.nextRetryAt ?? null,
 		};
@@ -340,6 +401,7 @@ export class AppStore {
 			now: this.deps.now,
 		});
 		this.connections.set(record.hostId, conn);
+		conn.setAlertsEnabled(this.alertsEnabled);
 		const offChange = conn.onChange(() => this.onConnectionChange(record.hostId));
 		const offMessage = conn.onMessage((msg) => this.onHostMessage(record.hostId, msg));
 		this.unsubscribers.set(record.hostId, () => {
@@ -466,6 +528,10 @@ export class AppStore {
 	}
 
 	private onHostMessage(hostId: string, msg: Parameters<typeof reduceView>[1]): void {
+		if (msg.type === "alert") {
+			this.deps.onAlert?.(hostId, msg.alert);
+			return;
+		}
 		const { selection, view } = this.state;
 		if (!selection || !view || selection.hostId !== hostId) return;
 		let next = reduceView(view, msg, this.now());

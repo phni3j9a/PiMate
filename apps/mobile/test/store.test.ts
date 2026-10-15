@@ -803,3 +803,69 @@ describe("subagent session guards", () => {
 		expect(opRcs(s)).toHaveLength(0);
 	});
 });
+
+it("notification tap validates live session with guards and never sends a prompt", async () => {
+	const { store } = await setup();
+	const s = connect();
+	const opening = store.openNotification({ hostId: "h1", instanceId: "i1", sessionId: "s1" });
+	await flush();
+	const request = opRcs(s).find((m) => m.request.method === "hello").request;
+	expect(request).toMatchObject({ expectInstanceId: "i1", expectSessionId: "s1" });
+	s.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: { type: "response", id: request.id, ok: true, result: {} },
+	});
+	await opening;
+	expect(opRcs(s).some((m) => m.request.method === "prompt")).toBe(false);
+	store.dispose();
+});
+it("old notification refuses stale session without selecting another instance", async () => {
+	const { store } = await setup();
+	const s = connect();
+	const opening = store.openNotification({ hostId: "h1", instanceId: "i0", sessionId: "old" });
+	const rejected = expect(opening).rejects.toThrow("通知時のセッション");
+	await flush();
+	const request = opRcs(s).find((m) => m.request.method === "hello").request;
+	s.receive({
+		type: "rc_result",
+		instanceId: "i0",
+		response: { type: "response", id: request.id, ok: false, error: { code: "session_changed" } },
+	});
+	await rejected;
+	expect(store.getState().selection?.instanceId).toBe("i1");
+	store.dispose();
+});
+it("notification to a removed host cannot retarget current chat", async () => {
+	const { store } = await setup();
+	connect();
+	await expect(store.openNotification({ hostId: "absent", instanceId: "i1", sessionId: "s1" })).rejects.toThrow(
+		"登録されていません",
+	);
+	store.dispose();
+});
+it("cold notification waits for auth/list and cannot open an exited Pi", async () => {
+	const { store } = await setup();
+	const opening = store.openNotification({ hostId: "h1", instanceId: "gone", sessionId: "s1" });
+	const rejected = expect(opening).rejects.toThrow("終了しています");
+	await flush();
+	const s = connect();
+	await rejected;
+	expect(opRcs(s)).toHaveLength(0);
+	store.dispose();
+});
+it("leaving the notification screen during validation does not change selection", async () => {
+	const { store } = await setup();
+	const s = connect();
+	const opening = store.openNotification({ hostId: "h1", instanceId: "i0", sessionId: "s1" }, () => false);
+	await flush();
+	const request = opRcs(s).find((m) => m.request.method === "hello").request;
+	s.receive({
+		type: "rc_result",
+		instanceId: "i0",
+		response: { type: "response", id: request.id, ok: true, result: {} },
+	});
+	await opening;
+	expect(store.getState().selection?.instanceId).toBe("i1");
+	store.dispose();
+});

@@ -1,6 +1,7 @@
 /** Chat with the selected Pi instance (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
 import type { SubagentRun } from "@pimate/protocol";
-import { router, useNavigation } from "expo-router";
+import { router, useIsFocused, useNavigation } from "expo-router";
+import { useDrawerStatus } from "expo-router/drawer";
 import { DrawerActions } from "expo-router/react-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -14,7 +15,6 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
@@ -26,6 +26,7 @@ import { SessionSheet } from "@/components/sheets/SessionSheet";
 import { SubagentSheet } from "@/components/sheets/SubagentSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
+import { notificationVisibility } from "@/lib/notificationRuntime";
 import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { modelLabel } from "@/lib/sessionInfo";
@@ -35,6 +36,14 @@ import { buildRows, type Row, type SpacedRow, spaceRows, visibleRows } from "@/l
 import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
 
 export default function ChatScreen() {
+	const focused = useIsFocused();
+	const drawer = useDrawerStatus();
+	useEffect(() => {
+		notificationVisibility.chat = focused && drawer === "closed";
+		return () => {
+			notificationVisibility.chat = false;
+		};
+	}, [focused, drawer]);
 	const navigation = useNavigation();
 	const insets = useSafeAreaInsets();
 	const keyboard = useKeyboardVisible();

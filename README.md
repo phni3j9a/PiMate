@@ -17,6 +17,7 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 - PoCの結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)（検証コードは [poc/](poc/README.md)）
 - M5a: PC側の配布パッケージ生成・初回セットアップ・Host常駐/削除に対応（Linux x64で検証）。
 - M5b: 署名済み Android APK のローカルビルド・実機検証に対応（Android 7.0 / API 24 以上）。
+- M5c: 接続中のローカル通知（親の入力待ち・完了・失敗、子の要対応・失敗・一時停止）と設定に対応。[対象・制限・検証記録](docs/notifications.md)。通知にはアプリ / Host 0.1.1 が必要です。
 - arm64 Linuxはrelease CIでビルド、実機未検証。macOSの常駐登録・Windowsは未対応。
 
 ## PCにインストール・スマホとペアリング

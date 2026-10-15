@@ -1,6 +1,7 @@
 /** Settings (docs/design/html/Settings.html): paired machines and the app version. */
 import { router } from "expo-router";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSyncExternalStore } from "react";
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PlusIcon } from "@/components/icons";
@@ -8,7 +9,7 @@ import { StatusMark } from "@/components/StatusMark";
 import { ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
 import { hostConnectionLabel, hostSummary } from "@/lib/presentation";
-import { appStore, appVersion } from "@/lib/runtime";
+import { appStore, appVersion, notificationCenter } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
 import { colors, spacing, typography } from "@/theme/tokens";
 
@@ -25,6 +26,7 @@ function confirmRemove(host: HostRuntime) {
 
 export default function SettingsScreen() {
 	const hosts = useAppState((s) => s.hosts);
+	const notifications = useSyncExternalStore(notificationCenter.subscribe, notificationCenter.getState);
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
 			<ScreenHeader title="設定" onBack={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
@@ -71,6 +73,58 @@ export default function SettingsScreen() {
 						style={styles.add}
 					/>
 				</View>
+				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
+					通知
+				</Text>
+				{(
+					[
+						["enabled", "接続中の通知"],
+						["input", "入力待ち・要対応"],
+						["complete", "完了"],
+						["failed", "失敗"],
+					] as const
+				).map(([key, label]) => (
+					<View key={key} style={styles.notificationRow}>
+						<Text style={styles.machineName}>{label}</Text>
+						<Switch
+							accessibilityLabel={label}
+							value={notifications.settings[key]}
+							disabled={
+								!notifications.loaded || notifications.busy || (key !== "enabled" && !notifications.settings.enabled)
+							}
+							trackColor={{ true: colors.accent }}
+							onValueChange={(value) => {
+								void notificationCenter.update(key, value);
+							}}
+						/>
+					</View>
+				))}
+				<Text style={styles.explanation}>
+					PC に接続し、アプリが動いている間に受信した変化だけを通知します。アプリの終了・OS
+					による休止・切断中は届きません。子の完了は個別に通知しません。
+				</Text>
+				{notifications.settings.enabled && notifications.permission !== "granted" ? (
+					<View>
+						<Text style={styles.explanation}>OS の通知が許可されていません。許可後にアプリへ戻ってください。</Text>
+						<TextButton
+							label="OS の通知設定を確認"
+							onPress={() => {
+								void Linking.openSettings().catch(() => {});
+							}}
+						/>
+					</View>
+				) : null}
+				{notifications.settings.enabled && hosts.some((h) => h.state === "connected" && !h.alerts) ? (
+					<Text style={styles.explanation}>
+						通知に未対応の Host があります。PC 側の PiMate Host を 0.1.1
+						以降に更新・再起動してください。チャットは引き続き使えます。
+					</Text>
+				) : null}
+				{notifications.error ? (
+					<Text accessibilityRole="alert" style={styles.explanation}>
+						{notifications.error}
+					</Text>
+				) : null}
 				<View style={styles.spacer} />
 			</ScrollView>
 			<Text style={styles.version}>PiMate {appVersion}</Text>
@@ -90,6 +144,14 @@ const styles = StyleSheet.create({
 	machineSub: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
 	add: { justifyContent: "flex-start", height: 52, gap: 12 },
 	spacer: { flex: 1 },
+	notificationRow: {
+		minHeight: 52,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+	},
+	explanation: { fontSize: 12, lineHeight: 19, color: colors.textSecondary, marginVertical: 8 },
 	version: {
 		...typography.caption,
 		textAlign: "center",
