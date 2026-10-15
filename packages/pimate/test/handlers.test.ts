@@ -149,7 +149,7 @@ it("lists sessions from Pi's actual session dir, sorts dates and marks current; 
 	expect(shutdown).toHaveBeenCalledOnce();
 });
 
-it.each(["/pimate", "/pimate setup", "  /pimate pair", "/PIMATE\tdevices"])(
+it.each(["/pimate", "/pimate setup", "  /pimate pair", "/PIMATE\tdevices", "/pimate:1 pair", "/pimate:2"])(
 	"rejects remote management prompt %s before dispatch",
 	(text) => {
 		const { handlers, pi } = setup();

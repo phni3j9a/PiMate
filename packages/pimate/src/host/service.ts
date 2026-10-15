@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { DEFAULT_HOST_PORT } from "@pimate/protocol";
@@ -18,22 +18,41 @@ export function systemdQuote(value: string): string {
 	if (/[\n\r\0]/.test(value)) throw new Error("Invalid newline/NUL in service configuration");
 	return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%")}"`;
 }
-export function serviceUnit(env = process.env): string {
-	env = { ...env, PIMATE_CONFIG_DIR: resolveConfigDir(env) };
-	const vars = [
-		"PATH",
-		"PIMATE_CONFIG_DIR",
-		"PIMATE_RUN_DIR",
-		"PIMATE_ABDUCO",
-		"PIMATE_PI",
-		"PIMATE_EXTENSION",
-		"PI_CODING_AGENT_DIR",
-		"XDG_CONFIG_HOME",
-		"XDG_RUNTIME_DIR",
-	];
-	return `${MARKER}[Unit]\nDescription=PiMate Host\n\n[Service]\nType=simple\nExecStart=${systemdQuote(process.execPath).replaceAll("$", "$$")} ${systemdQuote(cliPath).replaceAll("$", "$$")} serve\nRestart=on-failure\nRestartSec=3\nUMask=0077\n${vars
-		.filter((key) => env[key])
-		.map((key) => `Environment=${systemdQuote(`${key}=${env[key]}`)}`)
+const ENV_KEYS = [
+	"PATH",
+	"PIMATE_CONFIG_DIR",
+	"PIMATE_RUN_DIR",
+	"PIMATE_ABDUCO",
+	"PIMATE_PI",
+	"PIMATE_EXTENSION",
+	"PI_CODING_AGENT_DIR",
+	"XDG_CONFIG_HOME",
+	"XDG_RUNTIME_DIR",
+] as const;
+const PATH_KEYS = new Set<string>(ENV_KEYS.filter((k) => k !== "PATH"));
+/**
+ * Environment handed to the service/transient Host. systemd starts it from the home directory, so relative paths
+ * the user's Pi resolved against its own cwd are made absolute here (bare command names like `pi` stay as is).
+ */
+export function hostEnv(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): [string, string][] {
+	const out: [string, string][] = [];
+	for (const key of ENV_KEYS) {
+		let value = key === "PIMATE_CONFIG_DIR" && !env.PIMATE_CONFIG_DIR ? resolveConfigDir(env) : env[key];
+		if (!value) continue;
+		if (PATH_KEYS.has(key) && !isAbsolute(value) && (key !== "PIMATE_PI" || value.includes("/")))
+			value = resolve(cwd, value);
+		out.push([key, value]);
+	}
+	return out;
+}
+/** systemd expands `$VAR` in command lines (also for systemd-run); keep our arguments literal. */
+const literalArg = (value: string) => value.replaceAll("$", "$$$$");
+export function serviceUnit(env = process.env, cwd = process.cwd()): string {
+	return `${MARKER}[Unit]\nDescription=PiMate Host\n\n[Service]\nType=simple\nExecStart=${literalArg(systemdQuote(process.execPath))} ${literalArg(systemdQuote(cliPath))} serve\nRestart=on-failure\nRestartSec=3\nUMask=0077\n${hostEnv(
+		env,
+		cwd,
+	)
+		.map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}`)
 		.join("\n")}\n\n[Install]\nWantedBy=default.target\n`;
 }
 async function systemctl(...args: string[]): Promise<string> {
@@ -138,17 +157,6 @@ export async function startHost(): Promise<void> {
 		await systemctl("start", SERVICE);
 	} else if (await hasUserSystemd()) {
 		const unit = `pimate-host-${process.pid}-${Date.now()}`;
-		const envKeys = [
-			"PATH",
-			"PIMATE_CONFIG_DIR",
-			"PIMATE_RUN_DIR",
-			"PIMATE_ABDUCO",
-			"PIMATE_PI",
-			"PIMATE_EXTENSION",
-			"PI_CODING_AGENT_DIR",
-			"XDG_CONFIG_HOME",
-			"XDG_RUNTIME_DIR",
-		];
 		await exec(
 			"systemd-run",
 			[
@@ -156,9 +164,9 @@ export async function startHost(): Promise<void> {
 				"--quiet",
 				"--collect",
 				`--unit=${unit}`,
-				...envKeys.filter((k) => process.env[k]).map((k) => `--setenv=${k}=${process.env[k]}`),
-				process.execPath,
-				cliPath,
+				...hostEnv().map(([k, v]) => `--setenv=${k}=${v}`),
+				literalArg(process.execPath),
+				literalArg(cliPath),
 				"serve",
 			],
 			{ timeout: 15000 },

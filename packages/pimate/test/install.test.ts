@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { registerSetup } from "../src/extension/setup.ts";
 import { getLocalUI, patchUI } from "../src/extension/ui.ts";
 import { HostCore, resolveAbduco } from "../src/host/index.ts";
-import { serviceUnit, systemdQuote } from "../src/host/service.ts";
+import { hostEnv, serviceUnit, systemdQuote } from "../src/host/service.ts";
 
 const dirs: string[] = [];
 const temp = () => {
@@ -71,6 +71,22 @@ it("quotes systemd paths and environment without accepting injected directives",
 	expect(unit).toContain('Environment="PATH=/a b/$literal/%%x"');
 	expect(unit).toContain("Restart=on-failure");
 	expect(unit).not.toContain("enable-linger");
+});
+it("hands the Host absolute paths and literal command arguments", () => {
+	const env = hostEnv(
+		{ PATH: "/bin", PIMATE_CONFIG_DIR: "cfg", PIMATE_RUN_DIR: "./run", PIMATE_PI: "pi", PIMATE_ABDUCO: "bin/abduco" },
+		"/repo",
+	);
+	expect(Object.fromEntries(env)).toEqual({
+		PATH: "/bin",
+		PIMATE_CONFIG_DIR: "/repo/cfg",
+		PIMATE_RUN_DIR: "/repo/run",
+		PIMATE_PI: "pi",
+		PIMATE_ABDUCO: "/repo/bin/abduco",
+	});
+	expect(serviceUnit({ PIMATE_RUN_DIR: "./run", PIMATE_CONFIG_DIR: "/c" }, "/repo")).toContain(
+		'Environment="PIMATE_RUN_DIR=/repo/run"',
+	);
 });
 it("management dialogs and notifications do not enter the remote UI bridge", async () => {
 	const original = { confirm: vi.fn(async () => true), notify: vi.fn() };
