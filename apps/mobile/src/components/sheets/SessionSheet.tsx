@@ -1,6 +1,6 @@
 /**
  * Session sheet (docs/design/html/Sheet-Session.html), opened from the chat header.
- * Pages: the main menu, past sessions (/resume) and the message to branch from (/fork). /tree is left out.
+ * Pages: the main menu, past sessions (/resume) and the message to branch from (/fork). The tree opens its own route.
  */
 import type { SessionListItem } from "@pimate/protocol";
 import { router } from "expo-router";
@@ -147,6 +147,18 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				chevron
 				onPress={() => onPage("sessions")}
 			/>
+			{view?.sessionTree ? (
+				<Row
+					label="セッションツリー"
+					command="/tree"
+					disabled={disabled}
+					chevron
+					onPress={() => {
+						onClose();
+						router.push("/tree");
+					}}
+				/>
+			) : null}
 			<Row
 				label="ここから分岐"
 				command="/fork"

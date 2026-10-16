@@ -18,6 +18,7 @@ import type {
 	Response,
 	SessionListItem,
 	SessionOp,
+	SessionTree,
 	SpawnParams,
 	SubagentAction,
 	SubagentTranscript,
@@ -172,6 +173,7 @@ const OP_LABEL: Record<OpKind, string> = {
 	switch: "セッションの切り替え",
 	fork: "分岐",
 	reload: "再読み込み",
+	tree: "ツリーの移動",
 	compact: "圧縮",
 	shutdown: "終了",
 	model: "モデルの変更",
@@ -580,7 +582,8 @@ export class AppStore {
 					this.phoneSwitch.fromSessionId === view.session?.id &&
 					this.phoneSwitch.toSessionId === next.session?.id);
 			const draft = this.state.drafts[key]?.trim() || this.state.attachments[key]?.length;
-			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
+			if (draft && !byPhone && view.session?.id !== next.session?.id)
+				patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
@@ -641,10 +644,24 @@ export class AppStore {
 						},
 					};
 				const v = this.state.view;
+				if (op.kind === "tree" && (sessionId !== op.fromSessionId || v?.session?.id !== op.fromSessionId))
+					return this.opResultUnknown(op);
 				// The event carries the session the switch arrived at; only a move there is the phone's own.
 				if (op.fromSessionId && sessionId && v?.phase === "ready" && v.session?.id === op.fromSessionId)
 					this.phoneSwitch = { key, fromSessionId: op.fromSessionId, toSessionId: sessionId };
-				return this.sessionOpDone(op, key);
+				const patch = this.sessionOpDone(op, key);
+				if (op.kind === "tree") {
+					if (event.editorText && !this.state.drafts[key]?.trim())
+						patch.drafts = { ...this.state.drafts, [key]: event.editorText };
+					patch.notice = {
+						kind: "info",
+						text:
+							event.editorText && this.state.drafts[key]?.trim()
+								? "移動しました。入力中の下書きはそのまま残しています。"
+								: "移動しました",
+					};
+				}
+				return patch;
 			}
 			case "compact_done":
 				return op?.kind === "compact"
@@ -1210,6 +1227,49 @@ export class AppStore {
 	async sessionOp(op: "new" | "switch" | "fork", arg?: string, forkText?: string): Promise<Result<null>> {
 		const fromSessionId = this.state.view?.session?.id;
 		return this.startOp({ kind: op, forkText, fromSessionId }, "session_op", { op, ...(arg ? { arg } : {}) });
+	}
+
+	private treeTarget(target: OpTarget): Result<null> {
+		const now = this.opTarget();
+		if (
+			!now ||
+			now.hostId !== target.hostId ||
+			now.instanceId !== target.instanceId ||
+			now.sessionId !== target.sessionId
+		)
+			return { ok: false, title: "会話が変わりました", text: "チャットからツリーを開き直してください。" };
+		if (this.state.view?.phase !== "ready")
+			return { ok: false, title: "会話を同期しています", text: "少し待ってからお試しください。" };
+		if (!this.state.view.sessionTree)
+			return { ok: false, title: "未対応です", text: "PC の PiMate を更新してください。" };
+		return { ok: true, value: null };
+	}
+
+	async sessionTree(target: OpTarget): Promise<Result<SessionTree>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		const res = await this.guardedRc("session_tree", {}, { discardStale: true });
+		return res.ok ? { ok: true, value: res.value.result as SessionTree } : res;
+	}
+
+	async navigateTree(target: OpTarget, entryId: string, summarize: boolean): Promise<Result<null>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		if (this.state.view?.agentActive || this.state.view?.status !== "idle")
+			return { ok: false, title: "実行中は移動できません", text: "Pi の処理が終わるまでお待ちください。" };
+		this.set({ notice: null });
+		return this.startOp({ kind: "tree", fromSessionId: target.sessionId ?? undefined }, "session_op", {
+			op: "tree",
+			arg: entryId,
+			summarize,
+		});
+	}
+
+	async setTreeLabel(target: OpTarget, entryId: string, label: string): Promise<Result<null>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		const res = await this.guardedRc("set_label", { entryId, label }, { discardStale: true });
+		return res.ok ? { ok: true, value: null } : res;
 	}
 
 	async compact(): Promise<Result<null>> {

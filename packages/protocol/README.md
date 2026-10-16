@@ -15,3 +15,10 @@
 画像要求の ACK は RC の受付を示し、履歴への反映を保証しません。モバイルは受付後に仮の画像 outbox 表示を除去し、Pi の実履歴だけを表示します。Pi が画像を再変換し、本文に寸法注記を追加する場合があるためです。
 
 結果が不明な送信の照合は text **と**画像 MIME/base64 **と**枚数、未知だった entryId、セッションで行います。変換で完全一致しなければ推測で成功とせず、下書きを保持して手動の履歴確認を案内します。成功/実履歴での確認前の optimistic insertion、unknown delivery の自動再送はしません。
+
+## セッションツリー
+
+- `InstanceSnapshot.sessionTree === true` の RC だけが `session_tree`、`session_op` の `op: "tree"`、`set_label` に対応します。未指定/false の場合は入口を表示しません。
+- `session_tree` は `SessionTree { nodes, leafId, truncated }`。nodes は親が先の表示順で、`parentId` は畳まれたツール/状態エントリを飛ばした表示上の親です。`onBranch` は現在の枝、`isCurrent` は現在の葉の最寄りの表示ノード、`isLeaf` は表示上の葉。元の葉は `leafId` です。本文・件数には上限があり、元の Pi セッションは変更しません。
+- 移動要求は `session_op { op: "tree", arg: entryId, summarize?: boolean }`。受付応答とは別の `session_op_done` で取消/失敗/完了を通知します。成功時の任意の `editorText` は表示previewではなく入力欄へ戻す全文です。移動通知 `session_changed { reason: "tree" }` で同じセッションの履歴を再取得します。
+- `set_label { entryId, label?: string }` の空文字・省略は解除。最大200文字。各要求は `expectInstanceId` / `expectSessionId` で元の宛先に固定し、自動再送しません。

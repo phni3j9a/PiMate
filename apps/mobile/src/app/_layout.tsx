@@ -51,6 +51,7 @@ export default function RootLayout() {
 				<Stack.Screen name="settings" />
 				<Stack.Screen name="new" />
 				<Stack.Screen name="review" />
+				<Stack.Screen name="tree" />
 				<Stack.Screen name="subagent" />
 				<Stack.Screen name="notification" />
 			</Stack>

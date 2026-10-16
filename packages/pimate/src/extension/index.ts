@@ -7,6 +7,7 @@ import { getHub } from "./hub.ts";
 import { registerSetup } from "./setup.ts";
 import { SubagentRegistry } from "./subagents/registry.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
+import { navigateTree } from "./tree.ts";
 import { patchUI } from "./ui.ts";
 import { registerWriteDiff } from "./write-diff.ts";
 
@@ -41,6 +42,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			if (!ctx.hasUI) return;
 			// The previous ctx is already disposed here; replace it before anything can emit.
 			h.pi = pi;
+			h.treeNavigating = false;
 			h.pcPrompt = null;
 			// An earlier extension's session_start may already have started a run (agent_start seen before ours).
 			h.agentActive = !ctx.isIdle();
@@ -76,22 +78,35 @@ export default function pimate(pi: ExtensionAPI): void {
 		description: "PiMate internal session operation",
 		handler: async (args, ctx) => {
 			let p: ParamsOf<"session_op">;
+			let expectSessionId: string | undefined;
 			try {
-				p = validateRequest({ id: "internal", method: "session_op", params: JSON.parse(args) })
-					.params as ParamsOf<"session_op">;
+				const parsed = JSON.parse(args);
+				expectSessionId = parsed.expectSessionId;
+				p = validateRequest({ id: "internal", method: "session_op", params: parsed }).params as ParamsOf<"session_op">;
 			} catch {
 				ctx.ui.notify("Invalid PiMate session operation", "error");
 				return;
 			}
 			try {
-				let r: { cancelled: boolean } | undefined;
-				if (p.op === "new") r = await ctx.newSession();
+				let r: { cancelled: boolean; editorText?: string } | undefined;
+				if (p.op === "tree") {
+					if (expectSessionId !== ctx.sessionManager.getSessionId())
+						throw new Error("会話が切り替わりました。開き直してください");
+					r = await navigateTree(ctx, p.arg!, p.summarize);
+				} else if (p.op === "new") r = await ctx.newSession();
 				else if (p.op === "switch") r = await ctx.switchSession(p.arg!);
 				else if (p.op === "fork") r = await ctx.fork(p.arg!);
 				else await ctx.reload();
-				h.emit({ type: "session_op_done", op: p.op, cancelled: r?.cancelled ?? false });
+				h.emit({
+					type: "session_op_done",
+					op: p.op,
+					cancelled: r?.cancelled ?? false,
+					...(r?.editorText !== undefined ? { editorText: r.editorText } : {}),
+				});
 			} catch (e) {
 				h.emit({ type: "session_op_done", op: p.op, cancelled: true, error: String(e) });
+			} finally {
+				if (p.op === "tree") h.treeNavigating = false;
 			}
 		},
 	});
@@ -100,6 +115,8 @@ export default function pimate(pi: ExtensionAPI): void {
 			if (!ctx.hasUI) return;
 			h.ctx = ctx;
 			rebuildSubagents(ctx);
+			if (h.session) h.emit({ type: "session_changed", reason: "tree", session: h.session });
+			h.emitContext();
 		}),
 		pi.on("session_shutdown", (e) => {
 			h.subagents?.dispose();
