@@ -1,0 +1,18 @@
+{
+  "name": "PiMate Mt mark",
+  "version": 1,
+  "viewBox": [0, 0, 460, 408],
+  "note": "Clean vector reconstruction of the supplied 846.png silhouette. Light palette sampled from 845.png. Both appearances deliberately share one geometry; paper texture, grid, and wordmark are not app-icon artwork.",
+  "palettes": {
+    "light": {"blue": "#4C93BC", "coral": "#F38C7B", "yellow": "#F5C15E", "background": "#F1EEE9"},
+    "dark": {"blue": "#329DFD", "coral": "#FC7466", "yellow": "#FDCA3D", "background": "#121B2C"},
+    "tinted": {"blue": "#B8B8B8", "coral": "#E0E0E0", "yellow": "#FFFFFF", "background": "#161616"}
+  },
+  "shapes": [
+    {"color": "blue", "points": [[0,0],[101,0],[204,107],[204,224],[175,224],[112,180],[112,361],[0,361]]},
+    {"color": "blue", "points": [[204,224],[300,224],[300,332],[204,332]]},
+    {"color": "coral", "points": [[204,107],[313,0],[388,0],[388,224],[300,224],[300,134],[204,134]]},
+    {"color": "yellow", "points": [[388,134],[460,134],[460,224],[388,224]]},
+    {"color": "yellow", "points": [[300,224],[388,224],[388,320],[460,320],[460,408],[300,408]]}
+  ]
+}
