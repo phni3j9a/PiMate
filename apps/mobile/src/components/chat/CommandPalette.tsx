@@ -9,16 +9,18 @@ import { colors, fontFamily, radii, typography } from "@/theme/tokens";
 export function CommandPalette({
 	draft,
 	catalog,
+	tree,
 	onSelect,
 	onRetry,
 }: {
 	draft: string;
 	catalog: CommandsState | undefined;
+	tree: boolean;
 	onSelect: (text: string) => void;
 	onRetry: () => void;
 }) {
 	if (commandQuery(draft) === null) return null;
-	const commands = filterCommands(commandCatalog(catalog?.list ?? []), draft);
+	const commands = filterCommands(commandCatalog(catalog?.list ?? [], tree), draft);
 	return (
 		<View style={styles.palette}>
 			<Text style={styles.heading} accessibilityRole="header">

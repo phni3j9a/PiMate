@@ -131,8 +131,13 @@ it("rebuilds branch-local subagents on session_tree, closing old watchers and cl
 		const watcher = (Reflect.get(old, "watchers") as Map<string, import("node:fs").FSWatcher>).get("old-branch")!;
 		const close = vi.spyOn(watcher, "close");
 		const dispose = vi.spyOn(old, "dispose");
-		const ctx = { hasUI: true, sessionManager: { getBranch: () => [] } } as unknown as ExtensionContext;
+		const ctx = {
+			hasUI: true,
+			getContextUsage: () => null,
+			sessionManager: { getBranch: () => [] },
+		} as unknown as ExtensionContext;
 		hooks.get("session_tree")?.({ oldLeafId: "after-launch", newLeafId: "before-launch" }, ctx);
+		expect(emit).toHaveBeenCalledWith({ type: "session_changed", reason: "tree", session: { id: "parent" } });
 		expect(dispose).toHaveBeenCalledOnce();
 		expect(close).toHaveBeenCalledOnce();
 		expect(h.subagents).not.toBe(old);
@@ -148,4 +153,43 @@ it("rebuilds branch-local subagents on session_tree, closing old watchers and cl
 		old.dispose();
 		await rm(dir, { recursive: true, force: true });
 	}
+});
+
+it("tree command emits full editor text after completion, rejects delayed session changes and releases its busy flag", async () => {
+	const { h, pi } = setup();
+	const command = vi.mocked(pi.registerCommand).mock.calls.find(([name]) => name === "pimate-session")![1].handler;
+	const ctx = {
+		isIdle: () => true,
+		sessionManager: {
+			getSessionId: () => "s",
+			getLeafId: () => "old",
+			getEntry: () => ({ type: "message", message: { role: "user", content: "full editor text" } }),
+		},
+		navigateTree: vi.fn(async () => ({ cancelled: false })),
+	} as unknown as import("@earendil-works/pi-coding-agent").ExtensionCommandContext;
+	const emit = vi.spyOn(h, "emit");
+	h.treeNavigating = true;
+	await command('{"op":"tree","arg":"u","summarize":true,"expectSessionId":"s"}', ctx);
+	expect(ctx.navigateTree).toHaveBeenCalledWith("u", { summarize: true });
+	expect(emit).toHaveBeenCalledWith({
+		type: "session_op_done",
+		op: "tree",
+		cancelled: false,
+		editorText: "full editor text",
+	});
+	expect(h.treeNavigating).toBe(false);
+	vi.mocked(ctx.navigateTree).mockClear();
+	h.treeNavigating = true;
+	await command('{"op":"tree","arg":"u","expectSessionId":"other"}', ctx);
+	expect(ctx.navigateTree).not.toHaveBeenCalled();
+	expect(emit).toHaveBeenLastCalledWith(
+		expect.objectContaining({
+			type: "session_op_done",
+			op: "tree",
+			cancelled: true,
+			error: expect.stringContaining("会話が切り替わりました"),
+		}),
+	);
+	expect(h.treeNavigating).toBe(false);
+	expect(h.snapshot().sessionTree).toBe(true);
 });

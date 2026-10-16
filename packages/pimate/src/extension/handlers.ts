@@ -13,6 +13,7 @@ import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
 import { rpc } from "./subagents/registry.ts";
 import { normalizeBranch } from "./transcript.ts";
+import { normalizeTree } from "./tree.ts";
 
 const internalCommand = /^(?:pimate|pimate-session)(?::.*)?$/i;
 
@@ -41,6 +42,13 @@ export function createHandlers(h: Hub): Handlers {
 	return {
 		hello: () => ({ snapshot: h.snapshot() }),
 		history: () => ({ session: h.session, items: normalizeBranch(ready().ctx.sessionManager.getBranch()) }),
+		session_tree: () => normalizeTree(ready().ctx.sessionManager),
+		set_label: (p) => {
+			const { pi, ctx } = ready();
+			if (!ctx.sessionManager.getEntry(p.entryId)) throw new RcError("not_found", "ラベルの対象が見つかりません");
+			pi.setLabel(p.entryId, p.label?.trim() || undefined);
+			return {};
+		},
 		prompt: (p) => {
 			if (/^\s*\/(?:pimate|pimate-session)(?::\S*)?(?:\s|$)/i.test(p.text))
 				throw new RcError("unsupported", "/pimate is PC TUI only");
@@ -109,8 +117,18 @@ export function createHandlers(h: Hub): Handlers {
 		},
 		session_op: (p) => {
 			const { pi, ctx } = ready();
-			if (!ctx.isIdle()) throw new RcError("busy");
-			pi.sendUserMessage(`/pimate-session ${JSON.stringify(p)}`, { expandPromptTemplates: true });
+			if (!ctx.isIdle() || h.treeNavigating) throw new RcError("busy");
+			if (p.op === "tree") {
+				if (!ctx.sessionManager.getEntry(p.arg!)) throw new RcError("not_found", "移動先が見つかりません");
+				h.treeNavigating = true;
+			}
+			try {
+				const command = p.op === "tree" ? { ...p, expectSessionId: ctx.sessionManager.getSessionId() } : p;
+				pi.sendUserMessage(`/pimate-session ${JSON.stringify(command)}`, { expandPromptTemplates: true });
+			} catch (error) {
+				h.treeNavigating = false;
+				throw error;
+			}
 			return {};
 		},
 		models: async () => {

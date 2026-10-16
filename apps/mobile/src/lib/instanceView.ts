@@ -57,6 +57,7 @@ export interface InstanceView {
 	instanceId: string;
 	phase: ViewPhase;
 	promptImages?: boolean;
+	sessionTree?: boolean;
 	slashCommands?: boolean;
 	error?: { code: string; message?: string };
 	cwd: string | null;
@@ -215,6 +216,7 @@ function applySubscribed(
 		session,
 		status: snapshot.status,
 		promptImages: snapshot.promptImages === true,
+		sessionTree: snapshot.sessionTree === true,
 		slashCommands: snapshot.slashCommands === true,
 		model: snapshot.model,
 		thinking: snapshot.thinking,
@@ -301,7 +303,7 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 				agentActive: event.status === "waiting_input" ? view.agentActive : event.status === "running",
 			};
 		case "session_changed": {
-			const showNotice = event.reason !== "startup" && event.reason !== "reload";
+			const showNotice = event.reason !== "startup" && event.reason !== "reload" && event.reason !== "tree";
 			return {
 				...view,
 				phase: "resyncing" as const,

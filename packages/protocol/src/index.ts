@@ -151,6 +151,25 @@ export interface SessionListItem {
 	current: boolean;
 }
 
+/** Bounded, display-only session tree. parentId skips hidden tool/state entries. */
+export interface SessionTreeItem {
+	id: string;
+	parentId: string | null;
+	kind: string;
+	preview: string;
+	label?: string;
+	timestamp?: number;
+	onBranch: boolean;
+	isCurrent: boolean;
+	isLeaf: boolean;
+}
+
+export interface SessionTree {
+	nodes: SessionTreeItem[];
+	leafId: string | null;
+	truncated: boolean;
+}
+
 export interface InstanceSnapshot {
 	/** PiMate package version; absent on pre-M5 RCs. */
 	version?: string;
@@ -168,6 +187,8 @@ export interface InstanceSnapshot {
 	agentActive?: boolean;
 	/** Explicit capability: older RCs ignore unknown prompt fields. Never send images without this. */
 	promptImages?: boolean;
+	/** Session tree read, navigation and labels. Absent on older RCs. */
+	sessionTree?: boolean;
 	/** RC command discovery, expansion and explicit command acknowledgements. */
 	slashCommands?: boolean;
 	model: ModelRef | null;
@@ -205,7 +226,7 @@ export interface InstanceMeta {
 
 export type InstanceEvent =
 	| { type: "status"; status: InstanceStatus }
-	| { type: "session_changed"; reason: "startup" | "reload" | "new" | "resume" | "fork"; session: SessionRef }
+	| { type: "session_changed"; reason: "startup" | "reload" | "new" | "resume" | "fork" | "tree"; session: SessionRef }
 	| { type: "session_info"; name?: string }
 	| { type: "agent_start" }
 	| { type: "agent_settled"; aborted: boolean }
@@ -226,7 +247,7 @@ export type InstanceEvent =
 	| { type: "notify"; message: string; level: "info" | "warning" | "error" }
 	/** Sent after each assistant message, compaction, model change and session change. */
 	| { type: "context"; context: ContextInfo | null }
-	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string }
+	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string; editorText?: string }
 	| { type: "compact_done" }
 	| { type: "compact_error"; error: string }
 	/** A subagent run was added or changed (replace by id). */
@@ -240,7 +261,7 @@ export type InstanceEventType = InstanceEvent["type"];
 
 // ---------------------------------------------------------------- methods (client -> RC)
 
-export type SessionOp = "new" | "switch" | "fork" | "reload";
+export type SessionOp = "new" | "switch" | "fork" | "reload" | "tree";
 
 export interface CommandInfo {
 	name: string;
@@ -271,7 +292,11 @@ export interface RcMethods {
 	set_model: { params: ModelRef; result: { model: ModelRef } };
 	compact: { params: { instructions?: string }; result: Record<string, never> };
 	/** Pi built-in session commands. Result arrives as a `session_op_done` event. */
-	session_op: { params: { op: SessionOp; arg?: string }; result: Record<string, never> };
+	session_op: { params: { op: SessionOp; arg?: string; summarize?: boolean }; result: Record<string, never> };
+	/** Current session, with bounded previews and node count. */
+	session_tree: { params: Record<string, never>; result: SessionTree };
+	/** Empty/omitted label removes the bookmark. */
+	set_label: { params: { entryId: string; label?: string }; result: Record<string, never> };
 	commands: { params: Record<string, never>; result: { commands: CommandInfo[] } };
 	/** `scoped`: Pi's scoped models (`enabledModels` / `/scoped-models`, the PiMate "favorites"); empty = no filter. */
 	models: {

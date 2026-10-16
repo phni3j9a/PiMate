@@ -29,7 +29,10 @@ describe("slash commands", () => {
 		expect(commandQuery(insertCommand("review"))).toBeNull();
 	});
 	it("includes only existing app operations and gives them precedence", () => {
-		expect(BUILTIN_COMMANDS.map((c) => c.name)).toEqual(["model", "new", "resume", "fork", "compact"]);
+		expect(BUILTIN_COMMANDS.map((c) => c.name)).toEqual(["model", "new", "resume", "fork", "compact", "tree"]);
+		// /tree only with the RC sessionTree capability.
+		expect(commandCatalog([]).some((c) => c.name === "tree")).toBe(false);
+		expect(commandCatalog([], true).some((c) => c.name === "tree")).toBe(true);
 		const catalog = commandCatalog([
 			...commands,
 			{ name: "model", source: "extension" },
@@ -38,8 +41,16 @@ describe("slash commands", () => {
 		expect(catalog.filter((c) => c.name === "review")).toEqual([commands[0]]);
 		expect(catalog.filter((c) => c.name === "model")).toEqual([BUILTIN_COMMANDS[0]]);
 		for (const c of BUILTIN_COMMANDS) {
-			expect(commandIntent(insertCommand(c.name), commands)).toEqual({ kind: "builtin", name: c.name, hasArgs: false });
-			expect(commandIntent(`/${c.name} ignored`, commands)).toEqual({ kind: "builtin", name: c.name, hasArgs: true });
+			expect(commandIntent(insertCommand(c.name), commands, true)).toEqual({
+				kind: "builtin",
+				name: c.name,
+				hasArgs: false,
+			});
+			expect(commandIntent(`/${c.name} ignored`, commands, true)).toEqual({
+				kind: "builtin",
+				name: c.name,
+				hasArgs: true,
+			});
 		}
 	});
 	it("recognizes exact names, aliases and arguments, never mistakes paths for commands", () => {

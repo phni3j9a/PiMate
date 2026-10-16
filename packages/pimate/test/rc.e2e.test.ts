@@ -168,6 +168,13 @@ it.skipIf(!pi || !abduco)(
 				() => events,
 				(e) => e.some((x) => x.event.type === "text_delta"),
 			);
+			await expect(
+				client.request(
+					"session_op",
+					{ op: "tree", arg: userImage.entryId, summarize: false },
+					{ expectSessionId: history.session!.id },
+				),
+			).rejects.toMatchObject({ code: "busy" });
 			expect(cli("abort", instanceId)).toEqual({});
 			await until(
 				() => events,
@@ -185,6 +192,39 @@ it.skipIf(!pi || !abduco)(
 						event.event.item.stopReason === "aborted",
 				),
 			).toBe(true);
+			// Tree navigation uses the real command context, without invoking an LLM summary.
+			expect((await client.request("hello", {})).snapshot.sessionTree).toBe(true);
+			const tree = await client.request("session_tree", {});
+			const target = tree.nodes.find((n) => n.kind === "user")!;
+			await client.request("set_label", { entryId: target.id, label: "bookmark" });
+			expect((await client.request("session_tree", {})).nodes.find((n) => n.id === target.id)?.label).toBe("bookmark");
+			await client.request("set_label", { entryId: target.id });
+			expect((await client.request("session_tree", {})).nodes.find((n) => n.id === target.id)?.label).toBeUndefined();
+			events.length = 0;
+			await client.request(
+				"session_op",
+				{ op: "tree", arg: target.id, summarize: false },
+				{ expectSessionId: abortedHistory.session!.id },
+			);
+			await until(
+				() => events,
+				(es) => es.some((e) => e.event.type === "session_op_done" && e.event.op === "tree"),
+			);
+			expect(events).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ event: expect.objectContaining({ type: "session_changed", reason: "tree" }) }),
+					expect.objectContaining({
+						event: expect.objectContaining({
+							type: "session_op_done",
+							op: "tree",
+							cancelled: false,
+							editorText: expect.stringContaining("say hello"),
+						}),
+					}),
+				]),
+			);
+			expect((await client.request("history", {})).items.some((item) => item.entryId === target.id)).toBe(false);
+			expect((await client.request("session_tree", {})).nodes.some((n) => n.id === target.id)).toBe(true);
 			const before = (await client.request("hello", {})).snapshot;
 			expect(before.status).toBe("idle");
 			for (const op of ["new", "reload"] as const) {

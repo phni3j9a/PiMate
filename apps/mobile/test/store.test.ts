@@ -1192,6 +1192,104 @@ describe("parent image drafts", () => {
 	});
 });
 
+describe("session tree", () => {
+	async function ready(status: "idle" | "running" = "idle") {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", status, { sessionTree: true }));
+		return { store, s, target: store.opTarget()! };
+	}
+
+	it("hides the capability for old RCs and refuses tree methods without it", async () => {
+		const { store } = await setup();
+		const s = connect();
+		expect(store.getState().view?.sessionTree).toBe(false);
+		expect(await store.sessionTree(store.opTarget()!)).toMatchObject({ ok: false, title: "未対応です" });
+		expect(opRcs(s)).toHaveLength(0);
+	});
+
+	it("guards read, navigation and label requests with the displayed session, and rejects stale results", async () => {
+		const { store, s, target } = await ready();
+		const read = store.sessionTree(target);
+		let rc = opRcs(s).at(-1);
+		expect(rc.request).toMatchObject({ method: "session_tree", expectInstanceId: "i1", expectSessionId: "s1" });
+		rcReply(s, rc.request.id, true, { nodes: [], leafId: "leaf", truncated: true });
+		expect(await read).toEqual({ ok: true, value: { nodes: [], leafId: "leaf", truncated: true } });
+		const label = store.setTreeLabel(target, "u", "bookmark");
+		rc = opRcs(s).at(-1);
+		expect(rc.request).toMatchObject({
+			method: "set_label",
+			params: { entryId: "u", label: "bookmark" },
+			expectSessionId: "s1",
+		});
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }, "s2"));
+		rcReply(s, rc.request.id, true);
+		expect(await label).toMatchObject({ ok: false, code: "session_changed" });
+		expect(await store.navigateTree(target, "u", false)).toMatchObject({ ok: false, title: "会話が変わりました" });
+	});
+
+	it.each(["", "existing draft"])(
+		"resyncs after tree navigation and restores text only into an empty draft (%s)",
+		async (draft) => {
+			const { store, s, target } = await ready();
+			store.setDraft(draft);
+			const move = store.navigateTree(target, "u", true);
+			const rc = opRcs(s).at(-1);
+			expect(rc.request).toMatchObject({
+				method: "session_op",
+				params: { op: "tree", arg: "u", summarize: true },
+				expectSessionId: "s1",
+			});
+			rcReply(s, rc.request.id, true);
+			await move;
+			expect(store.getState().op?.kind).toBe("tree");
+			s.receive(event(6, { type: "session_changed", reason: "tree", session: { id: "s1" } }));
+			expect(store.getState().view?.phase).toBe("resyncing");
+			expect(store.getState().view?.sessionNotice).toBeNull();
+			expect(store.getState().targetChanged).toBeNull();
+			expect(s.sentOfType("subscribe").length).toBeGreaterThan(1);
+			s.receive(event(7, { type: "session_op_done", op: "tree", cancelled: false, editorText: "complete user text" }));
+			expect(store.getState().op).toBeNull();
+			expect(store.getState().drafts["h1/i1"]).toBe(draft || "complete user text");
+			s.receive(subscribedMsg([], "s1", "idle", { seq: 8, sessionTree: true }));
+			expect(store.getState().view?.phase).toBe("ready");
+			expect(store.getState().notice?.text).toContain("移動しました");
+		},
+	);
+
+	it("rejects moving during a run without sending", async () => {
+		const { store, s, target } = await ready("running");
+		expect(await store.navigateTree(target, "u", false)).toMatchObject({ ok: false, title: "実行中は移動できません" });
+		expect(opRcs(s)).toHaveLength(0);
+	});
+
+	it.each([{ cancelled: true }, { cancelled: true, error: "summary failed" }])(
+		"finishes cancelled/failed moves and reports them",
+		async (result) => {
+			const { store, s, target } = await ready();
+			const move = store.navigateTree(target, "u", false);
+			rcReply(s, opRcs(s).at(-1).request.id, true);
+			await move;
+			s.receive(event(6, { type: "session_op_done", op: "tree", ...result }));
+			expect(store.getState().op).toBeNull();
+			expect(store.getState().notice?.text).toContain("error" in result ? "summary failed" : "取り消されました");
+			expect(store.getState().drafts["h1/i1"] ?? "").toBe("");
+		},
+	);
+
+	it("never restores tree text into a different session after a PC switch", async () => {
+		const { store, s, target } = await ready();
+		const move = store.navigateTree(target, "u", false);
+		rcReply(s, opRcs(s).at(-1).request.id, true);
+		await move;
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }, "s2"));
+		s.receive(event(7, { type: "session_op_done", op: "tree", cancelled: false, editorText: "old text" }, "s1"));
+		expect(store.getState().drafts["h1/i1"] ?? "").toBe("");
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice?.kind).toBe("error");
+	});
+});
+
 describe("slash command sending and catalogs", () => {
 	const catalog = [
 		{ name: "hello", source: "extension" },
@@ -1277,6 +1375,18 @@ describe("slash command sending and catalogs", () => {
 			event: { type: "agent_settled", aborted: false },
 		});
 		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("opens the session tree for /tree only when the RC supports it", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
+		s.receive(subscribedMsg(store.getState().view!.items, "s1", "idle", { slashCommands: true, sessionTree: true }));
+		reply(s, "commands", { commands: catalog });
+		await flush();
+		store.setDraft("/tree");
+		expect(await store.send()).toBe("tree");
+		expect(store.getState().drafts["h1/i1"]).toBe("");
+		expect(rcs(s, "prompt")).toEqual([]);
 	});
 
 	it("blocks unknown command tokens without changing drafts or sending to the model", async () => {

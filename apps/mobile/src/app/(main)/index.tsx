@@ -302,6 +302,7 @@ export default function ChatScreen() {
 									)
 										return;
 									if (action === "model") setSheet("model");
+									else if (action === "tree") router.push("/tree");
 									else if (action === "resume" || action === "fork") {
 										setSessionPage(action === "resume" ? "sessions" : "fork");
 										setSheet("session");
@@ -338,6 +339,7 @@ export default function ChatScreen() {
 								<CommandPalette
 									draft={draft}
 									catalog={key ? commands[key] : undefined}
+									tree={view.sessionTree === true}
 									onSelect={(text) => appStore.setDraft(text)}
 									onRetry={() => void appStore.loadCommands(true)}
 								/>

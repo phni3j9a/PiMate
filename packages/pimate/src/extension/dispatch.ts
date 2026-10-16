@@ -21,6 +21,8 @@ const methods = [
 	"set_model",
 	"compact",
 	"session_op",
+	"session_tree",
+	"set_label",
 	"commands",
 	"models",
 	"set_scoped_models",
@@ -80,8 +82,12 @@ export function validateRequest(value: unknown): Request {
 		case "session_op":
 			ok =
 				typeof p.op === "string" &&
-				["new", "switch", "fork", "reload"].includes(p.op) &&
-				str("arg", ["switch", "fork"].includes(p.op));
+				["new", "switch", "fork", "reload", "tree"].includes(p.op) &&
+				str("arg", ["switch", "fork", "tree"].includes(p.op)) &&
+				bool("summarize");
+			break;
+		case "set_label":
+			ok = str("entryId", true) && str("label") && (p.label === undefined || (p.label as string).length <= 200);
 			break;
 		case "subagent_transcript":
 			ok = str("runId", true) && str("childId", true) && str("cursor");
