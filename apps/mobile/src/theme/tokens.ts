@@ -2,10 +2,12 @@
  * PiMate design tokens.
  *
  * Transcribed from the design mock: docs/design/mock/Tokens.dc.html (renderVals) and the
- * inline styles of the screen mocks (docs/design/mock/*.dc.html). Light theme only (docs/SPEC.md §1).
- * Separate areas with surface tone and spacing, not lines or shadows.
+ * inline styles of the screen mocks (docs/design/mock/*.dc.html). The dark palette keeps the same roles and
+ * the same rule: separate areas with surface tone and spacing, not lines or shadows.
  */
-export const colors = {
+import { Appearance } from "react-native";
+
+const light = {
 	/** 背景: every full screen (drawer, settings, sheets too). */
 	background: "#FFFFFF",
 	/** 塗り: input fields, code blocks, question cards. */
@@ -52,7 +54,48 @@ export const colors = {
 
 	/** Switch track off / sheet grabber (Settings, Sheet-* mocks). */
 	control: "#D3D9DC",
-} as const;
+	/** Dim layer behind sheets and the drawer. */
+	scrim: "rgba(31, 35, 38, 0.32)",
+};
+
+const dark: typeof light = {
+	background: "#131618",
+	surface: "#1E2326",
+	surfaceStrong: "#2A3034",
+	selected: "#233844",
+
+	text: "#E4E8EA",
+	textSecondary: "#9AA5AA",
+	textCode: "#C3CBCF",
+	textTertiary: "#6D777C",
+
+	accent: "#2C7DA5",
+	accentText: "#7CBEDE",
+	onAccent: "#FFFFFF",
+
+	statusWaiting: "#E1AD42",
+	statusWaitingText: "#E9C47E",
+	statusFailed: "#E37769",
+	statusFailedText: "#F09C91",
+	statusDone: "#4D9ABF",
+	statusIdle: "#9AA5AA",
+	statusIdleOpacity: 0.5,
+
+	diffAddBackground: "#16313F",
+	diffAddText: "#9DCCE4",
+	diffDelBackground: "#3A2421",
+	diffDelText: "#F09C91",
+
+	control: "#3B4246",
+	scrim: "rgba(0, 0, 0, 0.55)",
+};
+
+/**
+ * Follows the system theme as of launch. Styles are module-level StyleSheets, so a change while the app runs
+ * applies on the next launch. shortcut: launch-time only; move styles into hooks if live switching is needed.
+ */
+export const scheme: "light" | "dark" = Appearance.getColorScheme() === "dark" ? "dark" : "light";
+export const colors = scheme === "dark" ? dark : light;
 
 /**
  * Monospace family for code, paths and commands: JetBrains Mono, as in the mock. Loaded in the root layout
@@ -72,8 +115,8 @@ export const typography = {
 	sheetTitle: { fontSize: 17, fontWeight: "600", lineHeight: lineHeight(17) },
 	/** ヘッダーのタイトル 15 / 600 (header uses a 22px line box in the mock) */
 	headerTitle: { fontSize: 15, fontWeight: "600", lineHeight: 22 },
-	/** 本文・メッセージ 14 / 400 */
-	body: { fontSize: 14, fontWeight: "400", lineHeight: lineHeight(14) },
+	/** 本文・メッセージ 15 / 400 */
+	body: { fontSize: 15, fontWeight: "400", lineHeight: lineHeight(15) },
 	/** 補足・ターンの要約 12 / 400 */
 	caption: { fontSize: 12, fontWeight: "400", lineHeight: lineHeight(12) },
 	/** メタ情報・バッジ 11 / 400 */

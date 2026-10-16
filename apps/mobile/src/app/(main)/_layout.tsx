@@ -19,7 +19,7 @@ export default function MainLayout() {
 				drawerType: "front",
 				// Drawer.html: 330 of 390 px, the dimmed chat stays visible on the right.
 				drawerStyle: { width: Math.min(Math.round(width * 0.846), 360), backgroundColor: colors.background },
-				overlayColor: "rgba(16, 24, 28, 0.30)",
+				overlayColor: colors.scrim,
 				overlayAccessibilityLabel: "一覧を閉じる",
 				swipeEdgeWidth: 48,
 				sceneStyle: { backgroundColor: colors.background },

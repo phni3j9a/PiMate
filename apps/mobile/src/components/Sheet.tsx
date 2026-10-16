@@ -83,7 +83,7 @@ function useKeyboardHeight(active: boolean): number {
 
 const styles = StyleSheet.create({
 	root: { flex: 1, justifyContent: "flex-end" },
-	backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(31, 35, 38, 0.32)" },
+	backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.scrim },
 	panel: {
 		backgroundColor: colors.background,
 		borderTopLeftRadius: radii.sheet,
