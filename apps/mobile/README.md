@@ -131,6 +131,7 @@ npx expo start        # apps/mobile で実行
 ```bash
 node apps/mobile/scripts/dev-fake-host.mjs --port 47800   # ペアリング用リンクとExpo Go用ディープリンクを表示
 adb reverse tcp:47800 tcp:47800
+# スマホから「md」で始まるメッセージを送ると Markdown の見本（見出し・リスト・表・引用・コード）を返す
 curl -X POST http://127.0.0.1:47800/_dev/turn             # PCで打ったときの1ターンを再生（read / edit / write / bash。drop / offline?s=20 なども）
 curl -X POST "http://127.0.0.1:47800/_dev/ask?kind=select" # 質問を出す（select / confirm / input / editor）。answered で PC 側の回答
 curl -X POST http://127.0.0.1:47800/_dev/custom            # PC でしか操作できない画面（?end=1 で終了）
