@@ -69,7 +69,8 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 					{copied ? <CheckIcon size={16} /> : <CopyIcon size={16} color={colors.textSecondary} />}
 				</IconButton>
 			</View>
-			<Text style={styles.codeText}>{text}</Text>
+			{/* Tabs render about one space wide on Android, which flattens indentation. */}
+			<Text style={styles.codeText}>{text.replaceAll("\t", "  ")}</Text>
 		</View>
 	);
 }
