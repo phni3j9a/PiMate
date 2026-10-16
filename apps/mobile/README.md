@@ -1,6 +1,6 @@
 # PiMate mobile
 
-Expo（SDK 57、expo-router）のアプリです。Android優先で作っています。見た目は [docs/design/](../../docs/design/README.md) のモックに合わせます。
+Expo（SDK 57、expo-router）のアプリです。Android優先で作っています。見た目は [docs/design/](../../docs/design/README.md) のモックに合わせます。ライト / ダークは起動時の OS の設定に従います（起動中に OS 側で切り替えた場合は次の起動から。[#23](https://github.com/phni3j9a/PiMate/issues/23)）。ダークも色の役割は同じで、線や影ではなく面の濃淡で区切ります。本文は 15px です。
 
 ## できること
 
@@ -51,10 +51,6 @@ M5c（アプリ / Host 0.1.1）:
 - 古い Host ではチャットのみ。通知のためには PC パッケージを更新し Host を再起動してください。
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
-
-UI/UX 改善（[#23](https://github.com/phni3j9a/PiMate/issues/23)）:
-
-- ダークモード: 起動時の OS の設定に従う（アプリの起動中に OS 側で切り替えた場合は次の起動から）。色の役割はライトと同じで、線や影ではなく面の濃淡で区切る。本文は 15px
 
 今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
 
