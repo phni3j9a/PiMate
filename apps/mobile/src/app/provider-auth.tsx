@@ -227,7 +227,7 @@ function FlowPanel({
 		setValue("");
 		void controller.respond(trimmed);
 	};
-	const title = `${PROVIDERS[flow.provider]} · ${methodLabel(flow.provider, flow.method)}`;
+	const title = `${PROVIDERS[flow.provider]} · ${flow.method === "api_key" ? "API キー" : "ログイン"}`;
 	const done = !flowActive(flow);
 	const open = url
 		? () => {

@@ -115,9 +115,11 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 		expect(output).not.toContain("FAKE_SECRET");
 	} finally {
 		connection?.stop();
-		const exited = once(child, "exit");
-		child.kill("SIGTERM");
-		await exited;
+		if (child.pid && child.exitCode === null && child.signalCode === null) {
+			const exited = once(child, "exit");
+			child.kill("SIGTERM");
+			await exited;
+		}
 		await rm(dir, { recursive: true, force: true });
 	}
 }, 10000);
