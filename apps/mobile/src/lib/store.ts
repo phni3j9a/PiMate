@@ -23,6 +23,7 @@ import type {
 	SubagentTranscript,
 	ThinkingLevel,
 } from "@pimate/protocol";
+import { MAX_IMAGE_PROMPT_TEXT, type PromptImage, samePromptImages, validPromptImages } from "@pimate/protocol";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
 import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
 import {
@@ -54,6 +55,7 @@ export type OutboxState = "sending" | "delivered" | "queued" | "unconfirmed";
 export interface OutboxEntry {
 	id: string;
 	text: string;
+	images?: PromptImage[];
 	state: OutboxState;
 	deliveredAs?: "prompt" | "steer" | "followUp";
 	/** User entryIds present when the message was sent. */
@@ -77,6 +79,8 @@ export interface AppState {
 	selection: Selection | null;
 	view: InstanceView | null;
 	drafts: Record<string, string>;
+	/** In-memory image drafts, like text drafts; never persisted or automatically re-sent. */
+	attachments: Record<string, PromptImage[]>;
 	/** Sends of the selected instance that are not (yet) visible in the transcript. */
 	outbox: OutboxEntry[];
 	notice: ChatNotice | null;
@@ -143,7 +147,9 @@ export type SendBlocker =
 	| "target_changed"
 	| "dialog"
 	| "pc_prompt"
-	| "empty";
+	| "empty"
+	| "images_unsupported"
+	| "image_text_limit";
 
 export interface StoreDeps {
 	onAlert?: (hostId: string, alert: PiAlert) => void;
@@ -217,7 +223,11 @@ function rcErrorText(code: string, message?: string, notDone = "送信しませ�
 				text: "Pi が受け付けられない状態でした。少し待ってからお試しください。",
 			};
 		case "unsupported":
-			return { kind: "error", title: notDone, text: "この Pi（Remote Control）はこの操作に対応していません。" };
+			return {
+				kind: "error",
+				title: notDone,
+				text: message || "この Pi（Remote Control）はこの操作に対応していません。",
+			};
 		default:
 			return {
 				kind: "error",
@@ -239,6 +249,7 @@ export class AppStore {
 		selection: null,
 		view: null,
 		drafts: {},
+		attachments: {},
 		outbox: [],
 		notice: null,
 		targetChanged: null,
@@ -568,7 +579,7 @@ export class AppStore {
 				(this.phoneSwitch?.key === key &&
 					this.phoneSwitch.fromSessionId === view.session?.id &&
 					this.phoneSwitch.toSessionId === next.session?.id);
-			const draft = this.state.drafts[key]?.trim();
+			const draft = this.state.drafts[key]?.trim() || this.state.attachments[key]?.length;
 			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
@@ -672,26 +683,36 @@ export class AppStore {
 		if (!view || !selection || !outbox.length) return;
 		const key = draftKey(selection);
 		let drafts = this.state.drafts;
+		let attachments = this.state.attachments;
 		let notice = this.state.notice;
 		const remaining: OutboxEntry[] = [];
 		for (const entry of outbox) {
 			if (
 				entry.state !== "sending" &&
 				view.session?.id === entry.sessionId &&
-				findDeliveredUserItem(view, entry.text, entry.known)
+				findDeliveredUserItem(view, entry.text, entry.known, entry.images)
 			) {
 				if (entry.state === "unconfirmed") {
-					if (sameText(drafts[key], entry.text)) drafts = { ...drafts, [key]: "" };
+					if (sameText(drafts[key], entry.text) && samePromptImages(attachments[key], entry.images)) {
+						drafts = { ...drafts, [key]: "" };
+						attachments = { ...attachments, [key]: [] };
+					}
 					if (notice?.kind === "unconfirmed") notice = null;
 				}
 				continue;
 			}
 			if (entry.state === "unconfirmed" && afterResync)
-				notice = { kind: "unconfirmed", title: "届いたか未確認", text: UNCONFIRMED_AFTER_SYNC };
+				notice = {
+					kind: "unconfirmed",
+					title: "届いたか未確認",
+					text: entry.images?.length
+						? "画像はPiで変換される場合があり、履歴と自動照合できませんでした。履歴を確認してください（自動で再送しません）。"
+						: UNCONFIRMED_AFTER_SYNC,
+				};
 			remaining.push(entry);
 		}
 		if (remaining.length !== outbox.length || drafts !== this.state.drafts || notice !== this.state.notice)
-			this.set({ outbox: remaining, drafts, notice });
+			this.set({ outbox: remaining, drafts, attachments, notice });
 	}
 
 	// ------------------------------------------------------------ composer
@@ -700,6 +721,23 @@ export class AppStore {
 		const sel = this.state.selection;
 		if (!sel) return;
 		this.set({ drafts: { ...this.state.drafts, [draftKey(sel)]: text } });
+	}
+
+	/** Reject a picker result if its original destination is no longer open. */
+	setImages(images: PromptImage[], target: OpTarget): boolean {
+		const current = this.opTarget();
+		if (
+			!current ||
+			!validPromptImages(images) ||
+			current.hostId !== target.hostId ||
+			current.instanceId !== target.instanceId ||
+			current.sessionId !== target.sessionId ||
+			this.state.view?.phase !== "ready"
+		)
+			return false;
+		const key = draftKey(current);
+		this.set({ attachments: { ...this.state.attachments, [key]: images } });
+		return true;
 	}
 
 	dismissNotice(): void {
@@ -722,7 +760,10 @@ export class AppStore {
 		// Pi is waiting on a question: answer it first (in the chat, or on the PC).
 		if (view.pendingUI.length) return "dialog";
 		if (view.uiPrompt) return "pc_prompt";
-		if (!drafts[draftKey(selection)]?.trim()) return "empty";
+		const images = this.state.attachments[draftKey(selection)] ?? [];
+		if (images.length && view.promptImages !== true) return "images_unsupported";
+		if (images.length && (drafts[draftKey(selection)]?.length ?? 0) > MAX_IMAGE_PROMPT_TEXT) return "image_text_limit";
+		if (!drafts[draftKey(selection)]?.trim() && !images.length) return "empty";
 		return null;
 	}
 
@@ -733,10 +774,12 @@ export class AppStore {
 		if (!conn) return;
 		const key = draftKey(selection);
 		const text = (this.state.drafts[key] ?? "").replace(/\s+$/, "");
+		const images = this.state.attachments[key] ?? [];
 		const id = this.deps.randomUUID();
 		const entry: OutboxEntry = {
 			id,
 			text,
+			...(images.length ? { images } : {}),
 			state: "sending",
 			known: userEntryIds(view),
 			sessionId: view.session?.id,
@@ -747,7 +790,11 @@ export class AppStore {
 		const request: Request<"prompt"> = {
 			id,
 			method: "prompt",
-			params: { text, ...(view.status !== "idle" && deliverAs ? { deliverAs } : {}) },
+			params: {
+				text,
+				...(images.length ? { images } : {}),
+				...(view.status !== "idle" && deliverAs ? { deliverAs } : {}),
+			},
 			expectInstanceId: selection.instanceId,
 			...(view.session ? { expectSessionId: view.session.id } : {}),
 		};
@@ -762,7 +809,33 @@ export class AppStore {
 		}
 		if (res.ok) {
 			const deliveredAs = (res.result as { deliveredAs?: OutboxEntry["deliveredAs"] }).deliveredAs ?? "prompt";
-			this.finishSend(key, id, { clearDraft: text, deliveredAs });
+			const showImageReceipt =
+				images.length > 0 &&
+				this.isCurrent(key) &&
+				this.state.view?.session?.id === entry.sessionId &&
+				this.state.outbox.some((e) => e.id === id && e.state === "sending");
+			// Pi may resize/re-encode images and add dimension hints before persisting the user entry.
+			// An ACK confirms acceptance, not an identical future transcript item: never keep a duplicate bubble.
+			this.finishSend(key, id, {
+				clearDraft: text,
+				clearImages: images,
+				deliveredAs,
+				...(images.length ? { remove: true } : {}),
+				...(showImageReceipt
+					? {
+							notice: {
+								kind: "info" as const,
+								title: "画像付きメッセージを受け付けました",
+								text:
+									deliveredAs === "steer"
+										? "割り込みとして受け付けました。反映は履歴で確認してください。"
+										: deliveredAs === "followUp"
+											? "完了後に送る依頼として受け付けました。反映は履歴で確認してください。"
+											: "履歴に反映されるまでお待ちください。",
+							},
+						}
+					: {}),
+			});
 			// The subagent summary of finished runs ends with the next prompt (also when it is queued).
 			const v = this.state.view;
 			if (v && this.isCurrent(key)) {
@@ -788,7 +861,13 @@ export class AppStore {
 		if (!this.isCurrent(key)) return;
 		this.set({
 			outbox: this.state.outbox.map((e) => (e.id === id ? { ...e, state: "unconfirmed" as const } : e)),
-			notice: { kind: "unconfirmed", title: "届いたか未確認", text: "再接続したら確認します（自動で再送しません）" },
+			notice: {
+				kind: "unconfirmed",
+				title: "届いたか未確認",
+				text: this.state.outbox.find((e) => e.id === id)?.images?.length
+					? "Piが画像を変換する場合があり、自動では確認できないことがあります。履歴を確認してください（自動で再送しません）。"
+					: "再接続したら確認します（自動で再送しません）",
+			},
 		});
 	}
 
@@ -804,14 +883,23 @@ export class AppStore {
 			remove?: boolean;
 			notice?: ChatNotice;
 			clearDraft?: string;
+			clearImages?: PromptImage[];
 			deliveredAs?: OutboxEntry["deliveredAs"];
 			targetChanged?: boolean;
 		},
 	): void {
 		let drafts = this.state.drafts;
-		if (opts.clearDraft !== undefined && sameText(drafts[key], opts.clearDraft)) drafts = { ...drafts, [key]: "" };
+		let attachments = this.state.attachments;
+		if (
+			opts.clearDraft !== undefined &&
+			sameText(drafts[key], opts.clearDraft) &&
+			samePromptImages(attachments[key], opts.clearImages)
+		) {
+			drafts = { ...drafts, [key]: "" };
+			attachments = { ...attachments, [key]: [] };
+		}
 		if (!this.isCurrent(key)) {
-			this.set({ drafts });
+			this.set({ drafts, attachments });
 			return;
 		}
 		const outbox = opts.remove
@@ -825,7 +913,7 @@ export class AppStore {
 							}
 						: e,
 				);
-		const patch: Partial<AppState> = { drafts, outbox };
+		const patch: Partial<AppState> = { drafts, attachments, outbox };
 		if (opts.notice) patch.notice = opts.notice;
 		if (opts.targetChanged) {
 			const view = this.state.view;

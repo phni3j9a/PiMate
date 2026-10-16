@@ -5,7 +5,15 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export default function fixture(pi: ExtensionAPI): void {
 	const faux = fauxProvider({
 		provider: "pimate-faux",
-		models: [{ id: "scripted", name: "PiMate test model" }],
+		models: [
+			{
+				id: "scripted",
+				name: "PiMate test model",
+				...(process.env.PIMATE_E2E_IMAGE_RESIZE
+					? { inputLimits: { images: { resize: { maxWidth: 1024, maxHeight: 1024 } } } }
+					: {}),
+			},
+		],
 		tokensPerSecond: 80,
 		tokenSize: { min: 1, max: 1 },
 	});

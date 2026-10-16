@@ -913,3 +913,281 @@ it("leaving the notification screen during validation does not change selection"
 	expect(store.getState().selection?.instanceId).toBe("i1");
 	store.dispose();
 });
+
+describe("parent image drafts", () => {
+	const image = { type: "image", mimeType: "image/jpeg", data: "YQ==" } as const;
+	const other = { ...image, data: "Yg==" };
+	function attach(store: AppStore, images = [image]) {
+		expect(store.setImages(images, store.opTarget()!)).toBe(true);
+	}
+	function result(s: FakeSocket, ok: boolean, value: Record<string, unknown>) {
+		const id = opRcs(s).at(-1).request.id;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id, ok, ...(ok ? { result: value } : { error: value }) },
+		});
+	}
+	it("sends image-only with guards, clears only on success and never inserts history optimistically", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		expect(store.sendBlocker()).toBeNull();
+		const pending = store.send();
+		expect(opRcs(s)[0].request).toMatchObject({
+			params: { text: "", images: [image] },
+			expectSessionId: "s1",
+			expectInstanceId: "i1",
+		});
+		expect(store.getState().view?.items).toEqual([]);
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		result(s, true, { deliveredAs: "prompt" });
+		await pending;
+		expect(store.getState().attachments["h1/i1"]).toEqual([]);
+		expect(store.getState().outbox).toEqual([]);
+		expect(store.getState().notice?.title).toBe("画像付きメッセージを受け付けました");
+		expect(store.getState().view?.items).toEqual([]);
+		s.receive(
+			subscribedMsg([{ kind: "user", entryId: "actual", text: "", images: [image], imageCount: 1 }], "s1", "idle", {
+				promptImages: true,
+			}),
+		);
+		expect(store.getState().outbox).toEqual([]);
+	});
+	it.each(["steer", "followUp"] as const)("queues image+text while busy (%s)", async (mode) => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
+		store.setDraft("look");
+		attach(store);
+		const pending = store.send(mode);
+		expect(opRcs(s)[0].request.params).toEqual({ text: "look", images: [image], deliverAs: mode });
+		result(s, true, { deliveredAs: mode });
+		await pending;
+		expect(store.getState().outbox).toEqual([]);
+		expect(store.getState().notice?.text).toContain(mode === "steer" ? "割り込み" : "完了後");
+	});
+	it.each(["invalid_request", "session_changed"])("retains the complete draft on %s", async (code) => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		store.setDraft("look");
+		attach(store);
+		const pending = store.send();
+		result(s, false, { code, message: "rejected" });
+		await pending;
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		expect(store.getState().drafts["h1/i1"]).toBe("look");
+		expect(store.getState().outbox).toEqual([]);
+		expect(opRcs(s)).toHaveLength(1);
+	});
+	it("requires exactly true capability; old RC cannot silently discard images, but text still sends", async () => {
+		const { store } = await setup();
+		const s = connect();
+		attach(store);
+		for (const promptImages of [undefined, false, "true"]) {
+			s.receive(subscribedMsg([], "s1", "idle", { promptImages }));
+			expect(store.sendBlocker()).toBe("images_unsupported");
+			await store.send();
+		}
+		expect(opRcs(s)).toEqual([]);
+		attach(store, []);
+		store.setDraft("text only");
+		const pending = store.send();
+		expect(opRcs(s)[0].request.params).toEqual({ text: "text only" });
+		result(s, true, {});
+		await pending;
+	});
+	it("bounds text only when images are attached", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		store.setDraft("x".repeat(32769));
+		expect(store.sendBlocker()).toBe("image_text_limit");
+		store.setDraft("x".repeat(32768));
+		expect(store.sendBlocker()).toBeNull();
+		attach(store, []);
+		store.setDraft("x".repeat(32769));
+		expect(store.sendBlocker()).toBeNull();
+	});
+	it.each(["image", "text"])("preserves the entire edited draft after a late success (%s changed)", async (changed) => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		store.setDraft("sent");
+		attach(store);
+		const pending = store.send();
+		if (changed === "image") expect(store.setImages([other], store.opTarget()!)).toBe(true);
+		else store.setDraft("edited");
+		result(s, true, { deliveredAs: "prompt" });
+		await pending;
+		expect(store.getState().drafts["h1/i1"]).toBe(changed === "image" ? "sent" : "edited");
+		expect(store.getState().attachments["h1/i1"]).toEqual([changed === "image" ? other : image]);
+	});
+	it("retains unknown drafts, matches exact images not text alone, and never automatically resends", async () => {
+		vi.useFakeTimers();
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		const pending = store.send();
+		s.drop();
+		await pending;
+		expect(store.getState().outbox).toMatchObject([{ state: "unconfirmed", images: [image] }]);
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		vi.advanceTimersByTime(1200);
+		const next = FakeSocket.last();
+		authenticate(next, [instance("i1")]);
+		const wrong: TranscriptItem = { kind: "user", entryId: "different", text: "", images: [other], imageCount: 1 };
+		next.receive(subscribedMsg([wrong], "s1", "idle", { promptImages: true }));
+		expect(store.getState().outbox).toHaveLength(1);
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		expect(opRcs(next)).toEqual([]);
+		next.receive(
+			subscribedMsg(
+				[wrong, { kind: "user", entryId: "actual", text: "", images: [image], imageCount: 1 }],
+				"s1",
+				"idle",
+				{ promptImages: true },
+			),
+		);
+		expect(store.getState().outbox).toEqual([]);
+		expect(store.getState().attachments["h1/i1"]).toEqual([]);
+		expect(opRcs(next)).toEqual([]);
+	});
+	it("requires confirmation for an image-only draft after a session change and rejects a stale picker", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		const target = store.opTarget()!;
+		attach(store);
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s2",
+			seq: 6,
+			event: { type: "session_changed", reason: "resume", session: { id: "s2", name: "other" } },
+		});
+		expect(store.getState().targetChanged).toEqual({ to: "other" });
+		expect(store.setImages([other], target)).toBe(false);
+		s.receive(subscribedMsg([], "s2", "idle", { promptImages: true }));
+		expect(store.sendBlocker()).toBe("target_changed");
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		expect(store.setImages([other], target)).toBe(false);
+		const current = store.opTarget()!;
+		store.select("h1", "i0");
+		expect(store.setImages([other], current)).toBe(false);
+	});
+	it("explains unsupported image models without blaming the RC", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		const pending = store.send();
+		const id = opRcs(s)[0].request.id;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: {
+				type: "response",
+				id,
+				ok: false,
+				error: { code: "unsupported", message: "このモデルは画像を扱えません。画像対応モデルを選んでください" },
+			},
+		});
+		await pending;
+		expect(store.getState().notice?.text).toContain("画像対応モデルを選んでください");
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+	});
+	it("renders only the authoritative re-encoded image and dimension hints after an ACK", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		store.setDraft("look");
+		attach(store);
+		const pending = store.send();
+		result(s, true, { deliveredAs: "prompt" });
+		await pending;
+		const normalized: TranscriptItem = {
+			kind: "user",
+			entryId: "normalized",
+			text: "look\n[Image #1: original 1600x900, resized to 1024x576.]",
+			images: [{ ...image, mimeType: "image/png", data: "Yg==" }],
+			imageCount: 1,
+		};
+		s.receive(subscribedMsg([normalized], "s1", "idle", { promptImages: true }));
+		expect(store.getState().outbox).toEqual([]);
+		expect(store.getState().view?.items).toEqual([normalized]);
+		expect(store.getState().attachments["h1/i1"]).toEqual([]);
+	});
+	it("retains an uncertain image draft when Pi has transformed it, without guessing or resending", async () => {
+		vi.useFakeTimers();
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		const pending = store.send();
+		s.drop();
+		await pending;
+		vi.advanceTimersByTime(1200);
+		const next = FakeSocket.last();
+		authenticate(next, [instance("i1")]);
+		next.receive(
+			subscribedMsg(
+				[{ kind: "user", entryId: "normalized", text: "[Image resized]", images: [other], imageCount: 1 }],
+				"s1",
+				"idle",
+				{ promptImages: true },
+			),
+		);
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		expect(store.getState().outbox).toMatchObject([{ state: "unconfirmed" }]);
+		expect(store.getState().notice?.text).toContain("履歴を確認");
+		expect(opRcs(next)).toEqual([]);
+	});
+	it("does not show an old image receipt in another session", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		const pending = store.send();
+		const id = opRcs(s).at(-1).request.id;
+		s.receive(subscribedMsg([], "s2", "idle", { promptImages: true }));
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id, ok: true, result: { deliveredAs: "prompt" } },
+		});
+		await pending;
+		expect(store.getState().view?.session?.id).toBe("s2");
+		expect(store.getState().notice).toBeNull();
+		expect(store.getState().outbox).toEqual([]);
+	});
+	it("does not overwrite a newer error with an old image ACK after leaving and returning", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		attach(store);
+		const old = store.send();
+		const oldId = opRcs(s).at(-1).request.id;
+		store.select("h1", "i0");
+		store.select("h1", "i1");
+		s.receive(subscribedMsg([], "s1", "idle", { promptImages: true }));
+		store.setDraft("new request");
+		const newer = store.send();
+		result(s, false, { code: "unsupported", message: "画像対応モデルを選んでください" });
+		await newer;
+		const error = store.getState().notice;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: oldId, ok: true, result: { deliveredAs: "prompt" } },
+		});
+		await old;
+		expect(store.getState().notice).toEqual(error);
+		expect(store.getState().notice?.text).toContain("画像対応モデル");
+		expect(store.getState().drafts["h1/i1"]).toBe("new request");
+	});
+});

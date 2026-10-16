@@ -200,3 +200,15 @@ describe("transcript rows", () => {
 		expect(rows[1].marginTop).toBe(28);
 	});
 });
+
+it("keeps image-only rows and accurate placeholders through folding and spacing", () => {
+	const images = [{ type: "image", mimeType: "image/jpeg", data: "YQ==" }] as const;
+	const view = viewWith([
+		{ kind: "user", entryId: "image", text: "", images: [...images], imageCount: 1 },
+		{ kind: "assistant", entryId: "answer", text: "done", toolCalls: [] },
+		{ kind: "user", entryId: "unsupported", text: "keep me", imageCount: 2 },
+	]);
+	const rows = spaceRows(visibleRows(buildRows(view), () => false));
+	expect(rows.find((r) => r.key === "image")).toMatchObject({ kind: "user", text: "", images, imageCount: 1 });
+	expect(rows.find((r) => r.key === "unsupported")).toMatchObject({ kind: "user", text: "keep me", imageCount: 2 });
+});

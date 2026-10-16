@@ -14,6 +14,7 @@ import type { SpacedRow } from "@/lib/transcriptRows";
 import { colors, fontFamily, radii, sizes, typography } from "@/theme/tokens";
 
 import { DialogCard, PcPromptCard } from "./DialogCard";
+import { PromptImageView } from "./PromptImageView";
 import { RichText } from "./RichText";
 
 const SESSION_REASON: Record<string, string> = {
@@ -54,9 +55,18 @@ export const TranscriptRow = memo(function TranscriptRow({
 				<View style={margin}>
 					<View style={styles.userWrap}>
 						<View style={styles.bubble}>
-							<Text style={styles.bubbleText} selectable>
-								{row.text}
-							</Text>
+							{row.images?.[0] ? <PromptImageView image={row.images[0]} /> : null}
+							{(row.imageCount ?? 0) > (row.images?.length ?? 0) ? (
+								<Text style={styles.meta}>
+									画像 {row.imageCount} 枚
+									{row.images?.length ? "（残りは表示対象外）" : "（プレビューの制限で表示なし）"}
+								</Text>
+							) : null}
+							{row.text ? (
+								<Text style={styles.bubbleText} selectable>
+									{row.text}
+								</Text>
+							) : null}
 						</View>
 					</View>
 					{row.caption ? <Text style={styles.caption}>{row.caption}</Text> : null}
@@ -346,6 +356,8 @@ const styles = StyleSheet.create({
 	userWrap: { flexDirection: "row", justifyContent: "flex-end", paddingLeft: 48 },
 	bubble: {
 		maxWidth: 280,
+		flexShrink: 1,
+		gap: 8,
 		backgroundColor: colors.selected,
 		borderRadius: radii.bubble,
 		paddingVertical: 10,

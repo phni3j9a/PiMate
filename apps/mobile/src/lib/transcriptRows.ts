@@ -6,7 +6,7 @@
  * `fold` and are hidden behind one "18秒 作業 · ツール 4 回" summary row until the user opens it. The final answer,
  * its usage line, errors and notes stay visible. The turn in progress is never folded.
  */
-import type { TranscriptItem, UIRequest } from "@pimate/protocol";
+import type { PromptImage, TranscriptItem, UIRequest } from "@pimate/protocol";
 import { type ChangePiece, changeOf, changeSummary, toolResults } from "./changes";
 import { lineCount, seconds, toolSubject, usageLine } from "./format";
 import type { InstanceView, SessionNotice, ToolState } from "./instanceView";
@@ -19,7 +19,7 @@ export const turnKey = (userEntryId: string) => `turn:${userEntryId}`;
 type BaseRow =
 	| ({ kind: "sessionNotice"; key: string } & SessionNotice)
 	/** `caption`: small line under the bubble (subagent work record: who sent it and how). */
-	| { kind: "user"; key: string; text: string; caption?: string }
+	| { kind: "user"; key: string; text: string; images?: PromptImage[]; imageCount?: number; caption?: string }
 	/** `durationMs`: measured live only (see InstanceView.thinkingMs). */
 	| { kind: "thinking"; key: string; text: string; live: boolean; durationMs?: number }
 	| { kind: "text"; key: string; text: string; live: boolean }
@@ -222,7 +222,13 @@ export function buildRows(view: InstanceView, opts: { fold?: boolean } = {}): Ro
 					itemEnd: -1,
 					finalText: null,
 				});
-				rows.push({ kind: "user", key: item.entryId, text: item.text });
+				rows.push({
+					kind: "user",
+					key: item.entryId,
+					text: item.text,
+					...(item.images ? { images: item.images } : {}),
+					...(item.imageCount ? { imageCount: item.imageCount } : {}),
+				});
 				break;
 			case "assistant": {
 				if (item.thinking?.trim())

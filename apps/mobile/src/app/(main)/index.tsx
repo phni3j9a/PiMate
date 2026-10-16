@@ -28,6 +28,7 @@ import { SubagentSheet } from "@/components/sheets/SubagentSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { notificationVisibility } from "@/lib/notificationRuntime";
+import { pickImage } from "@/lib/pickImage";
 import { chatStatus, chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { modelLabel } from "@/lib/sessionInfo";
@@ -52,6 +53,10 @@ export default function ChatScreen() {
 	const selection = useAppState((s) => s.selection);
 	const view = useAppState((s) => s.view);
 	const drafts = useAppState((s) => s.drafts);
+	const attachments = useAppState((s) => s.attachments);
+	const [picking, setPicking] = useState(false);
+	const pickingRef = useRef(false);
+	const [imageError, setImageError] = useState<string | null>(null);
 	const outbox = useAppState((s) => s.outbox);
 	const notice = useAppState((s) => s.notice);
 	const targetChanged = useAppState((s) => s.targetChanged);
@@ -75,7 +80,7 @@ export default function ChatScreen() {
 		if (!view) return [];
 		const delivered: Row[] = outbox
 			.filter((e) => e.state === "delivered")
-			.map((e) => ({ kind: "user" as const, key: `outbox:${e.id}`, text: e.text }));
+			.map((e) => ({ kind: "user" as const, key: `outbox:${e.id}`, text: e.text, images: e.images }));
 		return [...buildRows(view), ...delivered];
 	}, [view, outbox]);
 
@@ -102,6 +107,24 @@ export default function ChatScreen() {
 
 	const key = selection ? draftKey(selection) : null;
 	const draft = key ? (drafts[key] ?? "") : "";
+	const image = key ? attachments[key]?.[0] : undefined;
+	const attachImage = async () => {
+		const target = appStore.opTarget();
+		if (!target || pickingRef.current) return;
+		pickingRef.current = true;
+		setPicking(true);
+		setImageError(null);
+		try {
+			const picked = await pickImage();
+			if (picked && !appStore.setImages([picked], target))
+				setImageError("送信先が変わったため画像を添付しませんでした。もう一度選んでください。");
+		} catch (error) {
+			setImageError(error instanceof Error ? error.message : "画像を読み込めませんでした。もう一度選んでください。");
+		} finally {
+			pickingRef.current = false;
+			setPicking(false);
+		}
+	};
 	const [timing, setTiming] = useState<{ key: string | null; mode: "steer" | "followUp" } | null>(null);
 	const sendMode = timing?.key === key ? timing.mode : "followUp";
 	const sending = outbox.some((e) => e.state === "sending");
@@ -168,6 +191,31 @@ export default function ChatScreen() {
 			text: `この下書きは「${targetChanged.to ?? "新しい会話"}」に送られます`,
 			action: { label: "確認する", onPress: () => appStore.confirmTarget() },
 		});
+	if (imageError)
+		banners.push({
+			key: "image-error",
+			tone: "failed",
+			icon: "error",
+			title: "画像を添付できませんでした",
+			text: imageError,
+			onDismiss: () => setImageError(null),
+		});
+	if (view?.phase === "ready" && view.promptImages !== true)
+		banners.push({
+			key: "images-unsupported",
+			tone: "normal",
+			icon: "error",
+			title: "この Pi は画像添付に未対応です",
+			text: "PC 側の PiMate を更新し Pi を再起動してください。テキストは送信できます。",
+		});
+	if (blocker === "image_text_limit")
+		banners.push({
+			key: "image-text-limit",
+			tone: "waiting",
+			icon: "error",
+			title: "画像付きの本文は32,768文字以内にしてください",
+			text: "本文を短くするか、画像を削除してください。下書きは残っています。",
+		});
 	if (notice)
 		banners.push({
 			key: "notice",
@@ -229,9 +277,21 @@ export default function ChatScreen() {
 							// Stay editable while sending: disabling the field drops the Android keyboard, and the store only
 							// clears the draft on success when it still equals the sent text.
 							editable
-							canSend={blocker === null}
+							canSend={blocker === null && !picking}
 							sending={sending}
-							onSend={() => void appStore.send(sendMode)}
+							onSend={() => {
+								if (!pickingRef.current) void appStore.send(sendMode);
+							}}
+							attachment={{
+								image,
+								picking,
+								disabled: !connected || view?.phase !== "ready" || view.promptImages !== true || sending,
+								onPick: () => void attachImage(),
+								onRemove: () => {
+									const target = appStore.opTarget();
+									if (target) appStore.setImages([], target);
+								},
+							}}
 							sendMode={
 								working
 									? { label: sendMode === "steer" ? "割り込む" : "後で伝える", onPress: () => setSheet("timing") }

@@ -1,4 +1,5 @@
 import type { ErrorCode, ParamsOf, ProtocolError, RcMethod, Request, Response, ResultOf } from "@pimate/protocol";
+import { MAX_IMAGE_PROMPT_TEXT, validPromptImages } from "@pimate/protocol";
 
 export class RcError extends Error {
 	readonly code: ErrorCode;
@@ -50,7 +51,10 @@ export function validateRequest(value: unknown): Request {
 			break;
 		case "prompt":
 			ok =
-				str("text", true) &&
+				typeof p.text === "string" &&
+				(p.images === undefined || validPromptImages(p.images)) &&
+				(!!p.text.trim() || (Array.isArray(p.images) && p.images.length > 0)) &&
+				(!Array.isArray(p.images) || !p.images.length || p.text.length <= MAX_IMAGE_PROMPT_TEXT) &&
 				(p.deliverAs === undefined ||
 					(typeof p.deliverAs === "string" && ["steer", "followUp"].includes(p.deliverAs))) &&
 				bool("expandTemplates");

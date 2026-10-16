@@ -12,7 +12,10 @@
  * - Nothing is retried automatically. Unknown fields must be ignored; unknown event types skipped.
  */
 
+import type { PromptImage } from "./images.ts";
 import type { SubagentAction, SubagentCounts, SubagentRun, SubagentsState, SubagentTranscript } from "./subagents.ts";
+
+export * from "./images.ts";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -66,7 +69,7 @@ export interface PimateWriteDetails {
 
 /** One entry of the current session branch, normalized for display. */
 export type TranscriptItem =
-	| { kind: "user"; entryId: string; text: string; timestamp?: number }
+	| { kind: "user"; entryId: string; text: string; images?: PromptImage[]; imageCount?: number; timestamp?: number }
 	| {
 			kind: "assistant";
 			entryId: string;
@@ -163,6 +166,8 @@ export interface InstanceSnapshot {
 	status: InstanceStatus;
 	/** A Pi run is between agent_start and agent_settled, including extension dialogs after agent_end. */
 	agentActive?: boolean;
+	/** Explicit capability: older RCs ignore unknown prompt fields. Never send images without this. */
+	promptImages?: boolean;
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];
@@ -246,7 +251,7 @@ export interface RcMethods {
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
 	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. */
 	prompt: {
-		params: { text: string; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
+		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
 		result: { deliveredAs: "prompt" | "steer" | "followUp" };
 	};
 	abort: { params: Record<string, never>; result: Record<string, never> };

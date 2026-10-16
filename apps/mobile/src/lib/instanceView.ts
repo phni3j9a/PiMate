@@ -19,6 +19,7 @@ import type {
 	TranscriptItem,
 	UIRequest,
 } from "@pimate/protocol";
+import { type PromptImage, samePromptImages } from "@pimate/protocol";
 import { contentText } from "./format";
 import { clearFinishedWatch, normalizeState, upsertRun, watchRuns } from "./subagents";
 
@@ -55,6 +56,7 @@ export interface UINote {
 export interface InstanceView {
 	instanceId: string;
 	phase: ViewPhase;
+	promptImages?: boolean;
 	error?: { code: string; message?: string };
 	cwd: string | null;
 	session: SessionRef | null;
@@ -211,6 +213,7 @@ function applySubscribed(
 		cwd: snapshot.cwd,
 		session,
 		status: snapshot.status,
+		promptImages: snapshot.promptImages === true,
 		model: snapshot.model,
 		thinking: snapshot.thinking,
 		items: dedupeItems(history.items),
@@ -465,7 +468,19 @@ export function userEntryIds(view: InstanceView): string[] {
 }
 
 /** Finds a user message with `text` that is not one of `known` (i.e. it arrived after we sent it). */
-export function findDeliveredUserItem(view: InstanceView, text: string, known: readonly string[]): boolean {
+export function findDeliveredUserItem(
+	view: InstanceView,
+	text: string,
+	known: readonly string[],
+	images: readonly PromptImage[] = [],
+): boolean {
 	const target = text.trim();
-	return view.items.some((i) => i.kind === "user" && !known.includes(i.entryId) && i.text.trim() === target);
+	return view.items.some(
+		(i) =>
+			i.kind === "user" &&
+			!known.includes(i.entryId) &&
+			i.text.trim() === target &&
+			(i.imageCount ?? i.images?.length ?? 0) === images.length &&
+			samePromptImages(i.images, images),
+	);
 }

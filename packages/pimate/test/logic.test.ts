@@ -33,7 +33,7 @@ describe("transcript", () => {
 				},
 				"u",
 			),
-		).toEqual({ entryId: "u", kind: "user", text: "hello" });
+		).toEqual({ entryId: "u", kind: "user", text: "hello", imageCount: 1 });
 		expect(
 			normalizeMessage(
 				{
@@ -209,4 +209,60 @@ it("validates M2 methods and bounded positive session limits", () => {
 	expect(validateRequest({ id: "s", method: "set_scoped_models", params: { models } }).params).toEqual({ models });
 	for (const params of [{}, { models: "faux/a" }, { models: [{ provider: "faux" }] }])
 		expect(() => validateRequest({ id: "s", method: "set_scoped_models", params })).toThrow("Invalid params");
+});
+
+describe("image prompt boundary", () => {
+	const image = { type: "image", mimeType: "image/png", data: "YQ==" };
+	const request = (params: unknown) => ({ id: "image", method: "prompt", params });
+	it("allows image-only prompts and bounds image+text without limiting text-only", () => {
+		expect(validateRequest(request({ text: "", images: [image] }))).toMatchObject({ params: { images: [image] } });
+		expect(() => validateRequest(request({ text: "x".repeat(32768), images: [image] }))).not.toThrow();
+		expect(() => validateRequest(request({ text: "x".repeat(32769), images: [image] }))).toThrow();
+		expect(() => validateRequest(request({ text: "x".repeat(32769) }))).not.toThrow();
+		for (const params of [
+			{ text: " " },
+			{ text: "", images: [] },
+			{ text: "hi", images: [image, image] },
+			{ text: "hi", images: [{ ...image, data: "invalid" }] },
+		])
+			expect(() => validateRequest(request(params))).toThrow();
+	});
+	it("preserves text, counts every original image, and only exposes a bounded supported first image", () => {
+		const normalize = (images: unknown[]) =>
+			normalizeMessage({ role: "user", content: [{ type: "text", text: "keep text" }, ...images] }, "u");
+		expect(normalize([image, image])).toMatchObject({ text: "keep text", imageCount: 2, images: [image] });
+		for (const first of [
+			{ ...image, mimeType: "image/gif" },
+			{ ...image, data: Buffer.alloc(512 * 1024 + 1).toString("base64") },
+		]) {
+			expect(normalize([first, image])).toEqual({ kind: "user", entryId: "u", text: "keep text", imageCount: 2 });
+		}
+		expect(normalizeMessage({ role: "user", content: [image] }, "u")).toMatchObject({
+			text: "",
+			imageCount: 1,
+			images: [image],
+		});
+	});
+});
+
+it("bounds aggregate history previews, prefers the newest, and preserves original content and counts", () => {
+	const image = { type: "image", mimeType: "image/png", data: Buffer.alloc(512 * 1024).toString("base64") };
+	const entries = Array.from({ length: 6 }, (_, i) => ({
+		type: "message",
+		id: `u${i}`,
+		message: { role: "user", content: [{ type: "text", text: `text ${i}` }, image, image] },
+	}));
+	const before = JSON.stringify(entries);
+	const normalized = normalizeBranch(entries);
+	expect(JSON.stringify(entries)).toBe(before);
+	expect(normalized.map((item) => (item.kind === "user" && item.images?.length) || 0)).toEqual([0, 0, 1, 1, 1, 1]);
+	for (let i = 0; i < normalized.length; i++)
+		expect(normalized[i]).toMatchObject({ kind: "user", text: `text ${i}`, imageCount: 2 });
+	expect(
+		normalized
+			.filter((item) => item.kind === "user")
+			.reduce((sum, item) => sum + (item.images ? Buffer.from(item.images[0].data, "base64").length : 0), 0),
+	).toBe(2 * 1024 * 1024);
+	// Live normalization is not subject to the aggregate history budget.
+	expect(normalizeMessage(entries[0].message, "u0")).toMatchObject({ images: [image], imageCount: 2 });
 });
