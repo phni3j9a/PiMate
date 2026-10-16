@@ -104,11 +104,13 @@ function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows
 	);
 }
 
-const HEADING: TextStyle[] = [
-	{ fontSize: 18, lineHeight: 26 },
-	{ fontSize: 16, lineHeight: 24 },
-	{ fontSize: 15, lineHeight: 22 },
-];
+/** h1–h3 sized from the body text, so they follow typography.body. */
+const HEADING: TextStyle[] = [4, 2, 1].map((up) => ({
+	fontSize: typography.body.fontSize + up,
+	lineHeight: Math.round((typography.body.fontSize + up) * 1.45),
+}));
+/** Centers a marker of `size` on the first line of body text. */
+const firstLine = (size: number) => (typography.body.lineHeight - size) / 2;
 
 function Blocks({ blocks }: { blocks: Block[] }) {
 	return blocks.map((block, i) => {
@@ -188,11 +190,11 @@ const styles = StyleSheet.create({
 	item: { flexDirection: "row" },
 	markerCol: { minWidth: 22, paddingLeft: 4 },
 	/** Bullet as a drawn dot: the "•" glyph renders tiny next to Japanese text on Android. */
-	dot: { width: 5, height: 5, borderRadius: 3, marginTop: 8, marginLeft: 2, backgroundColor: colors.text },
+	dot: { width: 5, height: 5, borderRadius: 3, marginTop: firstLine(5), marginLeft: 2, backgroundColor: colors.text },
 	box: {
 		width: 14,
 		height: 14,
-		marginTop: 4,
+		marginTop: firstLine(14),
 		borderRadius: 4,
 		borderWidth: 1.5,
 		borderColor: colors.textTertiary,
