@@ -1,5 +1,11 @@
 import type { ErrorCode, ParamsOf, ProtocolError, RcMethod, Request, Response, ResultOf } from "@pimate/protocol";
-import { MAX_IMAGE_PROMPT_TEXT, validPromptImages } from "@pimate/protocol";
+import {
+	AUTH_MAX_INPUT_LENGTH,
+	AUTH_MAX_WAIT_MS,
+	AUTH_PROVIDER_IDS,
+	MAX_IMAGE_PROMPT_TEXT,
+	validPromptImages,
+} from "@pimate/protocol";
 
 export class RcError extends Error {
 	readonly code: ErrorCode;
@@ -31,6 +37,12 @@ const methods = [
 	"subagents_rpc",
 	"subagent_transcript",
 	"subagent_control",
+	"auth_list",
+	"auth_begin",
+	"auth_wait",
+	"auth_respond",
+	"auth_cancel",
+	"auth_logout",
 ];
 function object(v: unknown): v is Record<string, unknown> {
 	return !!v && typeof v === "object" && !Array.isArray(v);
@@ -47,7 +59,35 @@ export function validateRequest(value: unknown): Request {
 		required ? typeof p[k] === "string" && !!p[k] : p[k] === undefined || typeof p[k] === "string";
 	const bool = (k: string) => p[k] === undefined || typeof p[k] === "boolean";
 	let ok = true;
+	const authId = (k: string) => typeof p[k] === "string" && /^[a-f0-9-]{36}$/.test(p[k] as string);
+	const authProvider = () =>
+		typeof p.provider === "string" && (AUTH_PROVIDER_IDS as readonly string[]).includes(p.provider);
 	switch (value.method) {
+		case "auth_begin":
+			ok = authProvider() && (p.method === "oauth" || p.method === "api_key");
+			break;
+		case "auth_logout":
+			ok = authProvider();
+			break;
+		case "auth_cancel":
+			ok = authId("flowId");
+			break;
+		case "auth_wait":
+			ok =
+				authId("flowId") &&
+				Number.isSafeInteger(p.afterRevision) &&
+				(p.afterRevision as number) >= 0 &&
+				(p.waitMs === undefined ||
+					(Number.isSafeInteger(p.waitMs) && (p.waitMs as number) >= 0 && (p.waitMs as number) <= AUTH_MAX_WAIT_MS));
+			break;
+		case "auth_respond":
+			ok =
+				authId("flowId") &&
+				authId("promptId") &&
+				typeof p.value === "string" &&
+				p.value.length > 0 &&
+				p.value.length <= AUTH_MAX_INPUT_LENGTH;
+			break;
 		case "sessions":
 			ok = p.limit === undefined || (Number.isSafeInteger(p.limit) && (p.limit as number) > 0);
 			break;
@@ -134,7 +174,13 @@ export async function dispatch(
 		const error: ProtocolError =
 			e instanceof RcError
 				? { code: e.code, message: e.message, data: e.data }
-				: { code: "internal", message: String(e) };
+				: {
+						code: "internal",
+						message:
+							object(value) && typeof value.method === "string" && value.method.startsWith("auth_")
+								? "Auth operation failed"
+								: String(e),
+					};
 		return { type: "response", id, ok: false, error };
 	}
 }

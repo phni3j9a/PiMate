@@ -16,6 +16,7 @@ import type {
 import { countSubagents, encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
 import { PACKAGE_VERSION } from "../package.ts";
 import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
+import type { ProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { dispatch } from "./dispatch.ts";
 import type { SubagentRegistry } from "./subagents/registry.ts";
@@ -41,6 +42,7 @@ export class Hub {
 	clients = new Set<Socket>();
 	pendingUI = new Map<string, PendingUI>();
 	handlers?: Handlers;
+	auth?: ProviderAuth;
 	subagents?: SubagentRegistry;
 	subscriptions: (() => void)[] = [];
 	tui?: { requestRender(force?: boolean): void };
@@ -108,6 +110,7 @@ export class Hub {
 			promptImages: true,
 			sessionTree: true,
 			slashCommands: true,
+			providerAuth: true,
 			model: this.ctx?.model ? { provider: this.ctx.model.provider, id: this.ctx.model.id } : null,
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),
@@ -197,6 +200,7 @@ export class Hub {
 		rmSync(this.metaPath, { force: true });
 	}
 	stop(): void {
+		this.auth?.dispose();
 		this.subagents?.dispose();
 		for (const p of this.pendingUI.values()) p.cancel();
 		for (const c of this.clients) c.destroy();

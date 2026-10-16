@@ -12,10 +12,12 @@
  * - Nothing is retried automatically. Unknown fields must be ignored; unknown event types skipped.
  */
 
+import type { AuthMethods } from "./auth.ts";
 import type { PromptImage } from "./images.ts";
 import type { SubagentAction, SubagentCounts, SubagentRun, SubagentsState, SubagentTranscript } from "./subagents.ts";
 
 export * from "./images.ts";
+export * from "./auth.ts";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -191,6 +193,8 @@ export interface InstanceSnapshot {
 	sessionTree?: boolean;
 	/** RC command discovery, expansion and explicit command acknowledgements. */
 	slashCommands?: boolean;
+	/** Auth-specific RPCs for the three supported providers. Absent = update PC package first. */
+	providerAuth?: boolean;
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];
@@ -275,7 +279,7 @@ export function slashCommandName(text: string): string | null {
 	return /^\/[\w:.-]+$/.test(token) ? token.slice(1) : null;
 }
 
-export interface RcMethods {
+export interface RcMethods extends AuthMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
 	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. Expanded extension commands run immediately and return "command" (no user transcript entry). */

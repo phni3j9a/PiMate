@@ -12,7 +12,7 @@ import type {
 	ResultOf,
 	ServerMessage,
 } from "@pimate/protocol";
-import { encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
+import { AUTH_MAX_WAIT_MS, encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
 import { RcError } from "../extension/dispatch.ts";
 import { privateRunDir, validInstanceId } from "../runtime.ts";
 
@@ -100,11 +100,17 @@ export class RcClient {
 			request.method === "subagents_rpc" ? (request.params as { timeoutMs?: number })?.timeoutMs : undefined;
 		const wait =
 			timeoutMs ??
-			(request.method === "subagents_rpc"
-				? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000)
-				: request.method === "subagent_control"
-					? Math.max(this.timeoutMs, 17000)
-					: this.timeoutMs);
+			(request.method === "auth_wait"
+				? Math.max(this.timeoutMs, AUTH_MAX_WAIT_MS + 2000)
+				: request.method === "auth_list"
+					? Math.max(this.timeoutMs, 32000)
+					: request.method === "auth_logout"
+						? Math.max(this.timeoutMs, 62000)
+						: request.method === "subagents_rpc"
+							? Math.max(this.timeoutMs, (rpcTimeout ?? 15000) + 2000)
+							: request.method === "subagent_control"
+								? Math.max(this.timeoutMs, 17000)
+								: this.timeoutMs);
 		if (!this.socket || this.socket.destroyed) return Promise.reject(new Error("RC not connected"));
 		if (this.pending.has(request.id))
 			return Promise.resolve({

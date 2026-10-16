@@ -193,3 +193,18 @@ it("tree command emits full editor text after completion, rejects delayed sessio
 	expect(h.treeNavigating).toBe(false);
 	expect(h.snapshot().sessionTree).toBe(true);
 });
+
+it("advertises provider auth and disposes pending auth on runtime replacement, session shutdown and quit", () => {
+	const { h, hooks, pi } = setup();
+	expect(h.snapshot().providerAuth).toBe(true);
+	const old = { dispose: vi.fn() };
+	h.auth = old as unknown as NonNullable<Hub["auth"]>;
+	extension(pi);
+	expect(old.dispose).toHaveBeenCalledOnce();
+	expect(h.auth).toBeUndefined();
+	const next = { dispose: vi.fn() };
+	h.auth = next as unknown as NonNullable<Hub["auth"]>;
+	hooks.get("session_shutdown")?.({ reason: "new" });
+	expect(next.dispose).toHaveBeenCalledOnce();
+	expect(h.auth).toBeUndefined();
+});
