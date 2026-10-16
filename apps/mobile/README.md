@@ -29,6 +29,7 @@ M3（表示）:
 - 差分の出どころ: edit は Pi の `details.patch`、write は RC が付ける `details.pimate`（`write_diff`）。それがない古い履歴や、大きすぎ・バイナリ・読めない・同時に複数の変更があった場合は、そう書いたうえで書き込んだ内容を表示する（新規ファイルとは言わない）
 - 停止ボタンはターンの実行中だけ表示（ターン外の Extension の質問では出さない）。中断したメッセージの「0 in · 0 out」は出さない
 - シートはキーボードを避ける。新しい Pi のモデル選択にも検索。セッションのメニューの操作が断られたときはシートの中に表示する
+- 回答の Markdown（[#23](https://github.com/phni3j9a/PiMate/issues/23)）: `marked` の lexer で解析し、表示は自作（`src/lib/richText.ts` / `src/components/chat/RichText.tsx`）。見出し（h1〜h3 の大きさ）、リスト（入れ子・番号・チェックボックス）、引用、表（横スクロール）、区切り線、太字・斜体・取り消し線、インラインコード、http(s) リンク（アプリ内ブラウザ）。`これは**「太字」**です` のように CommonMark が太字にしない日本語の書き方も太字にする。コードブロックは折り返し表示で、言語名とコピーボタンつき（ストリーミング中の閉じていない ``` もコード）。回答を長押しで全文（Markdown）をコピー（部分選択はできない）
 
 同じファイルへの変更は `./`・`..` を POSIX の規則で正規化して集約する。インスタンスの cwd が分かるときは絶対・相対パスも同一視する（シンボリックリンクの解決はしない）。同じ範囲内で新規作成したファイルは、後で編集しても A のまま。
 
@@ -52,7 +53,7 @@ M5c（アプリ / Host 0.1.1）:
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
 
-今後: Markdown の本格表示、`/tree`、画像の添付、作業中の「割り込む」。
+今後: `/tree`、画像の添付、作業中の「割り込む」。
 
 ## Android APK のビルドと配布（M5b）
 
@@ -130,6 +131,7 @@ npx expo start        # apps/mobile で実行
 ```bash
 node apps/mobile/scripts/dev-fake-host.mjs --port 47800   # ペアリング用リンクとExpo Go用ディープリンクを表示
 adb reverse tcp:47800 tcp:47800
+# スマホから「md」で始まるメッセージを送ると Markdown の見本（見出し・リスト・表・引用・コード）を返す
 curl -X POST http://127.0.0.1:47800/_dev/turn             # PCで打ったときの1ターンを再生（read / edit / write / bash。drop / offline?s=20 なども）
 curl -X POST "http://127.0.0.1:47800/_dev/ask?kind=select" # 質問を出す（select / confirm / input / editor）。answered で PC 側の回答
 curl -X POST http://127.0.0.1:47800/_dev/custom            # PC でしか操作できない画面（?end=1 で終了）

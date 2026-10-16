@@ -937,10 +937,46 @@ function fullScript(prompt) {
 	];
 }
 
-function shortScript() {
+/** Reply to a phone prompt starting with "md" (full-width too, as typed by a Japanese IME): every Markdown block. */
+const wantsMarkdown = (prompt) => /^md\b/i.test(prompt.normalize("NFKC"));
+const MARKDOWN_SAMPLE = `## 変更の概要
+
+\`--shout\` フラグを追加しました。**「大文字で出力」**する *だけ* の ~~小さな~~ 変更です。詳しくは [README](https://github.com/phni3j9a/PiMate) を参照。
+
+### 手順
+
+1. \`src/cli.ts\` に引数を追加
+2. テストを追加
+   - 正常系
+   - 空文字
+
+- [x] 実装
+- [ ] リリースノート
+
+> PC の Pi でも同じ結果になります。
+
+| ファイル | 追加 | 削除 | 備考 |
+|---|--:|--:|---|
+| src/cli.ts | 12 | 3 | フラグの解析 |
+| test/cli.test.ts | 24 | 0 | 正常系と空文字のテスト |
+
+---
+
+\`\`\`ts
+export function greet(name: string, shout = false): string {
+	const text = \`Hello, \${name}!\`;
+	return shout ? text.toUpperCase() : text;
+}
+\`\`\``;
+
+function shortScript(prompt = "") {
 	return [
 		{ ms: 300, run: (id) => emit(id, { type: "agent_start" }) },
-		{ ms: 200, stream: "text", text: "了解しました。README の使い方にも追記しておきます。" },
+		{
+			ms: 200,
+			stream: "text",
+			text: wantsMarkdown(prompt) ? MARKDOWN_SAMPLE : "了解しました。README の使い方にも追記しておきます。",
+		},
 		{ ms: 200, run: (id, turn) => assistantEnd(id, turn, turn.text, [], "stop", true) },
 	];
 }
@@ -981,7 +1017,12 @@ function startTurn(id, prompt, kind) {
 	emit(id, { type: "user_input", text: prompt, source: "rpc" });
 	emit(id, { type: "message_end", item: { kind: "user", entryId: eid(), text: prompt, timestamp: Date.now() } });
 	setStatus(id, "running");
-	const turn = { steps: kind === "full" ? fullScript(prompt) : shortScript(), timer: null, text: "", thinking: "" };
+	const turn = {
+		steps: kind === "full" && !wantsMarkdown(prompt) ? fullScript(prompt) : shortScript(prompt),
+		timer: null,
+		text: "",
+		thinking: "",
+	};
 	inst.turn = turn;
 	const next = () => {
 		if (inst.turn !== turn) return;
