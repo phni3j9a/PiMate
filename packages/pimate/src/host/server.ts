@@ -271,6 +271,7 @@ export class HostServer {
 							version: PACKAGE_VERSION,
 							platform: process.platform,
 							alerts: true,
+							providerAuth: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });

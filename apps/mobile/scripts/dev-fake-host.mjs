@@ -27,6 +27,7 @@
  *   drop                  cut all WebSocket connections (simulated network loss)
  *   offline?s=20          cut connections and refuse new ones for s seconds
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
+ *   auth?complete=1       finish fake Codex auth; also expire, fail=1|0, saving=ms, refresh=1|0, old=1|0, oldHost=1|0, badurl=1|0
  *   pair                  print a fresh pairing link
  *
  * M4 subagents: "認証まわりのレビュー" (~/work/api) starts with a pi-subagents background run of 3 reviewers that
@@ -55,9 +56,9 @@ const opt = (name, fallback) => {
 	const i = args.indexOf(`--${name}`);
 	return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
-const port = Number(opt("port", "47800"));
+let port = Number(opt("port", "47800"));
 const listen = opt("listen", "127.0.0.1");
-const address = opt("address", `${listen}:${port}`);
+let address = opt("address", `${listen}:${port}`);
 const statePath = opt("state", join(tmpdir(), "pimate-fake-host.json"));
 
 let state = { hostId: randomUUID(), tokens: [] };
@@ -483,7 +484,14 @@ class Peer {
 			this.send({
 				type: "auth_ok",
 				deviceId: "fake-device",
-				host: { hostId: state.hostId, name: HOST_NAME, protocol: 1, version: "0.0.0-fake", platform: "linux" },
+				host: {
+					hostId: state.hostId,
+					name: HOST_NAME,
+					protocol: 1,
+					version: "0.0.0-fake",
+					platform: "linux",
+					providerAuth: !authOptions.oldHost,
+				},
 			});
 			this.send({ type: "instances", instances: summaries() });
 			return;
@@ -531,7 +539,7 @@ class Peer {
 		if (request.expectSessionId && request.expectSessionId !== inst.summary.session?.id)
 			return fail("session_changed", "Session changed");
 		log(`rc ${request.method} ${id}`);
-		setTimeout(() => {
+		setTimeout(async () => {
 			if (request.method === "prompt") {
 				const text = String(request.params?.text ?? "");
 				const images = request.params?.images ?? [];
@@ -551,7 +559,7 @@ class Peer {
 			} else {
 				const handler = RC[request.method];
 				if (!handler) return fail("unsupported", `fake host does not implement ${request.method}`);
-				const out = handler(id, request.params ?? {});
+				const out = await handler(id, request.params ?? {});
 				if (out?.error) fail(out.error, out.message);
 				else reply({ type: "response", id: request.id, ok: true, result: out?.result ?? {} });
 			}
@@ -620,6 +628,124 @@ let refuseUntil = 0;
 let refuseShutdown = false;
 let spawning = false;
 
+// ------------------------------------------------------------------ transient fake provider auth (no real credentials)
+
+const authOptions = { old: false, oldHost: false, fail: false, refresh: false, badurl: false, saving: 200 };
+const authStored = new Map([["anthropic", "oauth"]]);
+const authFlows = new Map();
+const authWaiters = new Map();
+const authActive = (flow) => ["working", "input", "saving"].includes(flow?.status);
+const authResult = (id) => ({ result: { flow: structuredClone(authFlows.get(id)) } });
+function changeAuth(id, patch) {
+	const flow = authFlows.get(id);
+	authFlows.set(id, { ...flow, ...patch, revision: flow.revision + 1 });
+	for (const finish of [...(authWaiters.get(id) ?? [])]) finish();
+}
+function saveAuth(id) {
+	changeAuth(id, { status: "saving", prompt: undefined, authorization: undefined });
+	const flowId = authFlows.get(id).id;
+	setTimeout(() => {
+		if (authFlows.get(id)?.id !== flowId) return;
+		if (authOptions.fail) changeAuth(id, { status: "failed", error: "login_failed" });
+		else {
+			const flow = authFlows.get(id);
+			authStored.set(flow.provider, flow.method);
+			changeAuth(id, { status: "succeeded", refreshRequired: authOptions.refresh });
+		}
+	}, authOptions.saving).unref();
+}
+const AUTH_RC = {
+	auth_list(id) {
+		return {
+			result: {
+				providers: ["openai", "openai-codex", "anthropic"].map((provider) => ({
+					id: provider,
+					methods: provider === "openai-codex" ? ["oauth"] : ["oauth", "api_key"],
+					stored: authStored.get(provider) ?? null,
+					configured: authStored.has(provider),
+				})),
+				flow: authFlows.get(id),
+			},
+		};
+	},
+	auth_begin(id, { provider, method }) {
+		if (
+			authOptions.old ||
+			!["openai", "openai-codex", "anthropic"].includes(provider) ||
+			!["oauth", "api_key"].includes(method) ||
+			(provider === "openai-codex" && method !== "oauth")
+		)
+			return { error: "unsupported" };
+		if (authActive(authFlows.get(id))) return { error: "busy" };
+		const flow = {
+			id: randomUUID(),
+			provider,
+			method,
+			revision: 0,
+			expiresAt: Date.now() + 15 * MIN,
+			status: method === "oauth" && provider === "openai-codex" ? "working" : "input",
+		};
+		if (method === "api_key") flow.prompt = { id: randomUUID(), kind: "api_key" };
+		else if (provider === "openai-codex")
+			flow.authorization = {
+				url: "https://auth.openai.com/codex/device",
+				userCode: "PIMATE-FAKE-NOT-A-REAL-DEVICE-CODE",
+			};
+		else {
+			flow.authorization = {
+				url:
+					provider === "openai"
+						? "https://auth.openai.com/api/accounts/authorize?client_id=pimate-fake&state=pimate-fake"
+						: "https://claude.ai/oauth/authorize?client_id=pimate-fake&state=pimate-fake",
+			};
+			flow.prompt = { id: randomUUID(), kind: provider === "openai" ? "callback_url" : "code" };
+		}
+		if (authOptions.badurl && flow.authorization) flow.authorization.url = "https://example.invalid/not-auth";
+		authFlows.set(id, flow);
+		return authResult(id);
+	},
+	auth_wait(id, { flowId, afterRevision, waitMs = 25000 }) {
+		const flow = authFlows.get(id);
+		if (flow?.id !== flowId) return { error: "not_found" };
+		if (Date.now() >= flow.expiresAt && authActive(flow) && flow.status !== "saving")
+			changeAuth(id, { status: "expired", prompt: undefined, authorization: undefined });
+		if (authFlows.get(id).revision !== afterRevision || !authActive(authFlows.get(id))) return authResult(id);
+		const waits = authWaiters.get(id) ?? new Set();
+		authWaiters.set(id, waits);
+		if (waits.size >= 8) return { error: "busy" };
+		return new Promise((resolve) => {
+			const finish = () => {
+				clearTimeout(timer);
+				waits.delete(finish);
+				resolve(authResult(id));
+			};
+			const timer = setTimeout(finish, Math.max(0, Math.min(25000, waitMs))).unref();
+			waits.add(finish);
+		});
+	},
+	auth_respond(id, { flowId, promptId, value }) {
+		const flow = authFlows.get(id);
+		if (flow?.id !== flowId || flow.status !== "input" || flow.prompt?.id !== promptId)
+			return { error: "no_such_request" };
+		if (typeof value !== "string" || !value.trim() || value.length > 8192) return { error: "bad_request" };
+		// Deliberately discard input: fixtures keep metadata only, never keys/codes/callback URLs.
+		saveAuth(id);
+		return authResult(id);
+	},
+	auth_cancel(id, { flowId }) {
+		const flow = authFlows.get(id);
+		if (flow?.id !== flowId) return { error: "not_found" };
+		if (flow.status === "saving") return { error: "busy" };
+		if (authActive(flow)) changeAuth(id, { status: "cancelled", prompt: undefined, authorization: undefined });
+		return authResult(id);
+	},
+	auth_logout(id, { provider }) {
+		if (authActive(authFlows.get(id))) return { error: "busy" };
+		authStored.delete(provider);
+		return { result: { refreshRequired: authOptions.refresh } };
+	},
+};
+
 // ------------------------------------------------------------------ M2 RC methods
 
 function canned(text) {
@@ -652,6 +778,7 @@ function switchSession(id, reason, session, items) {
 
 /** Each returns { result } or { error, message }. */
 const RC = {
+	...AUTH_RC,
 	models(id) {
 		return { result: { models: MODELS, current: instances.get(id).model, scoped } };
 	},
@@ -803,6 +930,7 @@ function snapshot(id) {
 	return {
 		protocol: 1,
 		promptImages: true,
+		providerAuth: !authOptions.old,
 		instanceId: id,
 		pid: 4242,
 		cwd: s.cwd,
@@ -1848,6 +1976,20 @@ const server = createServer((req, res) => {
 		const id = url.searchParams.get("i") ?? [...instances.keys()][0];
 		const inst = instances.get(id);
 		switch (cmd) {
+			case "auth": {
+				if (!inst) return reply(404, {});
+				for (const key of ["old", "oldHost", "fail", "refresh", "badurl"])
+					if (url.searchParams.has(key)) authOptions[key] = url.searchParams.get(key) === "1";
+				if (url.searchParams.has("saving"))
+					authOptions.saving = Math.max(0, Math.min(30000, Number(url.searchParams.get("saving")) || 0));
+				const flow = authFlows.get(id);
+				if (flow && authActive(flow) && flow.status !== "saving") {
+					if (url.searchParams.has("expire"))
+						changeAuth(id, { status: "expired", prompt: undefined, authorization: undefined });
+					else if (url.searchParams.has("complete")) saveAuth(id);
+				}
+				return reply(200, { ok: true, options: authOptions });
+			}
 			case "turn":
 				if (!inst) return reply(404, {});
 				if (inst.turn) inst.followUps.push("PC から: 続けて");
@@ -1965,6 +2107,10 @@ server.on("upgrade", (req, socket) => {
 });
 
 server.listen(port, listen, () => {
+	if (port === 0) {
+		port = server.address().port;
+		if (!args.includes("--address")) address = `${listen}:${port}`;
+	}
 	console.log(`Fake PiMate Host on http://${listen}:${port} (hostId ${state.hostId}, state ${statePath})`);
 	printLink();
 });

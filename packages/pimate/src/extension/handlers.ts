@@ -42,7 +42,8 @@ export function createHandlers(h: Hub): Handlers {
 	};
 	const auth = () => {
 		const { ctx } = ready();
-		return (h.auth ??= createProviderAuth(ctx));
+		h.auth ??= createProviderAuth(ctx);
+		return h.auth;
 	};
 	return {
 		auth_list: () => auth().list(),

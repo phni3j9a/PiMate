@@ -1,4 +1,4 @@
-import type { HostMessage } from "@pimate/protocol";
+import type { HostInfo, HostMessage } from "@pimate/protocol";
 import type { SocketLike } from "../src/lib/hostConnection";
 
 export class FakeSocket implements SocketLike {
@@ -52,8 +52,8 @@ export class FakeSocket implements SocketLike {
 export const hostInfo = { hostId: "h1", name: "server-Macmini", protocol: 1, version: "0.0.0", platform: "linux" };
 
 /** Opens the socket and completes auth. */
-export function authenticate(socket: FakeSocket, instances: unknown[] = []) {
+export function authenticate(socket: FakeSocket, instances: unknown[] = [], capabilities: Partial<HostInfo> = {}) {
 	socket.open();
-	socket.receive({ type: "auth_ok", host: hostInfo, deviceId: "d1" });
+	socket.receive({ type: "auth_ok", host: { ...hostInfo, ...capabilities }, deviceId: "d1" });
 	socket.receive({ type: "instances", instances });
 }

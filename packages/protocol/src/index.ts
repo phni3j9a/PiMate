@@ -16,8 +16,8 @@ import type { AuthMethods } from "./auth.ts";
 import type { PromptImage } from "./images.ts";
 import type { SubagentAction, SubagentCounts, SubagentRun, SubagentsState, SubagentTranscript } from "./subagents.ts";
 
-export * from "./images.ts";
 export * from "./auth.ts";
+export * from "./images.ts";
 
 export const PROTOCOL_VERSION = 1;
 

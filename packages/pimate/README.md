@@ -65,6 +65,12 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 - subscribe/reconnectでsnapshot（途中のassistant text/thinkingを含む）+historyを送り、同期中のイベントは順序を保って後送します。通常の連続deltaは約50msで結合するため、WSのseqは増加しますが連番ではありません。history/liveの重複はentryIdで除去してください。RC再接続はbackoff付き、操作要求は**再送しません**。
 - `RcClient.send(request)` はid/guardsを保持してRCの成功/エラーResponseを返します。rejectはtransport/timeoutのみ。同じ共有link上でin-flight idを再利用しないでください（アプリはUUIDを使う）。
 
+## プロバイダー認証（開発版・未リリース）
+
+OpenAI・OpenAI Codex・Anthropic のログイン／ログアウトを専用の `auth_*` RPC で扱います。標準 CLI の agent directory を使う認証専用 `ModelRuntime` で保存・削除し、実行中の Pi は既存の通常 TUI のままです。入力やトークンは会話イベントへ流しません。保存先・別端末ブラウザ・共有範囲・制限は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+
+Host の `auth_ok.host.providerAuth` と RC の `snapshot.providerAuth` の両方が必要です。RC だけ更新した古い Host は認証用 long-poll を正しく待てないため、Host も更新・再起動してください。`RcClient.send` は認証の list / wait / logout にだけ長い timeout を設定し、ほかのメソッドの既定5秒は変えません。
+
 ## 親 Pi への画像プロンプト
 
 RC は `hello` snapshot の `promptImages: true` で画像対応を通知します。古い RC は未知の `images` を無視するため、クライアントはこの明示的な capability がない限り画像を送ってはいけません。PC パッケージの更新後は、対象の **Pi も再起動**してください。画像非対応モデルには `unsupported` を返し、本文だけを黙って送ることはありません。
