@@ -3,21 +3,26 @@ import type { ModelInfo, ThinkingLevel } from "@pimate/protocol";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { CheckIcon, SearchIcon } from "@/components/icons";
+import { CheckIcon, SearchIcon, StarIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
-import { TextButton } from "@/components/ui";
+import { IconButton, TextButton } from "@/components/ui";
 import { tokens } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import {
 	contextLine,
+	defaultScope,
 	findModel,
 	formatCost,
 	groupModels,
+	isFavorite,
+	type ModelScope,
 	providerName,
+	scopeModels,
 	sessionStats,
 	thinkingShort,
+	toggleFavorite,
 } from "@/lib/sessionInfo";
 import { colors, fontFamily, radii, typography } from "@/theme/tokens";
 
@@ -42,7 +47,17 @@ function ModelSheetBody() {
 
 	const list = models?.list ?? null;
 	const current = findModel(list, view?.model);
-	const groups = list ? groupModels(list, query) : [];
+	// Favorites = Pi's scoped models (shared with the PC's /scoped-models); undefined from an older RC.
+	const scoped = models?.scoped;
+	const [scopeChoice, setScopeChoice] = useState<ModelScope | null>(null);
+	const scope = scoped === undefined ? "all" : (scopeChoice ?? defaultScope(scoped));
+	const [fav, setFav] = useState<{ saving: boolean; error?: string; saved?: boolean }>({ saving: false });
+	const toggleStar = async (m: ModelInfo) => {
+		setFav({ saving: true });
+		const res = await appStore.setScopedModels(toggleFavorite(scoped, m));
+		setFav(res.ok ? { saving: false, saved: true } : { saving: false, error: res.text });
+	};
+	const groups = list ? groupModels(scopeModels(list, scoped, scope), query) : [];
 	const levels: ThinkingLevel[] = current?.thinkingLevels ?? [];
 	const stats = sessionStats(view?.items ?? []);
 	const context = view?.context ?? null;
@@ -56,6 +71,35 @@ function ModelSheetBody() {
 				</Text>
 				<Text style={styles.titleNote}>PC の Pi にも反映されます</Text>
 			</View>
+
+			{list && scoped !== undefined ? (
+				<View style={styles.scope}>
+					<View style={styles.segment} accessibilityRole="tablist">
+						{(["favorites", "all"] as const).map((k) => {
+							const on = k === scope;
+							return (
+								<Pressable
+									key={k}
+									accessibilityRole="tab"
+									accessibilityState={{ selected: on }}
+									onPress={() => setScopeChoice(k)}
+									style={({ pressed }) => [styles.segItem, on && styles.segOn, pressed && styles.pressed]}
+								>
+									<Text style={[styles.segText, on && styles.segTextOn]}>
+										{k === "favorites" ? `お気に入り ${scoped.length}` : `すべて ${list.length}`}
+									</Text>
+								</Pressable>
+							);
+						})}
+					</View>
+					<Text style={[styles.scopeNote, fav.error ? { color: colors.statusFailedText } : null]}>
+						{fav.error ??
+							(fav.saved
+								? "保存しました。起動中の PC の Pi の Ctrl+P には再起動後に反映されます"
+								: "☆ は PC の /scoped-models（Ctrl+P で切り替えるモデル）と共通です")}
+					</Text>
+				</View>
+			) : null}
 
 			{list && list.length > 6 ? (
 				<View style={styles.search}>
@@ -89,7 +133,11 @@ function ModelSheetBody() {
 				</View>
 			) : groups.length === 0 ? (
 				<Text style={[styles.stateText, { marginTop: 20 }]}>
-					{query ? "一致するモデルはありません" : "使えるモデルがありません"}
+					{query
+						? "一致するモデルはありません"
+						: scope === "favorites"
+							? "お気に入りはありません。「すべて」で ☆ を付けると、ここに並びます"
+							: "使えるモデルがありません"}
 				</Text>
 			) : (
 				groups.map((g) => (
@@ -103,6 +151,9 @@ function ModelSheetBody() {
 								pending={op?.kind === "model"}
 								disabled={!ready || busy}
 								onPress={() => void appStore.setModel({ provider: m.provider, id: m.id })}
+								favorite={scoped === undefined ? undefined : isFavorite(scoped, m)}
+								favoriteDisabled={!ready || fav.saving}
+								onToggleFavorite={() => void toggleStar(m)}
 							/>
 						))}
 					</View>
@@ -174,12 +225,19 @@ function ModelRow({
 	pending,
 	disabled,
 	onPress,
+	favorite,
+	favoriteDisabled,
+	onToggleFavorite,
 }: {
 	model: ModelInfo;
 	selected: boolean;
 	pending: boolean;
 	disabled: boolean;
 	onPress: () => void;
+	/** undefined: the RC cannot report favorites, so no star. */
+	favorite?: boolean;
+	favoriteDisabled: boolean;
+	onToggleFavorite: () => void;
 }) {
 	const window = model.contextWindow ? ` · ${tokens(model.contextWindow).toUpperCase()}` : "";
 	return (
@@ -201,6 +259,16 @@ function ModelRow({
 				</Text>
 			</View>
 			{selected ? <CheckIcon /> : pending ? null : null}
+			{favorite !== undefined ? (
+				<IconButton
+					label={favorite ? `${model.name} をお気に入りから外す` : `${model.name} をお気に入りに追加`}
+					onPress={onToggleFavorite}
+					disabled={favoriteDisabled}
+					size={40}
+				>
+					<StarIcon filled={favorite} color={favorite ? colors.accent : colors.textTertiary} />
+				</IconButton>
+			) : null}
 		</Pressable>
 	);
 }
@@ -221,6 +289,8 @@ const styles = StyleSheet.create({
 		marginBottom: 6,
 	},
 	searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
+	scope: { gap: 6, marginBottom: 10 },
+	scopeNote: { ...typography.caption, color: colors.textSecondary },
 	state: { alignItems: "center", gap: 8, paddingVertical: 24 },
 	stateText: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },
 	group: {

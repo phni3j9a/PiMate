@@ -68,6 +68,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 ## 日常操作とスマホからの起動（M2）
 
 - RC `models`: Piの認証済みモデル一覧。thinkingLevelsはPi 1.2.0と同じ `getSupportedThinkingLevels()` で求め、非reasoningモデルはoffのみ、xhigh/maxはモデルの対応表に従います。
+- RC `models` の `scoped`: Piのscoped models（`enabledModels` / `/scoped-models`。アプリの「お気に入り」）。起動中のセッションの値を返しますが、ディスクの `enabledModels` がこのPiの読み込み後に変わった場合（スマホや別のPiが保存）はディスクの値をPiと同じ規則で解決して返します。RC `set_scoped_models` はグローバル設定の `enabledModels` に保存します（全モデル・空はフィルターなし）。起動中のPCのPiのCtrl+Pの順番は再起動まで変わりません。
 - RC `sessions`: 現在のcwdと **Piが実際に使用中のsessionDir** から保存会話を更新日時降順で返します。`limit` は任意の正整数、日時はミリ秒、`current` で現在の会話を識別。切替は `session_op` のswitchへpathを渡します。
 - RC `shutdown`: `ctx.shutdown()` による正常終了。Host終了と異なり対象Piが終了します。
 - snapshotに `context` と `pcPrompt`。contextイベントはassistant終了・compaction・モデル/セッション変更後。回答できないTUI promptはPCで操作し、再接続でも開いたpromptが分かります。中断assistantはlive/history共通で `stopReason:"aborted"` に正規化し、通常のAPIエラーはerrorのままです。

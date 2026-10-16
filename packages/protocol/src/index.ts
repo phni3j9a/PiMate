@@ -260,7 +260,13 @@ export interface RcMethods {
 	/** Pi built-in session commands. Result arrives as a `session_op_done` event. */
 	session_op: { params: { op: SessionOp; arg?: string }; result: Record<string, never> };
 	commands: { params: Record<string, never>; result: { commands: CommandInfo[] } };
-	models: { params: Record<string, never>; result: { models: ModelInfo[]; current: ModelRef | null } };
+	/** `scoped`: Pi's scoped models (`enabledModels` / `/scoped-models`, the PiMate "favorites"); empty = no filter. */
+	models: {
+		params: Record<string, never>;
+		result: { models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] };
+	};
+	/** Saves the scoped models to Pi's global settings (`enabledModels`); empty = all models. */
+	set_scoped_models: { params: { models: ModelRef[] }; result: { scoped: ModelRef[] } };
 	/** Saved sessions of the instance's cwd, newest first. */
 	sessions: { params: { limit?: number }; result: { sessions: SessionListItem[] } };
 	/** Gracefully exit this Pi (ctx.shutdown()). The instance then disappears (`instance_gone`). */

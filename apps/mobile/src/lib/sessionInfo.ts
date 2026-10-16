@@ -56,6 +56,25 @@ export function modelLabel(
 	return showThinking ? `${name} · ${thinking}` : name;
 }
 
+export type ModelScope = "favorites" | "all";
+const sameModel = (a: ModelRef, b: ModelRef) => a.provider === b.provider && a.id === b.id;
+export const isFavorite = (scoped: readonly ModelRef[] | undefined, m: ModelRef) =>
+	!!scoped?.some((s) => sameModel(s, m));
+
+/** Like Pi's /model: the favorites (scoped models) first when there are any, else all models. */
+export const defaultScope = (scoped: readonly ModelRef[] | undefined): ModelScope =>
+	scoped?.length ? "favorites" : "all";
+
+export function scopeModels(models: readonly ModelInfo[], scoped: readonly ModelRef[] | undefined, scope: ModelScope) {
+	return scope === "all" ? models : models.filter((m) => isFavorite(scoped, m));
+}
+
+/** Favorites after starring / unstarring `m`, keeping Pi's order (Ctrl+P cycles in this order). */
+export function toggleFavorite(scoped: readonly ModelRef[] | undefined, m: ModelRef): ModelRef[] {
+	const base = scoped ?? [];
+	return isFavorite(base, m) ? base.filter((s) => !sameModel(s, m)) : [...base, { provider: m.provider, id: m.id }];
+}
+
 /** Models grouped by provider, keeping the RC order inside each group; `query` filters name / id / provider. */
 export function groupModels(models: readonly ModelInfo[], query = ""): { provider: string; models: ModelInfo[] }[] {
 	const q = query.trim().toLowerCase();

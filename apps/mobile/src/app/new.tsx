@@ -12,12 +12,21 @@ import { IconButton, PrimaryButton, TextButton } from "@/components/ui";
 import { ago } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
-import { findModel, groupModels, modelLabel, providerName, thinkingShort } from "@/lib/sessionInfo";
+import {
+	defaultScope,
+	findModel,
+	groupModels,
+	type ModelScope,
+	modelLabel,
+	providerName,
+	scopeModels,
+	thinkingShort,
+} from "@/lib/sessionInfo";
 import type { HostRuntime } from "@/lib/store";
 import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
 
 type Folders = { home: string; folders: FolderInfo[] } | { error: string } | null;
-type Models = { models: ModelInfo[]; current: ModelRef | null } | null | "loading";
+type Models = { models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] } | null | "loading";
 
 const close = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
@@ -321,8 +330,15 @@ function ModelPicker({
 	onClose: () => void;
 }) {
 	const list = models && models !== "loading" ? models.models : null;
+	const scoped = models && models !== "loading" ? models.scoped : undefined;
 	const [query, setQuery] = useState("");
-	const groups = useMemo(() => (list ? groupModels(list, query) : []), [list, query]);
+	// Favorites (Pi's scoped models) first, as in the model sheet; starring is done there.
+	const [choice, setScope] = useState<ModelScope | null>(null);
+	const scope = choice ?? defaultScope(scoped);
+	const groups = useMemo(
+		() => (list ? groupModels(scopeModels(list, scoped, scoped?.length ? scope : "all"), query) : []),
+		[list, scoped, scope, query],
+	);
 	const info = findModel(list, model);
 	const levels = info?.thinkingLevels ?? [];
 	return (
@@ -333,6 +349,26 @@ function ModelPicker({
 				</Text>
 				<TextButton label="完了" onPress={onClose} />
 			</View>
+			{list && scoped?.length ? (
+				<View style={[styles.segment, { marginBottom: 10 }]} accessibilityRole="tablist">
+					{(["favorites", "all"] as const).map((k) => {
+						const on = k === scope;
+						return (
+							<Pressable
+								key={k}
+								accessibilityRole="tab"
+								accessibilityState={{ selected: on }}
+								onPress={() => setScope(k)}
+								style={[styles.segItem, on && styles.segOn]}
+							>
+								<Text style={[styles.segText, on && styles.segTextOn]}>
+									{k === "favorites" ? `お気に入り ${scoped.length}` : `すべて ${list.length}`}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+			) : null}
 			{list && list.length > 6 ? (
 				<View style={styles.search}>
 					<SearchIcon />

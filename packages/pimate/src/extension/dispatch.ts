@@ -22,6 +22,7 @@ const methods = [
 	"session_op",
 	"commands",
 	"models",
+	"set_scoped_models",
 	"sessions",
 	"shutdown",
 	"subagents_rpc",
@@ -62,6 +63,12 @@ export function validateRequest(value: unknown): Request {
 			break;
 		case "set_model":
 			ok = str("provider", true) && str("id", true);
+			break;
+		case "set_scoped_models":
+			ok =
+				Array.isArray(p.models) &&
+				p.models.length <= 500 &&
+				p.models.every((m) => object(m) && typeof m.provider === "string" && typeof m.id === "string");
 			break;
 		case "compact":
 			ok = str("instructions");

@@ -94,6 +94,8 @@ export interface AppState {
 export interface ModelsState {
 	key: string;
 	list: ModelInfo[] | null;
+	/** Pi's scoped models ("favorites"); undefined when the RC is too old to report them. */
+	scoped?: ModelRef[];
 	error?: string;
 }
 
@@ -911,17 +913,30 @@ export class AppStore {
 		const sel = this.state.selection;
 		if (!sel) return;
 		const key = draftKey(sel);
-		this.set({ models: { key, list: this.state.models?.key === key ? this.state.models.list : null } });
+		const prev = this.state.models?.key === key ? this.state.models : null;
+		this.set({ models: { key, list: prev?.list ?? null, scoped: prev?.scoped } });
 		const res = await this.guardedRc("models", {}, { session: false });
 		if (!this.isCurrent(key)) return;
 		if (res.ok) {
-			const list = (res.value.result as { models?: ModelInfo[] }).models ?? [];
-			this.set({ models: { key, list } });
-		} else this.set({ models: { key, list: this.state.models?.list ?? null, error: res.text } });
+			const r = res.value.result as { models?: ModelInfo[]; scoped?: ModelRef[] };
+			this.set({ models: { key, list: r.models ?? [], scoped: r.scoped } });
+		} else this.set({ models: { ...(this.state.models ?? { key, list: null }), key, error: res.text } });
+	}
+
+	/** Saves the favorites as Pi's scoped models (global `enabledModels`); empty = all models. */
+	async setScopedModels(models: ModelRef[]): Promise<Result<null>> {
+		const key = this.state.selection ? draftKey(this.state.selection) : null;
+		const res = await this.guardedRc("set_scoped_models", { models }, { session: false });
+		if (!res.ok) return res;
+		const scoped = (res.value.result as { scoped?: ModelRef[] }).scoped ?? models;
+		if (key && this.state.models?.key === key) this.set({ models: { ...this.state.models, scoped } });
+		return { ok: true, value: null };
 	}
 
 	/** Models offered on a host (asked from any of its Pi instances; null when none answers). */
-	async hostModels(hostId: string): Promise<{ models: ModelInfo[]; current: ModelRef | null } | null> {
+	async hostModels(
+		hostId: string,
+	): Promise<{ models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] } | null> {
 		const conn = this.connections.get(hostId);
 		if (conn?.state !== "connected") return null;
 		const instances = [...conn.instances].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -934,8 +949,8 @@ export class AppStore {
 					expectInstanceId: instance.instanceId,
 				});
 				if (res.ok) {
-					const r = res.result as { models?: ModelInfo[]; current?: ModelRef | null };
-					return { models: r.models ?? [], current: r.current ?? null };
+					const r = res.result as { models?: ModelInfo[]; current?: ModelRef | null; scoped?: ModelRef[] };
+					return { models: r.models ?? [], current: r.current ?? null, scoped: r.scoped };
 				}
 			} catch {
 				return null;

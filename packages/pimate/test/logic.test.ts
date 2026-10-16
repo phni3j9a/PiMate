@@ -205,4 +205,8 @@ it("validates M2 methods and bounded positive session limits", () => {
 	for (const limit of [0, -1, 1.2, NaN, Infinity, "10"])
 		expect(() => validateRequest({ id: "m2", method: "sessions", params: { limit } })).toThrow("Invalid params");
 	expect(validateRequest({ id: "m2", method: "sessions", params: { limit: 10 } }).params).toEqual({ limit: 10 });
+	const models = [{ provider: "faux", id: "a" }];
+	expect(validateRequest({ id: "s", method: "set_scoped_models", params: { models } }).params).toEqual({ models });
+	for (const params of [{}, { models: "faux/a" }, { models: [{ provider: "faux" }] }])
+		expect(() => validateRequest({ id: "s", method: "set_scoped_models", params })).toThrow("Invalid params");
 });
