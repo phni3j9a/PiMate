@@ -173,6 +173,50 @@ describe("AppStore", () => {
 		expect(store.getState().outbox).toEqual([]);
 	});
 
+	it.each(["steer", "followUp"] as const)("sends an explicit %s while busy and queues until consumed", async (mode) => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "running"));
+		store.setDraft("direction");
+		const p = store.send(mode);
+		const rc = opRcs(s)[0];
+		expect(rc.request).toMatchObject({
+			params: { text: "direction", deliverAs: mode },
+			expectInstanceId: "i1",
+			expectSessionId: "s1",
+		});
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: rc.request.id, ok: true, result: { deliveredAs: mode } },
+		});
+		await p;
+		expect(store.getState().outbox).toMatchObject([{ state: "queued", deliveredAs: mode }]);
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "message_end", item: { kind: "user", entryId: "u9", text: "direction" } },
+		});
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("does not send a stale steering mode when idle", async () => {
+		const { store } = await setup();
+		const s = connect();
+		store.setDraft("start");
+		const p = store.send("steer");
+		const rc = opRcs(s)[0];
+		expect(rc.request.params).toEqual({ text: "start" });
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: rc.request.id, ok: true, result: { deliveredAs: "prompt" } },
+		});
+		await p;
+	});
+
 	it("keeps the draft and requires confirmation when the session changed", async () => {
 		const { store } = await setup();
 		const s = connect();
