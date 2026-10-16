@@ -23,7 +23,7 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.2と互換。モデルのお気に入りはPCパッケージ0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.3と互換。画像添付はPCパッケージ0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
@@ -38,6 +38,8 @@ pi
    linger状態は表示するだけで変更しません。ログアウト後の生存はOS側設定に依存します。
 4. PiMate の「QRコードを読み取る」でカメラを許可し、PC の **`/pimate setup` が表示した QR** を読み取る。
    マシン名・アドレスを確認してペアリングします。`pimate://` リンクの貼り付けも使えます。コードは10分・1回限りです。
+
+画像添付を使うには PC 側も更新し、対象の **Pi を再起動**してください。古い RC は画像を受け付けません（Host の再起動だけでは更新されません）。
 
 APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.md#android-apk-のビルドと配布m5b) を参照してください。同じ署名の新しい APK は既存アプリに上書きインストールできます。
 

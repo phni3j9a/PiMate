@@ -58,7 +58,7 @@ M5c（アプリ / Host 0.1.1）:
 - 入力欄の「＋」で OS の写真ピッカーを開き、1枚だけ選択。サムネイル横の × で削除、＋ で変更できます。古い Android では OS が画像に絞ったファイル選択画面を開く場合もあります。カメラ撮影・一般ファイルの添付・子への画像送信・拡大ビューアはありません。
 - 選択後は長辺最大 1600px の JPEG（品質 0.85）に変換し、512 KiB を超える場合は添付せず説明を出します。画像だけでも本文つきでも送信でき、画像つきの本文は 32,768 文字以内。準備中は送信できません。
 - 作業中も「割り込む」/「後で伝える」が使えます。画像は受付通知だけを表示し、本文には Pi の実履歴が届いた画像を表示します。Pi が画像や寸法注記を変換することがあるため、仮の送信済み表示は残しません。送信先のセッションが変わった画像だけの下書きにも確認が必要です。写真選択中に送信先が変わった場合は、遅れて返った写真を添付しません。
-- PC 側 RC の `snapshot.promptImages === true` が必須。未対応の RC では画像を送らず、PC パッケージ更新と Pi 再起動を案内します（Host の再起動だけでは既存 Pi の RC は更新されません）。テキストのみの送信は従来どおり。選択中のモデルも画像対応である必要があります。
+- Android 0.1.3 / PC パッケージ 0.1.4 以降。PC 側 RC の `snapshot.promptImages === true` が必須。未対応の RC では画像を送らず、PC パッケージ更新と Pi 再起動を案内します（Host の再起動だけでは既存 Pi の RC は更新されません）。テキストのみの送信は従来どおり。選択中のモデルも画像対応である必要があります。
 - 失敗・届いたか不明な場合は本文と画像を保持し、自動再送しません。成功確認前に履歴へ挿入しません。返信待ちに下書きを編集した場合、送信済みの本文・画像と両方一致しない限り消しません。
 - 通信切断で結果が未確認の画像は、Pi が再変換すると自動照合できない場合があります。その場合は下書きを保持し、手動の履歴確認を案内します。画像や本文の類似だけで配信済みと推測しません。
 - 履歴は各ユーザーメッセージの最初の JPEG/PNG/WebP（512 KiB 以下）をプレビューします。履歴全体では画像の decoded 合計を 2 MiB まで、最新側から優先します。サイズ・形式・合計上限で表示できないものや複数枚の残りは、本文を残したまま画像件数と表示制限を示します。Pi の元のセッションは変更しません。
@@ -89,7 +89,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.2.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.3.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -109,14 +109,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.2.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.3.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.2 apps/mobile/dist/pimate-0.1.2.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.2' --notes-file <リリースノート>
+gh release create app-v0.1.3 apps/mobile/dist/pimate-0.1.3.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.3' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
