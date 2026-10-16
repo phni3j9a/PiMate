@@ -21,7 +21,6 @@ import { DialogContext, type DialogContextValue } from "@/components/chat/Dialog
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
-import { Sheet } from "@/components/Sheet";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { ModelSheet } from "@/components/sheets/ModelSheet";
 import { SessionSheet } from "@/components/sheets/SessionSheet";
@@ -65,7 +64,7 @@ export default function ChatScreen() {
 	const models = useAppState((s) => s.models);
 	const commands = useAppState((s) => s.commands);
 	const answering = useAppState((s) => s.answering);
-	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | "timing" | null>(null);
+	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | null>(null);
 	const [sessionPage, setSessionPage] = useState<"main" | "sessions" | "fork">("main");
 	const closeSheet = useCallback(() => setSheet(null), []);
 
@@ -128,12 +127,10 @@ export default function ChatScreen() {
 			setPicking(false);
 		}
 	};
-	const [timing, setTiming] = useState<{ key: string | null; mode: "steer" | "followUp" } | null>(null);
-	const sendMode = timing?.key === key ? timing.mode : "followUp";
 	const sending = outbox.some((e) => e.state === "sending");
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
 	const blocker = useAppState(() => appStore.sendBlocker());
-	const queued = outbox.filter((e) => e.state === "queued");
+	const queued = outbox.filter((e) => e.state === "queued" || e.state === "unconfirmed");
 	const placeholder =
 		blocker === "dialog"
 			? "上の質問に回答すると入力できます"
@@ -291,7 +288,7 @@ export default function ChatScreen() {
 							onSend={() => {
 								if (pickingRef.current) return;
 								const target = appStore.opTarget();
-								void appStore.send(sendMode).then((action) => {
+								void appStore.send().then((action) => {
 									const current = appStore.opTarget();
 									if (
 										!action ||
@@ -319,11 +316,7 @@ export default function ChatScreen() {
 									if (target) appStore.setImages([], target);
 								},
 							}}
-							sendMode={
-								working
-									? { label: sendMode === "steer" ? "割り込む" : "後で伝える", onPress: () => setSheet("timing") }
-									: undefined
-							}
+							sendLabel={working ? "割り込む" : "送信"}
 							// Only a turn can be stopped: an extension command's dialog outside one is answered, not stopped.
 							showStop={!!view?.agentActive && view.phase === "ready" && connected}
 							stopping={aborting}
@@ -334,7 +327,12 @@ export default function ChatScreen() {
 							onOpenModel={() => setSheet("model")}
 						>
 							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
-							<QueuedRows entries={queued} />
+							<QueuedRows
+								entries={queued}
+								canRestore={view?.phase === "ready" && !draft && !image}
+								sessionId={view?.session?.id}
+								onRestore={(id) => appStore.restoreOutboxDraft(id)}
+							/>
 							{view?.slashCommands === true && view.phase === "ready" ? (
 								<CommandPalette
 									draft={draft}
@@ -348,19 +346,6 @@ export default function ChatScreen() {
 					</View>
 				) : null}
 			</KeyboardAvoidingView>
-			<Sheet visible={sheet === "timing"} onClose={closeSheet} label="送信のタイミング">
-				<Text style={styles.emptyTitle}>送信のタイミング</Text>
-				{(["followUp", "steer"] as const).map((mode) => (
-					<TextButton
-						key={mode}
-						label={`${mode === sendMode ? "✓ " : ""}${mode === "steer" ? "割り込む · 作業の区切りで伝える" : "後で伝える · 今の作業が終わってから"}`}
-						onPress={() => {
-							setTiming({ key, mode });
-							closeSheet();
-						}}
-					/>
-				))}
-			</Sheet>
 			<SessionSheet visible={sheet === "session"} onClose={closeSheet} initialPage={sessionPage} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
 			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />

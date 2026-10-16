@@ -69,12 +69,13 @@ export function createHandlers(h: Hub): Handlers {
 						...p.images.map(({ mimeType, data }) => ({ type: "image" as const, mimeType, data })),
 					]
 				: text;
-			const deliverAs = p.deliverAs ?? (ctx.isIdle() ? undefined : "followUp");
+			const idle = ctx.isIdle();
+			const deliverAs = p.deliverAs ?? (idle ? undefined : "followUp");
 			pi.sendUserMessage(content, {
 				...(deliverAs ? { deliverAs } : {}),
 				expandPromptTemplates: p.expandTemplates ?? false,
 			});
-			return { deliveredAs: extension ? "command" : (deliverAs ?? "prompt") };
+			return { deliveredAs: extension ? "command" : idle ? "prompt" : (deliverAs ?? "prompt") };
 		},
 		abort: () => {
 			const { ctx } = ready();

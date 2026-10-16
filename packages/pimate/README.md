@@ -69,7 +69,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 
 RC は `hello` snapshot の `promptImages: true` で画像対応を通知します。古い RC は未知の `images` を無視するため、クライアントはこの明示的な capability がない限り画像を送ってはいけません。PC パッケージの更新後は、対象の **Pi も再起動**してください。画像非対応モデルには `unsupported` を返し、本文だけを黙って送ることはありません。
 
-`prompt.params.images` は JPEG / PNG / WebP の base64 画像1枚、decoded 最大 512 KiB。画像つき本文は最大 32,768 文字で、`text: ""` の画像のみ送信も可能です。Pi の標準 `sendUserMessage` に text/image content 配列を渡します。`deliverAs: "steer" | "followUp"`、instance/session guards、失敗時の非再送はテキストと同じです。既存 CLI はテキスト送信のまま、撮影やファイルアップロードの追加 API はありません。
+`prompt.params.images` は JPEG / PNG / WebP の base64 画像1枚、decoded 最大 512 KiB。画像つき本文は最大 32,768 文字で、`text: ""` の画像のみ送信も可能です。Pi の標準 `sendUserMessage` に text/image content 配列を渡します。スマホは待機中も `deliverAs: "steer"` を送り、RC は idle なら prompt、busy なら steer として受け付けます。旧アプリ・CLI 向けの `followUp` と省略時の busy followUp は維持します。instance/session guards、失敗時の非再送はテキストと同じです。既存 CLI はテキスト送信のまま、撮影やファイルアップロードの追加 API はありません。
 
 履歴と live のユーザー項目は `imageCount`（元の総枚数）、`images`（最初の対応画像、サイズ上限内のみ）を含みます。履歴の画像 preview は decoded 合計 2 MiB を最新側から優先し、収まらない項目は件数と本文だけを返します。live 配信や Pi の原本は削りません。モバイル側は表示できない画像を placeholder にし、テキストを落としません。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 

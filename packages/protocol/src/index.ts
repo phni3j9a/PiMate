@@ -278,7 +278,7 @@ export function slashCommandName(text: string): string | null {
 export interface RcMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
-	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. Expanded extension commands run immediately and return "command" (no user transcript entry). */
+	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. Expanded extension commands run immediately and return "command" (no user transcript entry). */
 	prompt: {
 		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
 		result: { deliveredAs: "prompt" | "steer" | "followUp" | "command" };

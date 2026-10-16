@@ -35,6 +35,21 @@ it("chooses prompt vs followUp vs steer and controls template expansion", async 
 	});
 	expect(await setup().handlers.prompt({ text: "idle" })).toEqual({ deliveredAs: "prompt" });
 });
+it.each([true, false])(
+	"uses PC idle=%s for the receipt, preserving steering intent across the idle race",
+	async (idle) => {
+		const { handlers, pi } = setup(idle);
+		expect(await handlers.prompt({ text: "direction", deliverAs: "steer" })).toEqual({
+			deliveredAs: idle ? "prompt" : "steer",
+		});
+		expect(pi.sendUserMessage).toHaveBeenCalledWith("direction", { deliverAs: "steer", expandPromptTemplates: false });
+	},
+);
+it("preserves explicit followUp for older apps and CLI callers", async () => {
+	const { handlers, pi } = setup(false);
+	expect(await handlers.prompt({ text: "later", deliverAs: "followUp" })).toEqual({ deliveredAs: "followUp" });
+	expect(pi.sendUserMessage).toHaveBeenCalledWith("later", { deliverAs: "followUp", expandPromptTemplates: false });
+});
 it("selects registry models, exposes commands and aborts", async () => {
 	const { handlers, ctx, pi } = setup();
 	expect(await handlers.set_model({ provider: "faux", id: "one" })).toEqual({ model: { provider: "faux", id: "one" } });

@@ -1,4 +1,4 @@
-import type { InstanceSummary, TranscriptItem } from "@pimate/protocol";
+import type { InstanceSummary, PromptImage, TranscriptItem } from "@pimate/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HostRegistry, MemoryStorage } from "../src/lib/hostRegistry";
 import { AppStore, SPAWN_APPEAR_TIMEOUT_MS } from "../src/lib/store";
@@ -150,19 +150,19 @@ describe("AppStore", () => {
 		expect(store.getState().view?.items).toHaveLength(1);
 	});
 
-	it("shows follow-ups as queued until Pi takes them", async () => {
+	it("clears a queued steer when Pi settles normally", async () => {
 		const { store } = await setup();
 		const s = connect();
-		store.setDraft("later");
+		store.setDraft("direction");
 		const p = store.send();
 		const id = opRcs(s)[0].request.id;
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",
-			response: { type: "response", id, ok: true, result: { deliveredAs: "followUp" } },
+			response: { type: "response", id, ok: true, result: { deliveredAs: "steer" } },
 		});
 		await p;
-		expect(store.getState().outbox).toMatchObject([{ state: "queued", deliveredAs: "followUp" }]);
+		expect(store.getState().outbox).toMatchObject([{ state: "queued", deliveredAs: "steer" }]);
 		s.receive({
 			type: "event",
 			instanceId: "i1",
@@ -173,25 +173,25 @@ describe("AppStore", () => {
 		expect(store.getState().outbox).toEqual([]);
 	});
 
-	it.each(["steer", "followUp"] as const)("sends an explicit %s while busy and queues until consumed", async (mode) => {
+	it.each(["idle", "running"] as const)("always requests steer when the phone sees %s", async (status) => {
 		const { store } = await setup();
 		const s = connect();
-		s.receive(subscribedMsg([], "s1", "running"));
+		s.receive(subscribedMsg([], "s1", status));
 		store.setDraft("direction");
-		const p = store.send(mode);
+		const p = store.send();
 		const rc = opRcs(s)[0];
 		expect(rc.request).toMatchObject({
-			params: { text: "direction", deliverAs: mode },
+			params: { text: "direction", deliverAs: "steer" },
 			expectInstanceId: "i1",
 			expectSessionId: "s1",
 		});
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",
-			response: { type: "response", id: rc.request.id, ok: true, result: { deliveredAs: mode } },
+			response: { type: "response", id: rc.request.id, ok: true, result: { deliveredAs: "steer" } },
 		});
 		await p;
-		expect(store.getState().outbox).toMatchObject([{ state: "queued", deliveredAs: mode }]);
+		expect(store.getState().outbox).toMatchObject([{ state: "queued", deliveredAs: "steer" }]);
 		s.receive({
 			type: "event",
 			instanceId: "i1",
@@ -202,19 +202,127 @@ describe("AppStore", () => {
 		expect(store.getState().outbox).toEqual([]);
 	});
 
-	it("does not send a stale steering mode when idle", async () => {
+	it("accepts prompt delivery from an idle RC while still requesting steer", async () => {
 		const { store } = await setup();
 		const s = connect();
 		store.setDraft("start");
-		const p = store.send("steer");
+		const p = store.send();
 		const rc = opRcs(s)[0];
-		expect(rc.request.params).toEqual({ text: "start" });
+		expect(rc.request.params).toEqual({ text: "start", deliverAs: "steer" });
 		s.receive({
 			type: "rc_result",
 			instanceId: "i1",
 			response: { type: "response", id: rc.request.id, ok: true, result: { deliveredAs: "prompt" } },
 		});
 		await p;
+	});
+
+	it.each(["before", "after"])("keeps an unconsumed steer when stop settles %s its send ACK", async (ack) => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "running"));
+		store.setDraft("direction");
+		const sending = store.send();
+		const id = opRcs(s)[0].request.id;
+		const receipt = () =>
+			s.receive({
+				type: "rc_result",
+				instanceId: "i1",
+				response: { type: "response", id, ok: true, result: { deliveredAs: "steer" } },
+			});
+		if (ack === "after") {
+			receipt();
+			await sending;
+		}
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "agent_settled", aborted: true },
+		});
+		if (ack === "before") {
+			receipt();
+			await sending;
+		}
+		expect(store.getState().outbox).toMatchObject([{ state: "unconfirmed", text: "direction" }]);
+		expect(store.getState().drafts["h1/i1"]).toBe(ack === "before" ? "direction" : "");
+		expect(store.getState().notice).toMatchObject({ kind: "unconfirmed" });
+		expect(store.getState().notice?.title).toContain("届いていない可能性");
+		s.receive(subscribedMsg([], "s1", "idle"));
+		expect(store.getState().drafts["h1/i1"]).toBe(ack === "before" ? "direction" : "");
+		expect(opRcs(s)).toHaveLength(1);
+	});
+
+	it.each(["success", "timeout", "rejected"])(
+		"preserves stopped drafts on abort %s without waiting for a settle event",
+		async (outcome) => {
+			const { store } = await setup();
+			const s = connect();
+			store.setDraft("first");
+			const sending = store.send();
+			s.receive({
+				type: "rc_result",
+				instanceId: "i1",
+				response: { type: "response", id: opRcs(s)[0].request.id, ok: true, result: { deliveredAs: "steer" } },
+			});
+			await sending;
+			store.setDraft("new draft");
+			const stopping = store.abort();
+			s.receive({
+				type: "rc_result",
+				instanceId: "i1",
+				response: {
+					type: "response",
+					id: opRcs(s)[1].request.id,
+					...(outcome === "success"
+						? { ok: true, result: {} }
+						: { ok: false, error: { code: outcome === "timeout" ? "timeout" : "session_changed" } }),
+				},
+			});
+			await stopping;
+			expect(store.getState().drafts["h1/i1"]).toBe("new draft");
+			expect(store.getState().outbox[0].state).toBe(outcome === "rejected" ? "queued" : "unconfirmed");
+			expect(opRcs(s).map((r) => r.request.method)).toEqual(["prompt", "abort"]);
+		},
+	);
+
+	it.each([true, false])("never resurrects a consumed steer on stop (ACK already seen: %s)", async (acked) => {
+		const { store } = await setup();
+		const s = connect();
+		store.setDraft("direction");
+		const sending = store.send();
+		const receipt = () =>
+			s.receive({
+				type: "rc_result",
+				instanceId: "i1",
+				response: { type: "response", id: opRcs(s)[0].request.id, ok: true, result: { deliveredAs: "steer" } },
+			});
+		if (acked) {
+			receipt();
+			await sending;
+		}
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "message_end", item: { kind: "user", entryId: "u-new", text: "direction" } },
+		});
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 7,
+			event: { type: "agent_settled", aborted: true },
+		});
+		if (!acked) {
+			receipt();
+			await sending;
+		}
+		expect(store.getState().outbox).toEqual([]);
+		expect(store.getState().drafts["h1/i1"]).toBe("");
+		expect(store.getState().notice).toBeNull();
 	});
 
 	it("keeps the draft and requires confirmation when the session changed", async () => {
@@ -917,7 +1025,7 @@ it("leaving the notification screen during validation does not change selection"
 describe("parent image drafts", () => {
 	const image = { type: "image", mimeType: "image/jpeg", data: "YQ==" } as const;
 	const other = { ...image, data: "Yg==" };
-	function attach(store: AppStore, images = [image]) {
+	function attach(store: AppStore, images: PromptImage[] = [image]) {
 		expect(store.setImages(images, store.opTarget()!)).toBe(true);
 	}
 	function result(s: FakeSocket, ok: boolean, value: Record<string, unknown>) {
@@ -955,18 +1063,142 @@ describe("parent image drafts", () => {
 		);
 		expect(store.getState().outbox).toEqual([]);
 	});
-	it.each(["steer", "followUp"] as const)("queues image+text while busy (%s)", async (mode) => {
+	it("queues image+text as steer while busy so stopping can recover both", async () => {
 		const { store } = await setup();
 		const s = connect();
 		s.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
 		store.setDraft("look");
 		attach(store);
-		const pending = store.send(mode);
-		expect(opRcs(s)[0].request.params).toEqual({ text: "look", images: [image], deliverAs: mode });
-		result(s, true, { deliveredAs: mode });
+		const pending = store.send();
+		expect(opRcs(s)[0].request.params).toEqual({ text: "look", images: [image], deliverAs: "steer" });
+		result(s, true, { deliveredAs: "steer" });
 		await pending;
+		expect(store.getState().outbox).toMatchObject([{ state: "queued", images: [image], deliveredAs: "steer" }]);
+		expect(store.getState().notice?.text).toContain("割り込み");
+	});
+	it.each([false, true])(
+		"recovers a stopped image steer without replacing an edited attachment (%s)",
+		async (edited) => {
+			const { store } = await setup();
+			const s = connect();
+			s.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
+			store.setDraft("look");
+			attach(store);
+			const sending = store.send();
+			result(s, true, { deliveredAs: "steer" });
+			await sending;
+			if (edited) {
+				store.setDraft("next");
+				attach(store, [other]);
+			}
+			s.receive({
+				type: "event",
+				instanceId: "i1",
+				sessionId: "s1",
+				seq: 6,
+				event: { type: "agent_settled", aborted: true },
+			});
+			expect(store.getState().outbox).toMatchObject([{ state: "unconfirmed", images: [image], text: "look" }]);
+			expect(store.getState().drafts["h1/i1"]).toBe(edited ? "next" : "");
+			expect(store.getState().attachments["h1/i1"]).toEqual(edited ? [other] : []);
+			const id = store.getState().outbox[0].id;
+			expect(store.restoreOutboxDraft(id)).toBe(!edited);
+			if (!edited) {
+				expect(store.getState().drafts["h1/i1"]).toBe("look");
+				expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+				expect(store.getState().outbox).toEqual([]);
+			}
+			expect(opRcs(s)).toHaveLength(1);
+		},
+	);
+	it("preserves multiple stopped image drafts as separate sends and restores only into an empty composer", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
+		for (const [text, img] of [
+			["first", image],
+			["second", other],
+		] as const) {
+			store.setDraft(text);
+			attach(store, [img]);
+			const pending = store.send();
+			result(s, true, { deliveredAs: "steer" });
+			await pending;
+		}
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "agent_settled", aborted: true },
+		});
+		const [first, second] = store.getState().outbox;
+		expect(store.getState().outbox).toMatchObject([
+			{ text: "first", images: [image], state: "unconfirmed" },
+			{ text: "second", images: [other], state: "unconfirmed" },
+		]);
+		expect(store.restoreOutboxDraft("missing")).toBe(false);
+		store.setDraft(" ");
+		expect(store.restoreOutboxDraft(first.id)).toBe(false);
+		store.setDraft("");
+		attach(store);
+		expect(store.restoreOutboxDraft(first.id)).toBe(false);
+		attach(store, []);
+		expect(store.restoreOutboxDraft(first.id)).toBe(true);
+		expect(store.getState().drafts["h1/i1"]).toBe("first");
+		expect(store.getState().attachments["h1/i1"]).toEqual([image]);
+		expect(store.getState().outbox).toEqual([second]);
+		expect(store.restoreOutboxDraft(second.id)).toBe(false);
+		const retry = store.send();
+		expect(store.getState().outbox).toContainEqual(second);
+		result(s, true, { deliveredAs: "prompt" });
+		await retry;
+		expect(store.restoreOutboxDraft(second.id)).toBe(true);
+		expect(store.getState().attachments["h1/i1"]).toEqual([other]);
+		expect(store.getState().drafts["h1/i1"]).toBe("second");
 		expect(store.getState().outbox).toEqual([]);
-		expect(store.getState().notice?.text).toContain(mode === "steer" ? "割り込み" : "完了後");
+		expect(opRcs(s)).toHaveLength(3); // Only the explicit manual retry added a request.
+	});
+	it("does not let a late steer ACK erase a manually restored draft", async () => {
+		const { store } = await setup();
+		const s = connect();
+		store.setDraft("direction");
+		const pending = store.send();
+		const id = opRcs(s)[0].request.id;
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "agent_settled", aborted: true },
+		});
+		store.setDraft("");
+		expect(store.restoreOutboxDraft(id)).toBe(true);
+		result(s, true, { deliveredAs: "steer" });
+		await pending;
+		expect(store.getState().drafts["h1/i1"]).toBe("direction");
+		expect(store.getState().outbox).toEqual([]);
+		expect(opRcs(s)).toHaveLength(1);
+	});
+	it("cannot restore an uncertain send into another session", async () => {
+		const { store } = await setup();
+		const s = connect();
+		store.setDraft("direction");
+		const pending = store.send();
+		result(s, true, { deliveredAs: "steer" });
+		await pending;
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "agent_settled", aborted: true },
+		});
+		const id = store.getState().outbox[0].id;
+		s.receive(subscribedMsg([], "s2", "idle"));
+		expect(store.restoreOutboxDraft(id)).toBe(false);
+		expect(store.getState().outbox).toHaveLength(1);
+		expect(opRcs(s)).toHaveLength(1);
 	});
 	it.each(["invalid_request", "session_changed"])("retains the complete draft on %s", async (code) => {
 		const { store } = await setup();
@@ -995,7 +1227,7 @@ describe("parent image drafts", () => {
 		attach(store, []);
 		store.setDraft("text only");
 		const pending = store.send();
-		expect(opRcs(s)[0].request.params).toEqual({ text: "text only" });
+		expect(opRcs(s)[0].request.params).toEqual({ text: "text only", deliverAs: "steer" });
 		result(s, true, {});
 		await pending;
 	});
@@ -1320,13 +1552,9 @@ describe("slash command sending and catalogs", () => {
 		async (status) => {
 			const { store, s } = await commandSetup(status);
 			store.setDraft("/hello:1 arg ");
-			const sending = store.send("steer");
+			const sending = store.send();
 			expect(rcs(s, "prompt").at(-1)?.request).toMatchObject({
-				params: {
-					text: "/hello:1 arg",
-					expandTemplates: true,
-					...(status === "running" ? { deliverAs: "steer" } : {}),
-				},
+				params: { text: "/hello:1 arg", expandTemplates: true, deliverAs: "steer" },
 				expectSessionId: "s1",
 				expectInstanceId: "i1",
 			});
@@ -1354,7 +1582,11 @@ describe("slash command sending and catalogs", () => {
 		const { store, s } = await commandSetup();
 		store.setDraft(`/${name} arg`);
 		const sending = store.send();
-		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: `/${name} arg`, expandTemplates: true });
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({
+			text: `/${name} arg`,
+			expandTemplates: true,
+			deliverAs: "steer",
+		});
 		reply(s, "prompt", { deliveredAs: "prompt" });
 		await sending;
 		expect(store.getState().outbox).toEqual([]);
@@ -1363,8 +1595,8 @@ describe("slash command sending and catalogs", () => {
 	it("preserves queued templates until Pi settles", async () => {
 		const { store, s } = await commandSetup("running");
 		store.setDraft("/review arg");
-		const sending = store.send("followUp");
-		reply(s, "prompt", { deliveredAs: "followUp" });
+		const sending = store.send();
+		reply(s, "prompt", { deliveredAs: "steer" });
 		await sending;
 		expect(store.getState().outbox).toMatchObject([{ text: "/review arg", state: "queued" }]);
 		s.receive({
@@ -1406,14 +1638,14 @@ describe("slash command sending and catalogs", () => {
 		for (const text of ["/home/x", "/home/x arg"]) {
 			store.setDraft(text);
 			const sending = store.send();
-			expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text });
+			expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text, deliverAs: "steer" });
 			reply(s, "prompt", { deliveredAs: "prompt" });
 			await sending;
 		}
 		s.receive(subscribedMsg([])); // Old RC: no capability.
 		store.setDraft("/model");
 		const sending = store.send();
-		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/model" });
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/model", deliverAs: "steer" });
 		reply(s, "prompt", { deliveredAs: "prompt" });
 		await sending;
 	});
@@ -1535,7 +1767,7 @@ describe("slash command sending and catalogs", () => {
 		expect(rcs(s, "commands")).toEqual([]);
 		store.setDraft("/unknown arg");
 		const sending = store.send();
-		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/unknown arg" });
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/unknown arg", deliverAs: "steer" });
 		reply(s, "prompt", { deliveredAs: "prompt" });
 		await sending;
 	});

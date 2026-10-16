@@ -1,7 +1,7 @@
 /** Chat composer (Main.html footer) with the in-card status notices of Chat-Edge.html. */
 import type { PromptImage } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import {
 	ArrowUpIcon,
@@ -17,7 +17,7 @@ import {
 	WifiOffIcon,
 } from "@/components/icons";
 import { Spinner } from "@/components/StatusMark";
-import { IconButton } from "@/components/ui";
+import { IconButton, TextButton } from "@/components/ui";
 import type { OutboxEntry } from "@/lib/store";
 import { colors, radii, sizes, typography } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
@@ -79,26 +79,55 @@ function BannerView({ banner }: { banner: Banner }) {
 	);
 }
 
-export function QueuedRows({ entries }: { entries: OutboxEntry[] }) {
+export function QueuedRows({
+	entries,
+	canRestore,
+	sessionId,
+	onRestore,
+}: {
+	entries: OutboxEntry[];
+	canRestore: boolean;
+	sessionId?: string;
+	onRestore: (id: string) => void;
+}) {
 	if (!entries.length) return null;
 	return (
-		<View style={styles.queued}>
-			{entries.map((e) => (
-				<View
-					key={e.id}
-					style={styles.queuedRow}
-					accessible
-					accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.images?.length ? "画像1枚 " : ""}${e.text}`}
-				>
-					<QueuedIcon color={colors.textSecondary} />
-					<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
-					<Text style={styles.queuedText} numberOfLines={1}>
-						{e.images?.length ? `画像1枚${e.text ? " · " : ""}` : ""}
-						{e.text}
-					</Text>
-				</View>
-			))}
-		</View>
+		<ScrollView style={styles.queued} keyboardShouldPersistTaps="handled">
+			{entries.map((e) =>
+				e.state === "unconfirmed" ? (
+					<View key={e.id} style={styles.unconfirmed}>
+						<Text style={styles.bannerTitle}>届いていない可能性があります</Text>
+						<Text style={styles.bannerText}>PC の入力欄に戻っている場合があります。履歴を確認してください。</Text>
+						{e.images?.[0] ? <PromptImageView image={e.images[0]} compact /> : null}
+						{e.text ? (
+							<Text style={styles.queuedText} numberOfLines={3} selectable>
+								{e.text}
+							</Text>
+						) : null}
+						<TextButton
+							label="下書きへ戻す"
+							onPress={() => onRestore(e.id)}
+							disabled={!canRestore || e.sessionId !== sessionId}
+						/>
+						{!canRestore ? <Text style={styles.bannerText}>入力欄の本文と添付を空にすると戻せます。</Text> : null}
+					</View>
+				) : (
+					<View
+						key={e.id}
+						style={styles.queuedRow}
+						accessible
+						accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.images?.length ? "画像1枚 " : ""}${e.text}`}
+					>
+						<QueuedIcon color={colors.textSecondary} />
+						<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
+						<Text style={styles.queuedText} numberOfLines={1}>
+							{e.images?.length ? `画像1枚${e.text ? " · " : ""}` : ""}
+							{e.text}
+						</Text>
+					</View>
+				),
+			)}
+		</ScrollView>
 	);
 }
 
@@ -118,8 +147,7 @@ export function Composer({
 	model,
 	contextPercent,
 	onOpenModel,
-	leading,
-	sendMode,
+	sendLabel = "送信",
 	inputLabel = "メッセージ",
 	stopLabel = "停止",
 	attachment,
@@ -140,10 +168,7 @@ export function Composer({
 	model?: string | null;
 	contextPercent?: number | null;
 	onOpenModel?: () => void;
-	/** Left side of the action row when there is no model button (e.g. the subagent send mode). */
-	leading?: ReactNode;
-	/** Parent prompt timing, while Pi is running. */
-	sendMode?: { label: string; onPress: () => void };
+	sendLabel?: string;
 	inputLabel?: string;
 	stopLabel?: string;
 	/** Parent only; omitted by the child composer. */
@@ -210,21 +235,8 @@ export function Composer({
 								</View>
 							) : null}
 						</Pressable>
-					) : (
-						leading
-					)}
-					<View style={styles.spacer} />
-					{sendMode ? (
-						<Pressable
-							accessibilityRole="button"
-							accessibilityLabel={`送信のタイミング: ${sendMode.label}`}
-							onPress={sendMode.onPress}
-							style={({ pressed }) => [styles.mode, pressed && styles.pressed]}
-						>
-							<Text style={styles.modelText}>{sendMode.label}</Text>
-							<ChevronDownIcon size={12} color={colors.textSecondary} />
-						</Pressable>
 					) : null}
+					<View style={styles.spacer} />
 					{showStop ? (
 						<IconButton label={stopLabel} onPress={onStop} size={sizes.composerControl} disabled={stopping}>
 							{stopping ? <Spinner size={18} /> : <StopIcon />}
@@ -232,7 +244,7 @@ export function Composer({
 					) : null}
 					<Pressable
 						accessibilityRole="button"
-						accessibilityLabel={sending ? "送信中" : sendMode ? `${sendMode.label}で送信` : "送信"}
+						accessibilityLabel={sending ? "送信中" : sendLabel}
 						accessibilityState={{ disabled: !canSend, busy: sending }}
 						disabled={!canSend}
 						onPress={onSend}
@@ -269,7 +281,6 @@ const styles = StyleSheet.create({
 	},
 	actions: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 2 },
 	spacer: { flex: 1 },
-	mode: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
 	model: { flexShrink: 1, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 4 },
 	modelText: { flexShrink: 1, fontSize: 13, color: colors.textSecondary },
 	context: { flexDirection: "row", alignItems: "center", gap: 5, marginLeft: 14 },
@@ -286,11 +297,12 @@ const styles = StyleSheet.create({
 	banner: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10, paddingRight: 2 },
 	bannerIcon: { marginTop: 1 },
 	bannerBody: { flex: 1, minWidth: 0 },
-	bannerTitle: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
-	bannerText: { fontSize: 12, lineHeight: 17 },
+	bannerTitle: { fontSize: 12, lineHeight: 17, fontWeight: "600", color: colors.textSecondary },
+	bannerText: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 	bannerAction: { minHeight: 34, marginTop: -8, justifyContent: "center", paddingHorizontal: 4 },
 	bannerActionText: { fontSize: 13, fontWeight: "600", color: colors.accentText },
-	queued: { marginBottom: 6 },
+	unconfirmed: { padding: 12, gap: 4 },
+	queued: { marginBottom: 6, maxHeight: 240 },
 	queuedRow: { height: 40, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 12 },
 	queuedLabel: { fontSize: 12, color: colors.textSecondary },
 	queuedText: { flex: 1, minWidth: 0, fontSize: 13, color: colors.text },
