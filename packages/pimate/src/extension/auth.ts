@@ -33,6 +33,8 @@ const active = (s: AuthFlow) => ["working", "input", "saving"].includes(s.status
 const validProvider = (id: string): id is AuthProviderId => AUTH_PROVIDER_IDS.includes(id as AuthProviderId);
 const terminal = (s: AuthFlow) => !active(s);
 const inputError = () => new RcError("bad_request", "Invalid auth input");
+// biome-ignore lint/suspicious/noControlCharactersInRegex: Auth inputs must reject control characters.
+const invalidAuthCharacters = /[\s\x00-\x1f\x7f]/;
 
 /** Standard CLI only: SDK-injected credentials/authPath are not exposed by ExtensionContext. */
 export function createProviderAuth(ctx: ExtensionContext): ProviderAuth {
@@ -328,7 +330,8 @@ export class ProviderAuth {
 				this.end(op, "failed", op.state.status === "saving" ? "storage_failed" : "login_failed");
 		}
 	}
-	private prompt(op: Operation, prompt: AuthPrompt): Promise<string> {
+	// OpenAI installs cleanup after these callbacks, so cancellation must not synchronously escape them.
+	private async prompt(op: Operation, prompt: AuthPrompt): Promise<string> {
 		op.controller.signal.throwIfAborted();
 		if (prompt.signal?.aborted) return Promise.reject(new Error("Auth prompt cancelled"));
 		if (prompt.type === "select") {
@@ -378,7 +381,7 @@ export class ProviderAuth {
 		});
 	}
 	private notify(op: Operation, event: AuthEvent): void {
-		op.controller.signal.throwIfAborted();
+		if (op.controller.signal.aborted) return;
 		if (event.type === "auth_url") {
 			if (!validAuthUrl(op.state.provider, event.url)) throw new Error("Invalid authorization URL");
 			this.update(op, { authorization: { url: event.url } });
@@ -396,7 +399,7 @@ export class ProviderAuth {
 }
 
 function validAuthUrl(provider: AuthProviderId, value: string): boolean {
-	if (typeof value !== "string" || value.length > AUTH_MAX_INPUT_LENGTH || /[\s\x00-\x1f\x7f]/.test(value))
+	if (typeof value !== "string" || value.length > AUTH_MAX_INPUT_LENGTH || invalidAuthCharacters.test(value))
 		return false;
 	try {
 		const url = new URL(value);
@@ -439,7 +442,7 @@ function validInput(kind: NonNullable<AuthFlow["prompt"]>["kind"], value: string
 		typeof value !== "string" ||
 		!value.length ||
 		value.length > AUTH_MAX_INPUT_LENGTH ||
-		/[\s\x00-\x1f\x7f]/.test(value)
+		invalidAuthCharacters.test(value)
 	)
 		return false;
 	if (kind === "api_key") return value.length <= 4096 && !value.startsWith("!");

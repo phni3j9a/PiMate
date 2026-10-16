@@ -227,6 +227,32 @@ it.each(["cancel", "expire", "dispose"])("%s aborts provider work and prevents a
 	expect(credentials.size).toBe(0);
 	if (mode !== "dispose") expect((await state(flow)).status).toBe(mode === "expire" ? "expired" : "cancelled");
 });
+it.each(["cancel", "dispose"])("%s during OpenAI setup still reaches provider cleanup", async (mode) => {
+	let prepared!: () => void;
+	const closeCallbackServer = vi.fn();
+	const { auth, credentials } = setup(async (i) => {
+		await new Promise<void>((resolve) => {
+			prepared = resolve;
+		});
+		// Pi's OpenAI provider installs its cleanup after these callbacks.
+		i.notify({ type: "auth_url", url: "https://auth.openai.com/api/accounts/authorize?state=s" });
+		const input = i.prompt({ type: "manual_code", message: "Paste callback URL" });
+		try {
+			await input;
+			return oauth;
+		} finally {
+			closeCallbackServer();
+		}
+	});
+	const { flow } = auth.begin("openai", "oauth");
+	await tick();
+	if (mode === "cancel") auth.cancel(flow.id);
+	else auth.dispose();
+	prepared();
+	await tick();
+	expect(closeCallbackServer).toHaveBeenCalledOnce();
+	expect(credentials.size).toBe(0);
+});
 it("long-polls changes or deadline, bounds independent waits, and rejects stale flows", async () => {
 	vi.useFakeTimers();
 	const { auth, state } = setup(async () => new Promise(() => {}));
@@ -607,6 +633,7 @@ it("actual public ModelRuntime persists literal keys/OAuth metadata and logs out
 			return flow;
 		};
 		vi.stubEnv("PIMATE_LITERAL_ONLY", "MUST_NOT_BE_EXPANDED");
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: Verify that literal placeholders are not expanded.
 		const literal = "FAKE-$PIMATE_LITERAL_ONLY-${PIMATE_LITERAL_ONLY}-$$-$!";
 		let flow = await settle(auth.begin("anthropic", "api_key").flow);
 		expect(flow.prompt?.kind).toBe("api_key");
