@@ -92,7 +92,8 @@ export default function SettingsScreen() {
 							disabled={
 								!notifications.loaded || notifications.busy || (key !== "enabled" && !notifications.settings.enabled)
 							}
-							trackColor={{ true: colors.accent }}
+							trackColor={{ true: colors.accent, false: colors.control }}
+							thumbColor={colors.onAccent}
 							onValueChange={(value) => {
 								void notificationCenter.update(key, value);
 							}}
