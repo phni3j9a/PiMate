@@ -13,6 +13,9 @@ PiのPC側TUIで `/pimate setup` を実行します。Hostの起動・公開先�
 同意した場合のみ `systemd --user` の `pimate-host.service` を登録します。
 登録を断っても、その場だけHostを起動できます（Pi終了後も継続、ログアウト後はOS設定次第）。
 lingerは表示するだけで変更しません。Tailscaleがない場合はloopbackのみで、スマホからは接続できません。
+`pi install` ではパッケージのコマンドがPATHに入らないため、同意した場合のみ `pimate` コマンドのリンクを
+`$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` に作ります（スマホに表示される `pimate attach …` 用）。
+PATHに無ければ追記する行を表示します。シェル設定・既存の別ファイルは変更しません。
 
 表示されるQRまたは `pimate://` リンクをPiMate Androidアプリで開いてペアリングします。
 コードは10分・1回限りです。ペアリング済み端末はPiの操作権限を持つため、リンクを公開しないでください。
@@ -22,7 +25,7 @@ Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j
 - `/pimate devices`: 一覧・失効
 - `/pimate status`: バージョン、listen先、サービス、abduco、互換性
 - `/pimate start` / `stop` / `restart`: Hostを操作
-- `/pimate uninstall`: Host停止とサービス削除（設定は保持）
+- `/pimate uninstall`: Host停止とサービス・`pimate` リンクの削除（設定は保持）
 
 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
 旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。

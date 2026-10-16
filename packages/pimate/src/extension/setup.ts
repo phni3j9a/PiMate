@@ -5,16 +5,49 @@ import QRCode from "qrcode";
 import { HostConfig, resolveConfigDir } from "../host/config.ts";
 import { resolveAbduco } from "../host/index.ts";
 import {
+	commandStatus,
 	hasUserSystemd,
 	hostHealth,
+	installCommand,
 	installService,
+	removeCommand,
 	serviceStatus,
 	startHost,
 	stopHost,
 	uninstallService,
 } from "../host/service.ts";
-import { PACKAGE_VERSION, packageDir } from "../package.ts";
+import { cliPath, PACKAGE_VERSION, packageDir } from "../package.ts";
 import { getLocalUI } from "./ui.ts";
+
+/** `pi install` keeps package bins off PATH, so `pimate attach` shown on the phone needs this link. */
+async function offerCommand(ctx: ExtensionCommandContext): Promise<void> {
+	if (process.platform === "win32") return;
+	const ui = getLocalUI(ctx);
+	const cmd = commandStatus();
+	if (cmd.conflict) {
+		ui.notify(
+			`${cmd.path} exists and is not PiMate's link; left unchanged. Run ${cliPath} directly instead.`,
+			"warning",
+		);
+		return;
+	}
+	if (!cmd.linked) {
+		if (
+			!(await ui.confirm(
+				"Add the pimate command?",
+				`Link ${cmd.path} -> ${cliPath} so commands shown on the phone (pimate attach …) work in a terminal? Shell config files are not changed.`,
+			))
+		)
+			return;
+		installCommand();
+		ui.notify(`Installed ${cmd.path}`, "info");
+	}
+	if (!cmd.onPath)
+		ui.notify(
+			`${cmd.dir} is not on PATH. Add this to your shell config, then open a new terminal:\nexport PATH="${cmd.dir}:$PATH"`,
+			"warning",
+		);
+}
 
 async function pair(ctx: ExtensionCommandContext): Promise<void> {
 	const ui = getLocalUI(ctx);
@@ -64,6 +97,7 @@ export function registerSetup(pi: ExtensionAPI): void {
 					case "setup": {
 						const status = await serviceStatus();
 						if (await hostHealth()) {
+							await offerCommand(ctx);
 							if (await ui.confirm("PiMate is already running", "Create another phone pairing?")) await pair(ctx);
 							return;
 						}
@@ -91,6 +125,7 @@ export function registerSetup(pi: ExtensionAPI): void {
 							);
 							await startHost();
 						}
+						await offerCommand(ctx);
 						await pair(ctx);
 						return;
 					}
@@ -118,8 +153,9 @@ export function registerSetup(pi: ExtensionAPI): void {
 					case "status": {
 						const health = await hostHealth();
 						const service = await serviceStatus();
+						const cmd = commandStatus();
 						ui.notify(
-							`PiMate Extension ${PACKAGE_VERSION} / RC protocol ${PROTOCOL_VERSION}\nHost: ${health ? `${health.version ?? "unknown"} / protocol ${health.protocol} / RC ${health.rcProtocol ?? "unknown"}` : "stopped"}\nService: installed=${service.installed}, active=${service.active}, linger=${service.linger}\nListen: ${health?.addresses?.map((a) => `${a.address.includes(":") ? `[${a.address}]` : a.address}:${a.port}`).join(", ") ?? "unknown"}\nabduco (Host): ${health?.abduco ?? "unknown/unavailable"}\nabduco (this package): ${resolveAbduco(process.env, packageDir, (message) => ui.notify(message, "warning")) ?? "unavailable (install system abduco)"}\nSkipped incompatible RCs: ${JSON.stringify(health?.incompatible ?? {})}`,
+							`PiMate Extension ${PACKAGE_VERSION} / RC protocol ${PROTOCOL_VERSION}\nHost: ${health ? `${health.version ?? "unknown"} / protocol ${health.protocol} / RC ${health.rcProtocol ?? "unknown"}` : "stopped"}\nService: installed=${service.installed}, active=${service.active}, linger=${service.linger}\nListen: ${health?.addresses?.map((a) => `${a.address.includes(":") ? `[${a.address}]` : a.address}:${a.port}`).join(", ") ?? "unknown"}\nabduco (Host): ${health?.abduco ?? "unknown/unavailable"}\nabduco (this package): ${resolveAbduco(process.env, packageDir, (message) => ui.notify(message, "warning")) ?? "unavailable (install system abduco)"}\nSkipped incompatible RCs: ${JSON.stringify(health?.incompatible ?? {})}\nCommand: ${cmd.path} (${cmd.linked ? "linked" : cmd.conflict ? "other file, not PiMate's" : "not installed; run /pimate setup"}${cmd.onPath ? "" : ", directory not on PATH"})`,
 							"info",
 						);
 						if (
@@ -167,12 +203,13 @@ export function registerSetup(pi: ExtensionAPI): void {
 						if (
 							await ui.confirm(
 								"Remove PiMate Host service?",
-								"Stop Host and remove its systemd user unit. Paired device config and the Pi package are kept.",
+								"Stop Host and remove its systemd user unit and PiMate's pimate command link. Paired device config and the Pi package are kept.",
 							)
 						) {
 							await uninstallService();
+							removeCommand();
 							ui.notify(
-								`Host service removed. Run: pi remove npm:@phni3j9a/pimate\nThen optionally delete ${resolveConfigDir()} to forget all pairings. For local installs use pi remove <installed-directory>.`,
+								`Host service and pimate command link removed. Run: pi remove npm:@phni3j9a/pimate\nThen optionally delete ${resolveConfigDir()} to forget all pairings. For local installs use pi remove <installed-directory>.`,
 								"info",
 							);
 						}

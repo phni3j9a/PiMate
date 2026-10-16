@@ -1,7 +1,16 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	readlinkSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir, userInfo } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { DEFAULT_HOST_PORT } from "@pimate/protocol";
@@ -221,6 +230,37 @@ export async function stopHost(): Promise<void> {
 		await delay(250);
 	}
 	throw new Error("Host still running (possibly launched manually). Stop it in its original terminal.");
+}
+/** User command dir in uv's order; Pi's own installer also links ~/.local/bin/pi. XDG paths must be absolute. */
+export function commandStatus(env = process.env, target = cliPath) {
+	const xdg = (v?: string) => (v && isAbsolute(v) ? v : undefined);
+	const dataHome = xdg(env.XDG_DATA_HOME);
+	const dir = xdg(env.XDG_BIN_HOME) ?? (dataHome ? resolve(dataHome, "../bin") : join(homedir(), ".local/bin"));
+	const path = join(dir, "pimate");
+	let linked = false;
+	let conflict = false;
+	try {
+		linked = lstatSync(path).isSymbolicLink() && readlinkSync(path) === target;
+		conflict = !linked;
+	} catch {
+		/* absent */
+	}
+	const onPath = (env.PATH ?? "").split(delimiter).some((p) => p && resolve(p) === dir);
+	return { dir, path, linked, conflict, onPath };
+}
+/** Links the `pimate` command; never replaces a file or link that is not ours. */
+export function installCommand(env = process.env, target = cliPath): void {
+	const status = commandStatus(env, target);
+	if (status.linked) return;
+	if (status.conflict) throw new Error(`${status.path} already exists and is not PiMate's link; left unchanged`);
+	mkdirSync(status.dir, { recursive: true });
+	symlinkSync(target, status.path);
+}
+/** Removes the `pimate` link only if it points to this package's CLI. */
+export function removeCommand(env = process.env, target = cliPath): boolean {
+	const status = commandStatus(env, target);
+	if (status.linked) rmSync(status.path);
+	return status.linked;
 }
 export async function uninstallService(): Promise<void> {
 	if (existsSync(unitPath())) ensureOwnedUnit();

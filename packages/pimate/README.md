@@ -97,6 +97,8 @@ Hostの環境変数で起動設定を変更できます（shell評価なし）�
 
 開発時の既定は `pi -e <repo>/packages/pimate/src/extension/index.ts` です。二重ロードしないようRCのglobal登録と `-e` はどちらか一方にしてください。
 
+`pi install` した配布版の `pimate` はPATHに入らないため、`/pimate setup` が同意時に `$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` へリンクを作ります（現在のパッケージの `dist/cli.js` を指すリンクだけを自分のものとみなし、`/pimate uninstall` で削除。別ファイルは上書き・削除しない）。`/pimate status` に状態を表示します。
+
 ```sh
 pimate attach                         # abducoセッション一覧
 pimate attach pimate-01234567          # スマホが表示するコマンドで接続

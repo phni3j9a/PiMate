@@ -36,6 +36,8 @@ pi
 3. Hostの起動を確認し、常駐する場合のみ **systemd user service登録** に同意。
    `pimate-host.service` をログイン時に起動します。断ると一時起動し、Piを閉じてもHostは動き続けます。
    linger状態は表示するだけで変更しません。ログアウト後の生存はOS側設定に依存します。
+   続けて、同意した場合のみ `pimate` コマンド（`pimate attach` など）のリンクを `$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` の最初のディレクトリに作ります（Pi公式インストーラーの `~/.local/bin/pi` と同じ場所）。
+   そのディレクトリがPATHに無ければ追記する行を表示します。シェルの設定ファイルは変更しません。既存の別ファイルは上書きしません。導入済みの場合も `/pimate setup` を再実行すると追加できます。
 4. PiMate の「QRコードを読み取る」でカメラを許可し、PC の **`/pimate setup` が表示した QR** を読み取る。
    マシン名・アドレスを確認してペアリングします。`pimate://` リンクの貼り付けも使えます。コードは10分・1回限りです。
 
@@ -55,7 +57,7 @@ APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.m
 ### 削除
 
 PCのPiで `/pimate uninstall` → ターミナルで `pi remove npm:@phni3j9a/pimate`。
-Host停止・今回のuser unit削除だけを行い、設定・他のサービス・lingerは変更しません。
+Host停止・今回のuser unit削除と、PiMateが作った `pimate` リンクの削除だけを行い、設定・他のサービス・lingerは変更しません。
 ペアリングも忘れる場合は `~/.config/pimate`（環境変数で変更した場合はその場所）を手動削除します。
 開発/未公開tarballからの導入とリリース方法は [packages/pimate/README.md](packages/pimate/README.md#配布パッケージとリリースm5a) を参照してください。
 
