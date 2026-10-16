@@ -18,7 +18,7 @@ M2:
 - 質問への回答: select / confirm / input / editor をチャット内のカードで回答（回答は1回だけ送り、送信先の Pi・セッションを確かめる）。PC で回答されたら短い注記を残す
 - PC でしか操作できない画面（Extension の独自 UI など）は「PC のターミナルで操作が必要です」カードと `pimate attach` のコマンド（コピー可）を表示
 - セッションのメニュー（ヘッダーの「…」）: 統計（メッセージ・トークン・コスト）、新しいセッション、過去のセッションを開く、ここから分岐（ユーザーのメッセージを選ぶ。選んだ文は入力欄に入る）、コンテキストを圧縮、起動元・PC の接続状態・attach コマンド、この Pi を終了（確認あり）
-- モデル・Thinking（入力欄のモデル名）: プロバイダーごとのモデル、そのモデルで使える Thinking レベル、コンテキスト使用量とコスト、圧縮。変更は PC の Pi にも反映される。「お気に入り」は PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）と共通で、PC の `/model` と同じくお気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。古い PC パッケージでは ☆ を出さない（[#23](https://github.com/phni3j9a/PiMate/issues/23)）
+- モデル・Thinking（入力欄のモデル名）: プロバイダーごとのモデル、そのモデルで使える Thinking レベル、コンテキスト使用量とコスト、圧縮。変更は PC の Pi にも反映される。「お気に入り」は PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）と共通で、PC の `/model` と同じくお気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。PC パッケージ 0.1.2 以前では ☆ を出さない（[#23](https://github.com/phni3j9a/PiMate/issues/23)）
 - PC 側の変化に追従: `/resume` などでセッションが変わったら区切りを表示し、下書きがあれば送信前に確認を求める。モデル・Thinking の変更も反映
 
 M3（表示）:
@@ -76,7 +76,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.1.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.2.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -96,14 +96,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.1.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.2.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.1 apps/mobile/dist/pimate-0.1.1.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.1' --notes-file <リリースノート>
+gh release create app-v0.1.2 apps/mobile/dist/pimate-0.1.2.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.2' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。

@@ -23,7 +23,7 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリは0.1.1と互換）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.2と互換。モデルのお気に入りはPCパッケージ0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
