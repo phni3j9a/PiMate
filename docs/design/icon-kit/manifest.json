@@ -1,0 +1,758 @@
+{
+  "name": "PiMate icon kit",
+  "version": "1.0.0",
+  "geometry": "source/geometry.json",
+  "androidSafeCircle": {
+    "canvasDp": 108,
+    "diameterDp": 66,
+    "markWidthDp": 48,
+    "maxVertexRadiusDp": 32.08
+  },
+  "files": [
+    {
+      "path": "source/mark-light.svg",
+      "bytes": 399,
+      "sha256": "9687f092bbf967a9b703d3d3579729f7214b60380943e918c508f5eb9637dabe"
+    },
+    {
+      "path": "source/app-icon-light.svg",
+      "bytes": 528,
+      "sha256": "bfc76cb5a6e0078adb6f5de889ff70732be60159a46b28dab49d228c6c9431bd"
+    },
+    {
+      "path": "logo/mark-light-1024.png",
+      "bytes": 15608,
+      "sha256": "af98654a10e3757ba57bd99825cf0276cd3317e9226830c39b633921e36273a0"
+    },
+    {
+      "path": "splash/mark-light-1024.png",
+      "bytes": 15608,
+      "sha256": "af98654a10e3757ba57bd99825cf0276cd3317e9226830c39b633921e36273a0"
+    },
+    {
+      "path": "ios/icon-composer-layers/light/blue.svg",
+      "bytes": 319,
+      "sha256": "12fbbfaa717219ccc5317e124ca2a90c47efae0c1c1edebd3b4d85ed2603c807"
+    },
+    {
+      "path": "ios/icon-composer-layers/light/coral.svg",
+      "bytes": 255,
+      "sha256": "ed20080513cfb895e199adb570960f555a0f31a9e64e0a3dd178bd36dda3e6be"
+    },
+    {
+      "path": "ios/icon-composer-layers/light/yellow.svg",
+      "bytes": 311,
+      "sha256": "fb66eade78b29d3b80ff0f22ffcd7656e8f09f49cc04d4da7fe50a199fd56b8f"
+    },
+    {
+      "path": "source/mark-dark.svg",
+      "bytes": 399,
+      "sha256": "87b88ec118e1a82ba531c9c66349ee270513e9c24fdcb7cdaa45ea256a8cad2e"
+    },
+    {
+      "path": "source/app-icon-dark.svg",
+      "bytes": 528,
+      "sha256": "24045d8be05b8264c4be31278a6f75a05afa945b13354e44695d66dcccdb9fd5"
+    },
+    {
+      "path": "logo/mark-dark-1024.png",
+      "bytes": 15532,
+      "sha256": "1c38c0723064d32caf75e2f847248f7b70f2de9ba1f7ae35a056450020a93595"
+    },
+    {
+      "path": "splash/mark-dark-1024.png",
+      "bytes": 15532,
+      "sha256": "1c38c0723064d32caf75e2f847248f7b70f2de9ba1f7ae35a056450020a93595"
+    },
+    {
+      "path": "ios/icon-composer-layers/dark/blue.svg",
+      "bytes": 319,
+      "sha256": "278ce3bf7cb37ab024447b6b6fe473b81196b29f83ec0d4ef2c0c246d0783802"
+    },
+    {
+      "path": "ios/icon-composer-layers/dark/coral.svg",
+      "bytes": 255,
+      "sha256": "90f1501c9e59ea8574f1aef333ba11e4953929454b660de8fafca0446efa7013"
+    },
+    {
+      "path": "ios/icon-composer-layers/dark/yellow.svg",
+      "bytes": 311,
+      "sha256": "6e6c5b9d5b43ace831f3ddb712a0137e7ba03511b88758a15c20fc927dfeece6"
+    },
+    {
+      "path": "source/mark-black.svg",
+      "bytes": 399,
+      "sha256": "aa5b96d48459cfe5e9ebc832be75bd5f5dde0a426f6628170bb069f31bdb3cf6"
+    },
+    {
+      "path": "logo/mark-black-1024.png",
+      "bytes": 12610,
+      "sha256": "57c458539edc5218e311e3e8638f0a0686b5db976a177aae5fc3cd98153b6dec"
+    },
+    {
+      "path": "source/mark-white.svg",
+      "bytes": 399,
+      "sha256": "e9c1c3c2ae5cdb8bad26dfa10f83b6b5012ff4fd34c364297f89c396f5aa1506"
+    },
+    {
+      "path": "logo/mark-white-1024.png",
+      "bytes": 12036,
+      "sha256": "16d6a323d318c600fc5cf502c691a1df1cc61fcacd8e0a8914a4e4de91ce824b"
+    },
+    {
+      "path": "ios/AppIcon.appiconset/icon-light-1024.png",
+      "bytes": 11031,
+      "sha256": "fd9d17031c494ed576181305ced8eecc074c4a65739a226338f986bfb3756440"
+    },
+    {
+      "path": "ios/AppIcon.appiconset/icon-dark-1024.png",
+      "bytes": 11333,
+      "sha256": "97b40c58045fbe6c1da49c3aadf8d07cd82ee6ea9ede3dbd3db90072d803d058"
+    },
+    {
+      "path": "ios/AppIcon.appiconset/icon-tinted-1024.png",
+      "bytes": 11218,
+      "sha256": "9ec0d963e3002c2777ff173494df41b16a59f773a33001ee1101046b80ca0e44"
+    },
+    {
+      "path": "ios/AppIcon.appiconset/Contents.json",
+      "bytes": 711,
+      "sha256": "36f3a0fa25cbc6b143d20eea805f251355ac2bb220d2722d61717a991ed28ff7"
+    },
+    {
+      "path": "android/adaptive/foreground-light.svg",
+      "bytes": 495,
+      "sha256": "be819729d234dc5de4371f4f188159660161a4e5f4cd8c7292715226a355c615"
+    },
+    {
+      "path": "android/adaptive/foreground-light-1024.png",
+      "bytes": 9909,
+      "sha256": "dc6071486640a4a6e885b2f5767a90e85e343f1ee4f74a7c1048b765d4d7da5a"
+    },
+    {
+      "path": "android/adaptive/background-light-1024.png",
+      "bytes": 4908,
+      "sha256": "92b6ba4469ef8e3d641671bd26f99e9e6932066ab99046cde394844383ef244a"
+    },
+    {
+      "path": "android/play-store-light-512.png",
+      "bytes": 4721,
+      "sha256": "9a5e84858d5dffdaad49c6446072e7d0d6d8ccbbc92c97177f7788e40ccf2e7b"
+    },
+    {
+      "path": "android/native-light/res/drawable/ic_launcher_foreground.xml",
+      "bytes": 870,
+      "sha256": "d5e1cbaa4598fe4a6b5d5e82c51f22eb5534f251735dab626cb0a044366db499"
+    },
+    {
+      "path": "android/native-light/res/drawable/ic_launcher_monochrome.xml",
+      "bytes": 870,
+      "sha256": "ce681dc532478a1099d6a3e223265ff4da947400f8da03bc6b5522b72a996a06"
+    },
+    {
+      "path": "android/native-light/res/values/pimate_icon_colors.xml",
+      "bytes": 115,
+      "sha256": "cbc0f9de037dfcc02bd027b93d50fb8bd4181e9d88f50b678a341d4219c33d19"
+    },
+    {
+      "path": "android/native-light/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "bytes": 257,
+      "sha256": "03aa5d06b1d85ce0f42991b8b2fd97137f0b6e5c4f2c8548a64cdeafd3e868a9"
+    },
+    {
+      "path": "android/native-light/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "bytes": 257,
+      "sha256": "03aa5d06b1d85ce0f42991b8b2fd97137f0b6e5c4f2c8548a64cdeafd3e868a9"
+    },
+    {
+      "path": "android/native-light/res/mipmap-anydpi-v33/ic_launcher.xml",
+      "bytes": 322,
+      "sha256": "76667ee6989bae85f7d7851488b58dacc25fa85f9194859898902e3f3d6b9e15"
+    },
+    {
+      "path": "android/native-light/res/mipmap-anydpi-v33/ic_launcher_round.xml",
+      "bytes": 322,
+      "sha256": "76667ee6989bae85f7d7851488b58dacc25fa85f9194859898902e3f3d6b9e15"
+    },
+    {
+      "path": "android/native-light/res/mipmap-mdpi/ic_launcher.png",
+      "bytes": 1053,
+      "sha256": "a96959c25ca28d2296dc8c8e29c7505e0494c7e3a6af6830e63daa06790a59ea"
+    },
+    {
+      "path": "android/native-light/res/mipmap-mdpi/ic_launcher_round.png",
+      "bytes": 1422,
+      "sha256": "5429a6c455bea680d9118b633a0561d9636d10324c01756118c1bbc0b6b545c9"
+    },
+    {
+      "path": "android/native-light/res/mipmap-hdpi/ic_launcher.png",
+      "bytes": 1261,
+      "sha256": "267a95fb87ae0913cdc7fcaa4546c1dbb9e0c5b2bcbf8e50df41b0d43601cecd"
+    },
+    {
+      "path": "android/native-light/res/mipmap-hdpi/ic_launcher_round.png",
+      "bytes": 1848,
+      "sha256": "7d218fb33d1996992d9891a47ade152efad2f93f7ccb75e88bab0803db7da697"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xhdpi/ic_launcher.png",
+      "bytes": 1483,
+      "sha256": "6e57684297ee97efafa79bf5cec308987fcc50d4fa59e0c8f63018236d3b03bd"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xhdpi/ic_launcher_round.png",
+      "bytes": 2273,
+      "sha256": "944e6519913bf59b08c3e4b0622b1c2188f8047968d0b0c8b0d60acfe7311af7"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xxhdpi/ic_launcher.png",
+      "bytes": 2113,
+      "sha256": "b718ec6f71d28c55efd2e9556b296c933ad300eb5727b20f7ac4b917994ad3dc"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xxhdpi/ic_launcher_round.png",
+      "bytes": 3319,
+      "sha256": "7c2ad7f5d9e977a5841a72b92cba458b0aae3ec0917a03cb3f441268d4747c35"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xxxhdpi/ic_launcher.png",
+      "bytes": 2824,
+      "sha256": "7b28c892de9bd3f4df227d37dc5eac4a968c8510832b7b615efed6626d9419cb"
+    },
+    {
+      "path": "android/native-light/res/mipmap-xxxhdpi/ic_launcher_round.png",
+      "bytes": 4324,
+      "sha256": "387c428800ced557ceff7cfe6a523a0e90af85b6b26cba068d7b0b0177d78d94"
+    },
+    {
+      "path": "android/adaptive/foreground-dark.svg",
+      "bytes": 495,
+      "sha256": "efe6d128bc71d71c082c4b5e408c9b17fef0615eced844860aed214e741c6090"
+    },
+    {
+      "path": "android/adaptive/foreground-dark-1024.png",
+      "bytes": 9853,
+      "sha256": "0a565d0af3d0f1911bcc2acdaf69f008c18d973a73008efde6f8d60b24aa4113"
+    },
+    {
+      "path": "android/adaptive/background-dark-1024.png",
+      "bytes": 4908,
+      "sha256": "516a6d20c2da56f0c61e01c2fb7e035d7c320a1de08838b48c2edd49d72fc5f1"
+    },
+    {
+      "path": "android/play-store-dark-512.png",
+      "bytes": 4882,
+      "sha256": "51aaaca5471dda4b6dba73dd867f4a5785fe4779630dccb9296439590ecc12b8"
+    },
+    {
+      "path": "android/native-dark/res/drawable/ic_launcher_foreground.xml",
+      "bytes": 870,
+      "sha256": "0e2eda3670d063de7d58c0d2dcd9409625eb94dde2897eaf040e074e3fae628e"
+    },
+    {
+      "path": "android/native-dark/res/drawable/ic_launcher_monochrome.xml",
+      "bytes": 870,
+      "sha256": "ce681dc532478a1099d6a3e223265ff4da947400f8da03bc6b5522b72a996a06"
+    },
+    {
+      "path": "android/native-dark/res/values/pimate_icon_colors.xml",
+      "bytes": 115,
+      "sha256": "eb32e5224189b0768da922b700c0cfe8e67290f1c1f31fcba4048ec31073af1d"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "bytes": 257,
+      "sha256": "03aa5d06b1d85ce0f42991b8b2fd97137f0b6e5c4f2c8548a64cdeafd3e868a9"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "bytes": 257,
+      "sha256": "03aa5d06b1d85ce0f42991b8b2fd97137f0b6e5c4f2c8548a64cdeafd3e868a9"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-anydpi-v33/ic_launcher.xml",
+      "bytes": 322,
+      "sha256": "76667ee6989bae85f7d7851488b58dacc25fa85f9194859898902e3f3d6b9e15"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-anydpi-v33/ic_launcher_round.xml",
+      "bytes": 322,
+      "sha256": "76667ee6989bae85f7d7851488b58dacc25fa85f9194859898902e3f3d6b9e15"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-mdpi/ic_launcher.png",
+      "bytes": 1097,
+      "sha256": "62ab22f80c163fb24ad49588df6dcd89df32e0c697fca02162c2f4ea6dccea94"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-mdpi/ic_launcher_round.png",
+      "bytes": 1443,
+      "sha256": "38833389e26095af8daba45d3ca1e77d01580419c1755dcd77fd056b1d47d5b3"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-hdpi/ic_launcher.png",
+      "bytes": 1307,
+      "sha256": "a303686f19c7eb44b4612b1ab8885180bf70f0c6822b237877759d9d1ad1ed50"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-hdpi/ic_launcher_round.png",
+      "bytes": 1905,
+      "sha256": "cbee7ad9abcc02124ab39e3b815d1d9babe028bc085e42974d5643d335c45264"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xhdpi/ic_launcher.png",
+      "bytes": 1521,
+      "sha256": "5fc31b2610025464fcc0b3038d5d7872bc6b5e12427b7b94b05359dc7f1d7eb6"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xhdpi/ic_launcher_round.png",
+      "bytes": 2333,
+      "sha256": "d7470393bdab488e6a7ea939fe8dd7059177381767592869618146a42e2ea629"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xxhdpi/ic_launcher.png",
+      "bytes": 2166,
+      "sha256": "7f8e736b0d504650e8e887e1a4449571e7adb9d6ee4c15e9880f0ea1125a14de"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xxhdpi/ic_launcher_round.png",
+      "bytes": 3386,
+      "sha256": "f68595e3163214c01168f05b2a2a13dc5ff9c0b5b8ab74cbc5f1d58511f8e1fd"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xxxhdpi/ic_launcher.png",
+      "bytes": 2893,
+      "sha256": "6fd68284062ddce8d4a6f4d0a2a78b923a31ae4324534f64a42294a4b8418eb3"
+    },
+    {
+      "path": "android/native-dark/res/mipmap-xxxhdpi/ic_launcher_round.png",
+      "bytes": 4418,
+      "sha256": "d68106b99b650369152370ed75006542a4de0f8bc6d8cb91a75a7d901bc0f443"
+    },
+    {
+      "path": "android/adaptive/monochrome.svg",
+      "bytes": 495,
+      "sha256": "3a0c6fbbecb1eee147b1df8089cffea76d3a6adede43b5b4f08d97fe2b0e3185"
+    },
+    {
+      "path": "android/adaptive/monochrome-1024.png",
+      "bytes": 8674,
+      "sha256": "5bd44bbef834ca783ac74aeae5fd5764be40a3fcc0a16dcd42a25344d054827a"
+    },
+    {
+      "path": "android/notification/notification-24.png",
+      "bytes": 637,
+      "sha256": "bf94e5bb06ac390fcb808d5f79e1c87dac07fdec0bc4469a0e140d345cab7506"
+    },
+    {
+      "path": "android/notification/notification-36.png",
+      "bytes": 716,
+      "sha256": "c35edcc6fee02a22f46e1a078def6bd9f6f4acb78c53eeb15b1f35132ad048cc"
+    },
+    {
+      "path": "android/notification/notification-48.png",
+      "bytes": 782,
+      "sha256": "68a3303cbe44269c269a6ec3409bce2ac66409b405475b45ac2b0eb505894003"
+    },
+    {
+      "path": "android/notification/notification-72.png",
+      "bytes": 905,
+      "sha256": "909b1f9ee4ad391381093259448a6cc155660d719742d2a2e5751b9ada7247d8"
+    },
+    {
+      "path": "android/notification/notification-96.png",
+      "bytes": 1063,
+      "sha256": "195ce875f1641d9401c5b116c01fce72277f7c2086af0449e7d3a0f98cf7dbc9"
+    },
+    {
+      "path": "web/favicon-light.svg",
+      "bytes": 528,
+      "sha256": "bfc76cb5a6e0078adb6f5de889ff70732be60159a46b28dab49d228c6c9431bd"
+    },
+    {
+      "path": "web/icon-light-16.png",
+      "bytes": 664,
+      "sha256": "edf7618c81138fa915899da87809061a5420860bf1c544a42f94808e02357b04"
+    },
+    {
+      "path": "web/icon-light-32.png",
+      "bytes": 746,
+      "sha256": "4b40b7396039cd55d666da4eb06f416babf4157d52cce1e70b555f3520add277"
+    },
+    {
+      "path": "web/icon-light-48.png",
+      "bytes": 813,
+      "sha256": "2b26dfa88cfe4f696eb624ee4cce0a0d367a0caf179bbc4398715fbe76e0e79e"
+    },
+    {
+      "path": "web/icon-light-180.png",
+      "bytes": 1549,
+      "sha256": "01f45ff97e0c265ebb9b777b448357f4cef5ae24f1a52d4556bcd7c246a575bc"
+    },
+    {
+      "path": "web/icon-light-192.png",
+      "bytes": 1670,
+      "sha256": "9ee57305f5e0c815a4751b7c2036b609999064258030e137636595bb7d058a43"
+    },
+    {
+      "path": "web/icon-light-512.png",
+      "bytes": 4721,
+      "sha256": "9a5e84858d5dffdaad49c6446072e7d0d6d8ccbbc92c97177f7788e40ccf2e7b"
+    },
+    {
+      "path": "web/maskable-light-192.png",
+      "bytes": 1642,
+      "sha256": "944c683c1d0f5deb07d2e5e829ed7c4e001386617fc786f52781ef477adc6191"
+    },
+    {
+      "path": "web/maskable-light-512.png",
+      "bytes": 4489,
+      "sha256": "b482d169fe25575cdc6f02a0e1ecd4e5975dc4e6e1bd385638000b0082917b07"
+    },
+    {
+      "path": "web/favicon-light.ico",
+      "bytes": 1468,
+      "sha256": "0c4cff01e992b8bba7228218085f5288e8e4b49fd6f3b4c83f9dc355a0074c97"
+    },
+    {
+      "path": "web/favicon-dark.svg",
+      "bytes": 528,
+      "sha256": "24045d8be05b8264c4be31278a6f75a05afa945b13354e44695d66dcccdb9fd5"
+    },
+    {
+      "path": "web/icon-dark-16.png",
+      "bytes": 651,
+      "sha256": "8a013846e93f22762f43ac205a06eb2b7ba33088cf3a214ba30735c9cf060692"
+    },
+    {
+      "path": "web/icon-dark-32.png",
+      "bytes": 744,
+      "sha256": "99eb32215baa3b76a8d1b451ad242b54431a081d7df047b8a98bca9923848b05"
+    },
+    {
+      "path": "web/icon-dark-48.png",
+      "bytes": 837,
+      "sha256": "85981cd52b8a0c7b82315760a43169f4dfcef37d8dd637a1d41d5f6e35a28903"
+    },
+    {
+      "path": "web/icon-dark-180.png",
+      "bytes": 1643,
+      "sha256": "a4a8e29f28d4fad8e533e9f4e5962102b367391db07443446b6832ea14902bf4"
+    },
+    {
+      "path": "web/icon-dark-192.png",
+      "bytes": 1763,
+      "sha256": "bc89a35064b42a1a0ae310110c9c1839b2721d37c32204ba1e5987473c156e5a"
+    },
+    {
+      "path": "web/icon-dark-512.png",
+      "bytes": 4882,
+      "sha256": "51aaaca5471dda4b6dba73dd867f4a5785fe4779630dccb9296439590ecc12b8"
+    },
+    {
+      "path": "web/maskable-dark-192.png",
+      "bytes": 1708,
+      "sha256": "7284f6814becb50299d0835db7bc63e6dc5e709b0e1f9efae091975eabcdeaaa"
+    },
+    {
+      "path": "web/maskable-dark-512.png",
+      "bytes": 4653,
+      "sha256": "bb09937274592976f8663b5aee5c5e2bf5daad2d52f8d8525e3e933a40d3af49"
+    },
+    {
+      "path": "web/favicon-dark.ico",
+      "bytes": 1512,
+      "sha256": "08388f4d8f6cecaa538225b1769a4ac6328b08d142e7fba27f90bd07f7cb08dc"
+    },
+    {
+      "path": "web/site.webmanifest",
+      "bytes": 689,
+      "sha256": "614a90a538f3e0a91bacd98bd7cebb2ecba1dee15c1a2b450864fa607cb3fbe2"
+    },
+    {
+      "path": "web/head-snippet.html",
+      "bytes": 553,
+      "sha256": "3e4f4efbaa9e882abfa85f26fdb8e071d45d345f537fceb3862d8d4b8496ea67"
+    },
+    {
+      "path": "desktop/windows/pimate-light.ico",
+      "bytes": 9225,
+      "sha256": "766e04ce5dddc1ec7de6e3dcafc539a79839df1343ea5042a359bd1e5dc072ff"
+    },
+    {
+      "path": "desktop/macos/pimate-light.icns",
+      "bytes": 68169,
+      "sha256": "1023cc402ac28bbb6e149e9ab42ed65baf75dec3a8fc2a1f922a3e123ff36f75"
+    },
+    {
+      "path": "desktop/png/pimate-light-16.png",
+      "bytes": 744,
+      "sha256": "bb7423d4622c2d409195ba1789141675fd691dc974e0271e16c43afdd5d162de"
+    },
+    {
+      "path": "desktop/png/pimate-light-24.png",
+      "bytes": 837,
+      "sha256": "8e8ccf716258359e0eb773f4fc262b25235fcdc4eb403fa3a517ec44aab5c92f"
+    },
+    {
+      "path": "desktop/png/pimate-light-32.png",
+      "bytes": 906,
+      "sha256": "5bb4e50510e7e2f0b3bf69ee0fd28b13765b6a83d400bac63428297aade9e8f9"
+    },
+    {
+      "path": "desktop/png/pimate-light-48.png",
+      "bytes": 1053,
+      "sha256": "a96959c25ca28d2296dc8c8e29c7505e0494c7e3a6af6830e63daa06790a59ea"
+    },
+    {
+      "path": "desktop/png/pimate-light-64.png",
+      "bytes": 1223,
+      "sha256": "69ebb9e6d886627f124d485984d63c559642ede25ec9322f6c06cdf0d44ab390"
+    },
+    {
+      "path": "desktop/png/pimate-light-128.png",
+      "bytes": 1935,
+      "sha256": "344c32681cad207be5ffeade522dc9fdaac76bf66ff2facfd4485f35bab9f1bc"
+    },
+    {
+      "path": "desktop/png/pimate-light-256.png",
+      "bytes": 3706,
+      "sha256": "4f48c329dffbbe845ea29d3d6101d56efb92ec8c21cd4499817860d85f6aa181"
+    },
+    {
+      "path": "desktop/png/pimate-light-512.png",
+      "bytes": 8343,
+      "sha256": "84a01e69dd73960968eeaf2a8305704299e179c1788b841274e4e609ac7cb638"
+    },
+    {
+      "path": "desktop/png/pimate-light-1024.png",
+      "bytes": 19526,
+      "sha256": "2ff37e25a7c2284e422eb81c7a28fbdde3d3d76703ef898b28f2adb27ba1c696"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_16x16.png",
+      "bytes": 744,
+      "sha256": "bb7423d4622c2d409195ba1789141675fd691dc974e0271e16c43afdd5d162de"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_16x16@2x.png",
+      "bytes": 906,
+      "sha256": "5bb4e50510e7e2f0b3bf69ee0fd28b13765b6a83d400bac63428297aade9e8f9"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_32x32.png",
+      "bytes": 906,
+      "sha256": "5bb4e50510e7e2f0b3bf69ee0fd28b13765b6a83d400bac63428297aade9e8f9"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_32x32@2x.png",
+      "bytes": 1223,
+      "sha256": "69ebb9e6d886627f124d485984d63c559642ede25ec9322f6c06cdf0d44ab390"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_128x128.png",
+      "bytes": 1935,
+      "sha256": "344c32681cad207be5ffeade522dc9fdaac76bf66ff2facfd4485f35bab9f1bc"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_128x128@2x.png",
+      "bytes": 3706,
+      "sha256": "4f48c329dffbbe845ea29d3d6101d56efb92ec8c21cd4499817860d85f6aa181"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_256x256.png",
+      "bytes": 3706,
+      "sha256": "4f48c329dffbbe845ea29d3d6101d56efb92ec8c21cd4499817860d85f6aa181"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_256x256@2x.png",
+      "bytes": 8343,
+      "sha256": "84a01e69dd73960968eeaf2a8305704299e179c1788b841274e4e609ac7cb638"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_512x512.png",
+      "bytes": 8343,
+      "sha256": "84a01e69dd73960968eeaf2a8305704299e179c1788b841274e4e609ac7cb638"
+    },
+    {
+      "path": "desktop/macos/pimate-light.iconset/icon_512x512@2x.png",
+      "bytes": 19526,
+      "sha256": "2ff37e25a7c2284e422eb81c7a28fbdde3d3d76703ef898b28f2adb27ba1c696"
+    },
+    {
+      "path": "desktop/windows/pimate-dark.ico",
+      "bytes": 9520,
+      "sha256": "1b21307143e0c6073371be83881296351dfba87d00ba684134bef01f1dcedc50"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.icns",
+      "bytes": 69147,
+      "sha256": "9919cc39aeb555b35a73847d9cd6c33d88f1f2d38832a4e4fa5fd3a01b98332f"
+    },
+    {
+      "path": "desktop/png/pimate-dark-16.png",
+      "bytes": 746,
+      "sha256": "09250cb96fd2ac99ad81afa4966fbbaddd114d95282205c2728e8595494f81a0"
+    },
+    {
+      "path": "desktop/png/pimate-dark-24.png",
+      "bytes": 838,
+      "sha256": "250b10279a215ff8e556524d5718a61f2fe0722b7e3bf2c7be78a10e4f482416"
+    },
+    {
+      "path": "desktop/png/pimate-dark-32.png",
+      "bytes": 915,
+      "sha256": "0cd92699e5434374aab7c12aa0950d7b65cb922bd001edd5229d7d96ff1d6397"
+    },
+    {
+      "path": "desktop/png/pimate-dark-48.png",
+      "bytes": 1097,
+      "sha256": "62ab22f80c163fb24ad49588df6dcd89df32e0c697fca02162c2f4ea6dccea94"
+    },
+    {
+      "path": "desktop/png/pimate-dark-64.png",
+      "bytes": 1262,
+      "sha256": "b1b3c9529316781eb4ded3666d0bf3882e591cbce231bbb1ffeb1414dc09b7a1"
+    },
+    {
+      "path": "desktop/png/pimate-dark-128.png",
+      "bytes": 2023,
+      "sha256": "6993c505199f02b5327f081a3b4f4f97218070d7397ece520405d84c307defe4"
+    },
+    {
+      "path": "desktop/png/pimate-dark-256.png",
+      "bytes": 3797,
+      "sha256": "255caacd2d13212a3b76bca3cdb766cde8fcc6da860ec35711cc970a50d199c0"
+    },
+    {
+      "path": "desktop/png/pimate-dark-512.png",
+      "bytes": 8438,
+      "sha256": "88117c2a59cee176d15827831442b8bc1c9d462d88b9307fc956175bb5eff9fb"
+    },
+    {
+      "path": "desktop/png/pimate-dark-1024.png",
+      "bytes": 19725,
+      "sha256": "ed82cf3d4e4b7d3123993f00b1d8cbf59cc64bde7da7c0e439de26f46311ac64"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_16x16.png",
+      "bytes": 746,
+      "sha256": "09250cb96fd2ac99ad81afa4966fbbaddd114d95282205c2728e8595494f81a0"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_16x16@2x.png",
+      "bytes": 915,
+      "sha256": "0cd92699e5434374aab7c12aa0950d7b65cb922bd001edd5229d7d96ff1d6397"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_32x32.png",
+      "bytes": 915,
+      "sha256": "0cd92699e5434374aab7c12aa0950d7b65cb922bd001edd5229d7d96ff1d6397"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_32x32@2x.png",
+      "bytes": 1262,
+      "sha256": "b1b3c9529316781eb4ded3666d0bf3882e591cbce231bbb1ffeb1414dc09b7a1"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_128x128.png",
+      "bytes": 2023,
+      "sha256": "6993c505199f02b5327f081a3b4f4f97218070d7397ece520405d84c307defe4"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_128x128@2x.png",
+      "bytes": 3797,
+      "sha256": "255caacd2d13212a3b76bca3cdb766cde8fcc6da860ec35711cc970a50d199c0"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_256x256.png",
+      "bytes": 3797,
+      "sha256": "255caacd2d13212a3b76bca3cdb766cde8fcc6da860ec35711cc970a50d199c0"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_256x256@2x.png",
+      "bytes": 8438,
+      "sha256": "88117c2a59cee176d15827831442b8bc1c9d462d88b9307fc956175bb5eff9fb"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_512x512.png",
+      "bytes": 8438,
+      "sha256": "88117c2a59cee176d15827831442b8bc1c9d462d88b9307fc956175bb5eff9fb"
+    },
+    {
+      "path": "desktop/macos/pimate-dark.iconset/icon_512x512@2x.png",
+      "bytes": 19725,
+      "sha256": "ed82cf3d4e4b7d3123993f00b1d8cbf59cc64bde7da7c0e439de26f46311ac64"
+    },
+    {
+      "path": "desktop/tray/template-black-16.png",
+      "bytes": 586,
+      "sha256": "96725a68a9e7891eff338b09f5dcc3cabf2b0e0e26cfe599d12133706c028e01"
+    },
+    {
+      "path": "desktop/tray/template-black-22.png",
+      "bytes": 613,
+      "sha256": "ca5cf18b72ca10198713495a57580d8e3d6cdf470dbb5815f4b5b39aee88ea1f"
+    },
+    {
+      "path": "desktop/tray/template-black-24.png",
+      "bytes": 634,
+      "sha256": "c39c5f326a7ec97aee33c9cad1dd6f492309312c80f5757584698babc18e5efa"
+    },
+    {
+      "path": "desktop/tray/template-black-32.png",
+      "bytes": 683,
+      "sha256": "e4ce09d59ddffcd916d07ffd2b9dc9dc198a0025e0d62f79800b2ead9dccf38e"
+    },
+    {
+      "path": "desktop/tray/template-black-44.png",
+      "bytes": 754,
+      "sha256": "365c23c2e79cc35db64265f0a38ad748d2ec23fd390f09d2931f466f674cb220"
+    },
+    {
+      "path": "desktop/tray/template-black-48.png",
+      "bytes": 770,
+      "sha256": "14fb4a784d36eb1a20a1509bf09fa6f85917499b45211060cc14b837be6cca8c"
+    },
+    {
+      "path": "desktop/tray/template-white-16.png",
+      "bytes": 591,
+      "sha256": "45766c8698df5a9e9bc9022f31837bdfc19f33a4c2df65e8b59f67984e8edb05"
+    },
+    {
+      "path": "desktop/tray/template-white-22.png",
+      "bytes": 618,
+      "sha256": "667f4f2be8b50ebb1e39a15e25407529d53fda551800f454e9bcfb6711217b2c"
+    },
+    {
+      "path": "desktop/tray/template-white-24.png",
+      "bytes": 637,
+      "sha256": "bf94e5bb06ac390fcb808d5f79e1c87dac07fdec0bc4469a0e140d345cab7506"
+    },
+    {
+      "path": "desktop/tray/template-white-32.png",
+      "bytes": 690,
+      "sha256": "7b739dc034e2c9edde21ae980984660850c3580a09ac61c0ecfaaf2267d28760"
+    },
+    {
+      "path": "desktop/tray/template-white-44.png",
+      "bytes": 764,
+      "sha256": "b9d035862372652d17f8422c8e7156cf5bac709673c614b5b960ed93e35dd08c"
+    },
+    {
+      "path": "desktop/tray/template-white-48.png",
+      "bytes": 782,
+      "sha256": "68a3303cbe44269c269a6ec3409bce2ac66409b405475b45ac2b0eb505894003"
+    },
+    {
+      "path": "preview.svg",
+      "bytes": 10992,
+      "sha256": "0daf1494100d853974a16d04d1c367c05d49c8b0bb0f9b70b0c3a1af6ca346da"
+    },
+    {
+      "path": "preview.png",
+      "bytes": 109694,
+      "sha256": "eca4be1e3213942b421e087a94268d4885da1ebdfae7404a78fcf845e5f031df"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "icon": "./assets/brand/icon-light.png",
+    "ios": {
+      "icon": {
+        "light": "./assets/brand/icon-light.png",
+        "dark": "./assets/brand/icon-dark.png",
+        "tinted": "./assets/brand/icon-tinted.png"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/android-foreground.png",
+        "backgroundImage": "./assets/brand/android-background.png",
+        "backgroundColor": "#F1EEE9",
+        "monochromeImage": "./assets/brand/android-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/brand/favicon.png"
+    }
+  }
+}

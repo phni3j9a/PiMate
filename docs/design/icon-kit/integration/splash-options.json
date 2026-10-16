@@ -1,0 +1,9 @@
+{
+  "backgroundColor": "#F1EEE9",
+  "image": "./assets/brand/splash-light.png",
+  "imageWidth": 76,
+  "dark": {
+    "backgroundColor": "#121B2C",
+    "image": "./assets/brand/splash-dark.png"
+  }
+}
