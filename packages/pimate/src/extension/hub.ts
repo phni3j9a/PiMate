@@ -30,6 +30,7 @@ export class Hub {
 	streaming = { text: "", thinking: "" };
 	status: InstanceStatus = "idle";
 	agentActive = false;
+	treeNavigating = false;
 	dir: string;
 	sockPath: string;
 	metaPath: string;
@@ -105,6 +106,8 @@ export class Hub {
 			status: this.status,
 			agentActive: this.agentActive,
 			promptImages: true,
+			sessionTree: true,
+			slashCommands: true,
 			model: this.ctx?.model ? { provider: this.ctx.model.provider, id: this.ctx.model.id } : null,
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),

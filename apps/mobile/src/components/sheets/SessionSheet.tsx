@@ -1,6 +1,6 @@
 /**
  * Session sheet (docs/design/html/Sheet-Session.html), opened from the chat header.
- * Pages: the main menu, past sessions (/resume) and the message to branch from (/fork). /tree is left out.
+ * Pages: the main menu, past sessions (/resume) and the message to branch from (/fork). The tree opens its own route.
  */
 import type { SessionListItem } from "@pimate/protocol";
 import { router } from "expo-router";
@@ -23,16 +23,24 @@ import { colors, fontFamily, typography } from "@/theme/tokens";
 
 type Page = "main" | "sessions" | "fork";
 
-export function SessionSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function SessionSheet({
+	visible,
+	onClose,
+	initialPage = "main",
+}: {
+	visible: boolean;
+	onClose: () => void;
+	initialPage?: Page;
+}) {
 	return (
 		<Sheet visible={visible} onClose={onClose} label="セッション">
-			{visible ? <Body onClose={onClose} /> : null}
+			{visible ? <Body onClose={onClose} initialPage={initialPage} /> : null}
 		</Sheet>
 	);
 }
 
-function Body({ onClose }: { onClose: () => void }) {
-	const [page, setPage] = useState<Page>("main");
+function Body({ onClose, initialPage }: { onClose: () => void; initialPage: Page }) {
+	const [page, setPage] = useState<Page>(initialPage);
 	if (page === "sessions") return <SessionsPage onBack={() => setPage("main")} onDone={onClose} />;
 	if (page === "fork") return <ForkPage onBack={() => setPage("main")} onDone={onClose} />;
 	return <MainPage onPage={setPage} onClose={onClose} />;
@@ -147,6 +155,18 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				chevron
 				onPress={() => onPage("sessions")}
 			/>
+			{view?.sessionTree ? (
+				<Row
+					label="セッションツリー"
+					command="/tree"
+					disabled={disabled}
+					chevron
+					onPress={() => {
+						onClose();
+						router.push("/tree");
+					}}
+				/>
+			) : null}
 			<Row
 				label="ここから分岐"
 				command="/fork"

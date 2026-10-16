@@ -1423,3 +1423,386 @@ describe("parent image drafts", () => {
 		expect(store.getState().drafts["h1/i1"]).toBe("new request");
 	});
 });
+
+describe("session tree", () => {
+	async function ready(status: "idle" | "running" = "idle") {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", status, { sessionTree: true }));
+		return { store, s, target: store.opTarget()! };
+	}
+
+	it("hides the capability for old RCs and refuses tree methods without it", async () => {
+		const { store } = await setup();
+		const s = connect();
+		expect(store.getState().view?.sessionTree).toBe(false);
+		expect(await store.sessionTree(store.opTarget()!)).toMatchObject({ ok: false, title: "未対応です" });
+		expect(opRcs(s)).toHaveLength(0);
+	});
+
+	it("guards read, navigation and label requests with the displayed session, and rejects stale results", async () => {
+		const { store, s, target } = await ready();
+		const read = store.sessionTree(target);
+		let rc = opRcs(s).at(-1);
+		expect(rc.request).toMatchObject({ method: "session_tree", expectInstanceId: "i1", expectSessionId: "s1" });
+		rcReply(s, rc.request.id, true, { nodes: [], leafId: "leaf", truncated: true });
+		expect(await read).toEqual({ ok: true, value: { nodes: [], leafId: "leaf", truncated: true } });
+		const label = store.setTreeLabel(target, "u", "bookmark");
+		rc = opRcs(s).at(-1);
+		expect(rc.request).toMatchObject({
+			method: "set_label",
+			params: { entryId: "u", label: "bookmark" },
+			expectSessionId: "s1",
+		});
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }, "s2"));
+		rcReply(s, rc.request.id, true);
+		expect(await label).toMatchObject({ ok: false, code: "session_changed" });
+		expect(await store.navigateTree(target, "u", false)).toMatchObject({ ok: false, title: "会話が変わりました" });
+	});
+
+	it.each(["", "existing draft"])(
+		"resyncs after tree navigation and restores text only into an empty draft (%s)",
+		async (draft) => {
+			const { store, s, target } = await ready();
+			store.setDraft(draft);
+			const move = store.navigateTree(target, "u", true);
+			const rc = opRcs(s).at(-1);
+			expect(rc.request).toMatchObject({
+				method: "session_op",
+				params: { op: "tree", arg: "u", summarize: true },
+				expectSessionId: "s1",
+			});
+			rcReply(s, rc.request.id, true);
+			await move;
+			expect(store.getState().op?.kind).toBe("tree");
+			s.receive(event(6, { type: "session_changed", reason: "tree", session: { id: "s1" } }));
+			expect(store.getState().view?.phase).toBe("resyncing");
+			expect(store.getState().view?.sessionNotice).toBeNull();
+			expect(store.getState().targetChanged).toBeNull();
+			expect(s.sentOfType("subscribe").length).toBeGreaterThan(1);
+			s.receive(event(7, { type: "session_op_done", op: "tree", cancelled: false, editorText: "complete user text" }));
+			expect(store.getState().op).toBeNull();
+			expect(store.getState().drafts["h1/i1"]).toBe(draft || "complete user text");
+			s.receive(subscribedMsg([], "s1", "idle", { seq: 8, sessionTree: true }));
+			expect(store.getState().view?.phase).toBe("ready");
+			expect(store.getState().notice?.text).toContain("移動しました");
+		},
+	);
+
+	it("rejects moving during a run without sending", async () => {
+		const { store, s, target } = await ready("running");
+		expect(await store.navigateTree(target, "u", false)).toMatchObject({ ok: false, title: "実行中は移動できません" });
+		expect(opRcs(s)).toHaveLength(0);
+	});
+
+	it.each([{ cancelled: true }, { cancelled: true, error: "summary failed" }])(
+		"finishes cancelled/failed moves and reports them",
+		async (result) => {
+			const { store, s, target } = await ready();
+			const move = store.navigateTree(target, "u", false);
+			rcReply(s, opRcs(s).at(-1).request.id, true);
+			await move;
+			s.receive(event(6, { type: "session_op_done", op: "tree", ...result }));
+			expect(store.getState().op).toBeNull();
+			expect(store.getState().notice?.text).toContain("error" in result ? "summary failed" : "取り消されました");
+			expect(store.getState().drafts["h1/i1"] ?? "").toBe("");
+		},
+	);
+
+	it("never restores tree text into a different session after a PC switch", async () => {
+		const { store, s, target } = await ready();
+		const move = store.navigateTree(target, "u", false);
+		rcReply(s, opRcs(s).at(-1).request.id, true);
+		await move;
+		s.receive(event(6, { type: "session_changed", reason: "new", session: { id: "s2" } }, "s2"));
+		s.receive(event(7, { type: "session_op_done", op: "tree", cancelled: false, editorText: "old text" }, "s1"));
+		expect(store.getState().drafts["h1/i1"] ?? "").toBe("");
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice?.kind).toBe("error");
+	});
+});
+
+describe("slash command sending and catalogs", () => {
+	const catalog = [
+		{ name: "hello", source: "extension" },
+		{ name: "hello:1", source: "extension" },
+		{ name: "review", source: "prompt" },
+		{ name: "skill:design", source: "skill" },
+	];
+	const rcs = (s: FakeSocket, method: string) => s.sentOfType("rc").filter((r) => r.request.method === method);
+	function reply(s: FakeSocket, method: string, result: unknown) {
+		const request = rcs(s, method).at(-1)!.request;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result },
+		});
+	}
+	async function commandSetup(status: "idle" | "running" = "idle") {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
+		s.receive(subscribedMsg(store.getState().view!.items, "s1", status, { slashCommands: true, promptImages: true }));
+		reply(s, "commands", { commands: catalog });
+		await flush();
+		return { store, s };
+	}
+
+	it.each(["idle", "running"] as const)(
+		"expands known RC commands and clears command outbox on ACK while %s",
+		async (status) => {
+			const { store, s } = await commandSetup(status);
+			store.setDraft("/hello:1 arg ");
+			const sending = store.send();
+			expect(rcs(s, "prompt").at(-1)?.request).toMatchObject({
+				params: { text: "/hello:1 arg", expandTemplates: true, deliverAs: "steer" },
+				expectSessionId: "s1",
+				expectInstanceId: "i1",
+			});
+			expect(store.getState().outbox).toMatchObject([{ state: "sending" }]);
+			reply(s, "prompt", { deliveredAs: "command" });
+			await sending;
+			expect(store.getState().outbox).toEqual([]);
+			expect(store.getState().drafts["h1/i1"]).toBe("");
+			expect(store.getState().view?.items).toHaveLength(1);
+		},
+	);
+
+	it("keeps edits made while an extension command is being acknowledged", async () => {
+		const { store, s } = await commandSetup();
+		store.setDraft("/hello");
+		const sending = store.send();
+		store.setDraft("another message");
+		reply(s, "prompt", { deliveredAs: "command" });
+		await sending;
+		expect(store.getState().drafts["h1/i1"]).toBe("another message");
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it.each(["review", "skill:design"])("does not retain a raw /%s bubble after template expansion", async (name) => {
+		const { store, s } = await commandSetup();
+		store.setDraft(`/${name} arg`);
+		const sending = store.send();
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({
+			text: `/${name} arg`,
+			expandTemplates: true,
+			deliverAs: "steer",
+		});
+		reply(s, "prompt", { deliveredAs: "prompt" });
+		await sending;
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("preserves queued templates until Pi settles", async () => {
+		const { store, s } = await commandSetup("running");
+		store.setDraft("/review arg");
+		const sending = store.send();
+		reply(s, "prompt", { deliveredAs: "steer" });
+		await sending;
+		expect(store.getState().outbox).toMatchObject([{ text: "/review arg", state: "queued" }]);
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "agent_settled", aborted: false },
+		});
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("opens the session tree for /tree only when the RC supports it", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
+		s.receive(subscribedMsg(store.getState().view!.items, "s1", "idle", { slashCommands: true, sessionTree: true }));
+		reply(s, "commands", { commands: catalog });
+		await flush();
+		store.setDraft("/tree");
+		expect(await store.send()).toBe("tree");
+		expect(store.getState().drafts["h1/i1"]).toBe("");
+		expect(rcs(s, "prompt")).toEqual([]);
+	});
+
+	it("blocks unknown command tokens without changing drafts or sending to the model", async () => {
+		const { store, s } = await commandSetup();
+		for (const text of ["/unknown", "/hello:2 arg", "/tree", "/pimate", "/reload"]) {
+			store.setDraft(text);
+			await store.send();
+			expect(store.getState().drafts["h1/i1"]).toBe(text);
+			expect(store.getState().notice?.text).toContain("使えません");
+		}
+		expect(rcs(s, "prompt")).toEqual([]);
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("sends absolute paths as ordinary text and keeps old RC behavior", async () => {
+		const { store, s } = await commandSetup();
+		for (const text of ["/home/x", "/home/x arg"]) {
+			store.setDraft(text);
+			const sending = store.send();
+			expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text, deliverAs: "steer" });
+			reply(s, "prompt", { deliveredAs: "prompt" });
+			await sending;
+		}
+		s.receive(subscribedMsg([])); // Old RC: no capability.
+		store.setDraft("/model");
+		const sending = store.send();
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/model", deliverAs: "steer" });
+		reply(s, "prompt", { deliveredAs: "prompt" });
+		await sending;
+	});
+
+	it.each(["model", "resume", "fork"])("routes /%s to its existing app picker without an RC prompt", async (name) => {
+		const { store, s } = await commandSetup();
+		store.setDraft(`/${name} `);
+		expect(await store.send()).toBe(name);
+		expect(store.getState().drafts["h1/i1"]).toBe("");
+		expect(rcs(s, "prompt")).toEqual([]);
+	});
+
+	it.each(["new", "compact"])("routes /%s through the existing guarded operation", async (name) => {
+		const { store, s } = await commandSetup();
+		store.setDraft(`/${name}`);
+		const sending = store.send();
+		const method = name === "new" ? "session_op" : "compact";
+		expect(rcs(s, method).at(-1)?.request).toMatchObject({
+			params: name === "new" ? { op: "new" } : {},
+			expectInstanceId: "i1",
+			expectSessionId: "s1",
+		});
+		reply(s, method, {});
+		await sending;
+		expect(store.getState().drafts["h1/i1"]).toBe("");
+		expect(rcs(s, "prompt")).toEqual([]);
+		expect(store.getState().outbox).toEqual([]);
+	});
+
+	it("keeps a refused operation's draft, and rejects unsupported arguments, images and empty forks", async () => {
+		const { store, s } = await commandSetup();
+		store.setDraft("/new");
+		const sending = store.send();
+		const request = rcs(s, "session_op").at(-1)!.request;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: false, error: { code: "busy" } },
+		});
+		await sending;
+		expect(store.getState().drafts["h1/i1"]).toBe("/new");
+		store.setDraft("/model ignored");
+		expect(await store.send()).toBeUndefined();
+		expect(store.getState().notice?.text).toContain("引数や画像");
+		store.setDraft("/hello");
+		store.setImages([{ type: "image", mimeType: "image/jpeg", data: "YQ==" }], store.opTarget()!);
+		await store.send();
+		expect(store.getState().notice?.text).toContain("画像を添付できません");
+		expect(store.getState().attachments["h1/i1"]).toHaveLength(1);
+		store.setImages([], store.opTarget()!);
+		s.receive(subscribedMsg([], "s1", "idle", { slashCommands: true }));
+		store.setDraft("/fork");
+		expect(await store.send()).toBeUndefined();
+		expect(store.getState().notice?.text).toContain("分岐できるメッセージ");
+		expect(rcs(s, "prompt")).toEqual([]);
+	});
+
+	it("caches per instance, refreshes on session switches and reloads, and ignores old replies", async () => {
+		const { store, s } = await commandSetup();
+		await store.loadCommands();
+		expect(rcs(s, "commands")).toHaveLength(1);
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s1",
+			seq: 6,
+			event: { type: "session_changed", reason: "reload", session: { id: "s1" } },
+		});
+		expect(store.getState().commands["h1/i1"]).toBeUndefined();
+		s.receive(subscribedMsg([], "s1", "idle", { slashCommands: true, seq: 6 }));
+		expect(rcs(s, "commands")).toHaveLength(2);
+		const old = rcs(s, "commands").at(-1)!.request.id;
+		s.receive({
+			type: "event",
+			instanceId: "i1",
+			sessionId: "s2",
+			seq: 7,
+			event: { type: "session_changed", reason: "resume", session: { id: "s2" } },
+		});
+		s.receive(subscribedMsg([], "s2", "idle", { slashCommands: true, seq: 7 }));
+		expect(rcs(s, "commands")).toHaveLength(3);
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: old, ok: true, result: { commands: [{ name: "stale", source: "extension" }] } },
+		});
+		await flush();
+		expect(store.getState().commands["h1/i1"]?.list).toBeNull();
+		reply(s, "commands", { commands: catalog });
+		await flush();
+		expect(store.getState().commands["h1/i1"]?.list).toEqual(catalog);
+		store.select("h1", "i0");
+		expect(store.getState().commands["h1/i0"]).toBeUndefined();
+		store.select("h1", "i1");
+		s.receive(subscribedMsg([], "s2", "idle", { slashCommands: true, seq: 7 }));
+		expect(rcs(s, "commands")).toHaveLength(4);
+	});
+
+	it("refreshes cached commands after reconnecting, including a reload missed while offline", async () => {
+		const { store, s } = await commandSetup();
+		expect(store.getState().commands["h1/i1"]?.list).toEqual(catalog);
+		s.drop();
+		expect(store.getState().commands["h1/i1"]).toBeUndefined();
+		store.retryConnection("h1");
+		const next = FakeSocket.last();
+		authenticate(next, [instance("i1", 5)]);
+		next.receive(subscribedMsg([], "s1", "idle", { slashCommands: true }));
+		expect(rcs(next, "commands")).toHaveLength(1);
+		reply(next, "commands", { commands: [{ name: "reloaded", source: "extension" }] });
+		await flush();
+		expect(store.getState().commands["h1/i1"]?.list?.[0]?.name).toBe("reloaded");
+	});
+
+	it("does not query commands or intercept slash text on an old RC", async () => {
+		const { store } = await setup();
+		const s = connect();
+		expect(rcs(s, "commands")).toEqual([]);
+		await store.loadCommands();
+		expect(rcs(s, "commands")).toEqual([]);
+		store.setDraft("/unknown arg");
+		const sending = store.send();
+		expect(rcs(s, "prompt").at(-1)?.request.params).toEqual({ text: "/unknown arg", deliverAs: "steer" });
+		reply(s, "prompt", { deliveredAs: "prompt" });
+		await sending;
+	});
+
+	it("blocks command sending during catalog lookup, supports manual retry and never auto-resends commands", async () => {
+		const { store } = await setup();
+		const s = connect();
+		s.receive(subscribedMsg([], "s1", "idle", { slashCommands: true }));
+		store.setDraft("/hello");
+		await store.send();
+		expect(rcs(s, "prompt")).toEqual([]);
+		expect(store.getState().notice?.text).toContain("一覧を取得");
+		const lookup = rcs(s, "commands").at(-1)!.request;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: lookup.id, ok: false, error: { code: "not_ready" } },
+		});
+		await flush();
+		expect(store.getState().commands["h1/i1"]?.error).toBeTruthy();
+		const retry = store.loadCommands(true);
+		reply(s, "commands", { commands: catalog });
+		await retry;
+		const sending = store.send();
+		const request = rcs(s, "prompt").at(-1)!.request;
+		s.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: false, error: { code: "timeout" } },
+		});
+		await sending;
+		expect(store.getState().outbox).toMatchObject([{ state: "unconfirmed" }]);
+		expect(store.getState().drafts["h1/i1"]).toBe("/hello");
+		s.receive(subscribedMsg([], "s1", "idle", { slashCommands: true }));
+		expect(rcs(s, "prompt")).toHaveLength(1);
+		expect(store.getState().notice?.text).toContain("自動で再送しません");
+	});
+});

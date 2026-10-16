@@ -73,11 +73,22 @@ RC は `hello` snapshot の `promptImages: true` で画像対応を通知しま�
 
 履歴と live のユーザー項目は `imageCount`（元の総枚数）、`images`（最初の対応画像、サイズ上限内のみ）を含みます。履歴の画像 preview は decoded 合計 2 MiB を最新側から優先し、収まらない項目は件数と本文だけを返します。live 配信や Pi の原本は削りません。モバイル側は表示できない画像を placeholder にし、テキストを落としません。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
+## コマンド一覧と実行（#37）
+
+RC は `snapshot.slashCommands:true` で、`commands` による一覧取得と明示的なコマンド受付を通知します。一覧は Pi の Extension / prompt / skill を名前・説明・source 付きで返し、PiMate 管理用の `pimate` / 内部 `pimate-session`（重複名の `:1` 等も含む）を除外します。これらの管理用コマンドは remote prompt でも拒否し、セッション操作には専用の `session_op` を使います。
+
+先頭トークンが `/[\w:.-]+` に一致する `prompt` を `expandTemplates:true` で送る場合、RC は現在の `pi.getCommands()` で正確な名前を確認します。削除済み・未知の名前は `unsupported` で拒否し、LLM へ流しません。Extension なら作業中も Pi が即実行するため、結果は `deliveredAs:"command"`（受付確認。操作の成功そのものではない）を返し、クライアントは履歴への user 項目を待ってはいけません。Extension の画像添付も拒否します。テンプレート / Skill は展開後に通常送信または steer / followUp のキューに入ります。明示しない送信は従来どおり展開なしです。要求は再送しません。
+
+Pi 組み込みコマンドはこの一覧には含まれません。対応するモバイル画面がある `/model` / `/new` / `/resume` / `/fork` / `/compact` / `/tree`（`sessionTree` 対応 RC のみ）はアプリ側が既存操作へ割り当てます。
+
 ## 日常操作とスマホからの起動（M2）
 
 - RC `models`: Piの認証済みモデル一覧。thinkingLevelsはPi 1.2.0と同じ `getSupportedThinkingLevels()` で求め、非reasoningモデルはoffのみ、xhigh/maxはモデルの対応表に従います。
 - RC `models` の `scoped`: Piのscoped models（`enabledModels` / `/scoped-models`。アプリの「お気に入り」）。起動中のセッションの値を返しますが、ディスクの `enabledModels` がこのPiの読み込み後に変わった場合（スマホや別のPiが保存）はディスクの値をPiと同じ規則で解決して返します。RC `set_scoped_models` はグローバル設定の `enabledModels` に保存します（全モデル・空はフィルターなし）。起動中のPCのPiのCtrl+Pの順番は再起動まで変わりません。
 - RC `sessions`: 現在のcwdと **Piが実際に使用中のsessionDir** から保存会話を更新日時降順で返します。`limit` は任意の正整数、日時はミリ秒、`current` で現在の会話を識別。切替は `session_op` のswitchへpathを渡します。
+- RC `session_tree`: 現在のセッションの表示用ツリー（id・表示上のparentId・種類・本文preview・ラベル・時刻・現在の枝/位置・葉）を返します。ツール結果・状態エントリは畳み、ラベル付きは残します。最大1,000件、preview160文字・label200文字、走査最大10,000件。現在の枝を優先し、それ自体が1,000件を超えた場合は古い祖先を畳んで直近500件を残します。省略は `truncated: true`。Piの原本は変更しません。
+- `snapshot.sessionTree: true` がツリーのcapabilityです。`session_op {op:"tree", arg:entryId, summarize:boolean}` は既存のcommand context経由で移動し、実行中/移動中をbusyで拒否します。受付時のsession guardをコマンド実行直前にも確認します。`session_tree` イベント（PCからの移動も含む）は `session_changed {reason:"tree"}` とcontext更新を配信し、アプリは履歴を再取得します。完了は `session_op_done`。ユーザー/custom messageへの移動時は、Piと同じ全文 `editorText` も返します（既に選択中の葉ならno-op）。要約はPi標準LLM経路です。
+- RC `set_label {entryId, label?}`: `pi.setLabel()` で保存/解除（空白・省略は解除、最大200文字）。ツリーの取得・移動・ラベル操作は通常の `expectSessionId` guardを使います。
 - RC `shutdown`: `ctx.shutdown()` による正常終了。Host終了と異なり対象Piが終了します。
 - snapshotに `context` と `pcPrompt`。contextイベントはassistant終了・compaction・モデル/セッション変更後。回答できないTUI promptはPCで操作し、再接続でも開いたpromptが分かります。中断assistantはlive/history共通で `stopReason:"aborted"` に正規化し、通常のAPIエラーはerrorのままです。
 - 認証済みWSの `folders` はhome、保存セッションのcwd、稼働中cwd/台数、最寄り親を含む保存trust判断を返します。既存ディレクトリのみ、最大200件、5秒キャッシュ。`$PI_CODING_AGENT_DIR/sessions`（既定 `~/.pi/agent/sessions`）の更新が新しい200フォルダを対象に、各最大2000ファイルのmtimeと最新ヘッダ先頭16KiBだけを読みます。全履歴は解析しません。独自sessionDirの会話は稼働中cwdには出ますが、停止後の候補探索対象外です。

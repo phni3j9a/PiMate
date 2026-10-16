@@ -6,6 +6,7 @@
  * optimistically and never re-sent. The draft stays until the Host confirms delivery.
  */
 import type {
+	CommandInfo,
 	FolderInfo,
 	InstanceSummary,
 	ModelInfo,
@@ -18,12 +19,14 @@ import type {
 	Response,
 	SessionListItem,
 	SessionOp,
+	SessionTree,
 	SpawnParams,
 	SubagentAction,
 	SubagentTranscript,
 	ThinkingLevel,
 } from "@pimate/protocol";
 import { MAX_IMAGE_PROMPT_TEXT, type PromptImage, samePromptImages, validPromptImages } from "@pimate/protocol";
+import { type BuiltinCommand, commandIntent } from "./commands";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
 import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
 import {
@@ -89,10 +92,18 @@ export interface AppState {
 	aborting: boolean;
 	/** Models of the selected instance (RC `models`), loaded once per selection. */
 	models: ModelsState | null;
+	/** Command catalogs keyed by host/instance, replaced after session changes and reconnects. */
+	commands: Record<string, CommandsState>;
 	/** A session/model operation started from the phone and not finished yet. */
 	op: PendingOp | null;
 	/** requestId of the dialog answer in flight. */
 	answering: string | null;
+}
+
+export interface CommandsState {
+	sessionId: string | null;
+	list: CommandInfo[] | null;
+	error?: string;
 }
 
 export interface ModelsState {
@@ -172,6 +183,7 @@ const OP_LABEL: Record<OpKind, string> = {
 	switch: "セッションの切り替え",
 	fork: "分岐",
 	reload: "再読み込み",
+	tree: "ツリーの移動",
 	compact: "圧縮",
 	shutdown: "終了",
 	model: "モデルの変更",
@@ -255,6 +267,7 @@ export class AppStore {
 		targetChanged: null,
 		aborting: false,
 		models: null,
+		commands: {},
 		op: null,
 		answering: null,
 	};
@@ -475,6 +488,12 @@ export class AppStore {
 			record.needsRepair = true;
 			void this.registry.save(record).catch(() => {});
 		}
+		if (conn.state !== "connected") {
+			const commands = Object.fromEntries(
+				Object.entries(this.state.commands).filter(([key]) => !key.startsWith(`${hostId}/`)),
+			);
+			this.set({ commands });
+		}
 		const op = this.state.op;
 		if (op?.accepted && conn.state !== "connected" && this.state.selection?.hostId === hostId)
 			this.set({ hosts: this.runtimes(), ...this.opResultUnknown(op) });
@@ -519,7 +538,11 @@ export class AppStore {
 		}
 		if (prev && prev.hostId !== hostId) this.connections.get(prev.hostId)?.setSubscription(null);
 		const selection = { hostId, instanceId };
+		// An unselected Pi may have reloaded without an event reaching this subscription.
+		const commands = { ...this.state.commands };
+		delete commands[draftKey(selection)];
 		this.set({
+			commands,
 			selection,
 			view: createView(instanceId),
 			outbox: [],
@@ -565,6 +588,8 @@ export class AppStore {
 			(view.phase === "ready" && next.phase === "resyncing") ||
 			(msg.type === "subscribed" && !!view.session && !!next.session && view.session.id !== next.session.id);
 		if (sessionChanged) {
+			patch.commands = { ...this.state.commands };
+			delete patch.commands[key];
 			const op = this.state.op;
 			// The phone switched on purpose: the draft simply follows, and the divider says who did it.
 			// Only an op started from the conversation being left counts (never a leftover one).
@@ -580,7 +605,8 @@ export class AppStore {
 					this.phoneSwitch.fromSessionId === view.session?.id &&
 					this.phoneSwitch.toSessionId === next.session?.id);
 			const draft = this.state.drafts[key]?.trim() || this.state.attachments[key]?.length;
-			if (draft && !byPhone) patch.targetChanged = { to: next.session?.name || undefined };
+			if (draft && !byPhone && view.session?.id !== next.session?.id)
+				patch.targetChanged = { to: next.session?.name || undefined };
 			if (byPhone && next.sessionNotice) next = { ...next, sessionNotice: { ...next.sessionNotice, byPhone: true } };
 			patch.outbox = this.state.outbox.filter((e) => e.state === "sending" || e.state === "unconfirmed");
 		}
@@ -617,6 +643,7 @@ export class AppStore {
 		this.reconcileOutbox(msg.type === "subscribed");
 		if (msg.type === "event" && msg.event.type === "agent_settled" && msg.event.aborted)
 			this.retainStoppedSends(key, msg.sessionId);
+		if (msg.type === "subscribed" && next.slashCommands === true) void this.loadCommands();
 	}
 
 	/** Finishes phone-started operations from their result events. */
@@ -643,10 +670,24 @@ export class AppStore {
 						},
 					};
 				const v = this.state.view;
+				if (op.kind === "tree" && (sessionId !== op.fromSessionId || v?.session?.id !== op.fromSessionId))
+					return this.opResultUnknown(op);
 				// The event carries the session the switch arrived at; only a move there is the phone's own.
 				if (op.fromSessionId && sessionId && v?.phase === "ready" && v.session?.id === op.fromSessionId)
 					this.phoneSwitch = { key, fromSessionId: op.fromSessionId, toSessionId: sessionId };
-				return this.sessionOpDone(op, key);
+				const patch = this.sessionOpDone(op, key);
+				if (op.kind === "tree") {
+					if (event.editorText && !this.state.drafts[key]?.trim())
+						patch.drafts = { ...this.state.drafts, [key]: event.editorText };
+					patch.notice = {
+						kind: "info",
+						text:
+							event.editorText && this.state.drafts[key]?.trim()
+								? "移動しました。入力中の下書きはそのまま残しています。"
+								: "移動しました",
+					};
+				}
+				return patch;
 			}
 			case "compact_done":
 				return op?.kind === "compact"
@@ -769,7 +810,7 @@ export class AppStore {
 		return null;
 	}
 
-	async send(): Promise<void> {
+	async send(): Promise<BuiltinCommand | undefined> {
 		const { selection, view } = this.state;
 		if (!selection || !view || this.sendBlocker() !== null) return;
 		const conn = this.connections.get(selection.hostId);
@@ -777,6 +818,45 @@ export class AppStore {
 		const key = draftKey(selection);
 		const text = (this.state.drafts[key] ?? "").replace(/\s+$/, "");
 		const images = this.state.attachments[key] ?? [];
+		const catalog = this.state.commands[key];
+		const intent =
+			view.slashCommands === true
+				? commandIntent(text, catalog?.list ?? [], view.sessionTree === true)
+				: { kind: "text" as const };
+		const refuse = (text: string) => this.set({ notice: { kind: "error", text } });
+		if (intent.kind === "unknown") {
+			refuse(
+				catalog?.list
+					? `/${intent.name} は使えません。一覧から選んでください。`
+					: "コマンド一覧を取得してから送信してください。",
+			);
+			return;
+		}
+		if (intent.kind === "builtin") {
+			if (intent.hasArgs || images.length) {
+				refuse("アプリ操作には引数や画像を付けずに送信してください。");
+				return;
+			}
+			if (this.state.op) {
+				refuse("ほかの操作が終わるまでお待ちください。");
+				return;
+			}
+			if (intent.name === "fork" && !view.items.some((i) => i.kind === "user")) {
+				refuse("分岐できるメッセージがありません。");
+				return;
+			}
+			if (intent.name === "new" || intent.name === "compact") {
+				const result = await (intent.name === "new" ? this.sessionOp("new") : this.compact());
+				if (!result.ok) return;
+			} else this.set({ notice: null });
+			if (sameText(this.state.drafts[key], text)) this.set({ drafts: { ...this.state.drafts, [key]: "" } });
+			return intent.name === "new" || intent.name === "compact" ? undefined : intent.name;
+		}
+		if (intent.kind === "remote" && intent.command.source === "extension" && images.length) {
+			refuse("Extension コマンドには画像を添付できません。");
+			return;
+		}
+		const expandTemplates = intent.kind === "remote";
 		const id = this.deps.randomUUID();
 		const entry: OutboxEntry = {
 			id,
@@ -802,6 +882,7 @@ export class AppStore {
 			method: "prompt",
 			params: {
 				text,
+				...(expandTemplates ? { expandTemplates: true } : {}),
 				...(images.length ? { images } : {}),
 				// Pi applies this only while busy; sending it even when apparently idle avoids a PC-start race.
 				deliverAs: "steer",
@@ -824,7 +905,12 @@ export class AppStore {
 				this.reconcileOutbox(false);
 				return;
 			}
-			const deliveredAs = (res.result as { deliveredAs?: OutboxEntry["deliveredAs"] }).deliveredAs ?? "prompt";
+			const deliveredAs =
+				(res.result as { deliveredAs?: "command" | OutboxEntry["deliveredAs"] }).deliveredAs ?? "prompt";
+			if (deliveredAs === "command") {
+				this.finishSend(key, id, { remove: true, clearDraft: text, clearImages: images });
+				return;
+			}
 			const showImageReceipt =
 				images.length > 0 &&
 				this.isCurrent(key) &&
@@ -836,7 +922,7 @@ export class AppStore {
 				clearDraft: text,
 				clearImages: images,
 				deliveredAs,
-				...(images.length && deliveredAs === "prompt" ? { remove: true } : {}),
+				...((images.length || expandTemplates) && deliveredAs === "prompt" ? { remove: true } : {}),
 				...(showImageReceipt
 					? {
 							notice: {
@@ -1076,6 +1162,28 @@ export class AppStore {
 		} else this.set({ models: { ...(this.state.models ?? { key, list: null }), key, error: res.text } });
 	}
 
+	/** Cache only for this instance/session; stale replies never overwrite a replacement catalog. */
+	async loadCommands(force = false): Promise<void> {
+		const { selection, view } = this.state;
+		if (!selection || view?.phase !== "ready" || view.slashCommands !== true) return;
+		const key = draftKey(selection);
+		const sessionId = view.session?.id ?? null;
+		const prev = this.state.commands[key];
+		if (!force && prev?.sessionId === sessionId) return;
+		const pending: CommandsState = { sessionId, list: null };
+		this.set({ commands: { ...this.state.commands, [key]: pending } });
+		const res = await this.guardedRc("commands", {}, { discardStale: true });
+		if (this.state.commands[key] !== pending) return;
+		this.set({
+			commands: {
+				...this.state.commands,
+				[key]: res.ok
+					? { sessionId, list: (res.value.result as { commands: CommandInfo[] }).commands }
+					: { sessionId, list: null, error: res.text || res.title },
+			},
+		});
+	}
+
 	/** Saves the favorites as Pi's scoped models (global `enabledModels`); empty = all models. */
 	async setScopedModels(models: ModelRef[]): Promise<Result<null>> {
 		const key = this.state.selection ? draftKey(this.state.selection) : null;
@@ -1275,6 +1383,49 @@ export class AppStore {
 	async sessionOp(op: "new" | "switch" | "fork", arg?: string, forkText?: string): Promise<Result<null>> {
 		const fromSessionId = this.state.view?.session?.id;
 		return this.startOp({ kind: op, forkText, fromSessionId }, "session_op", { op, ...(arg ? { arg } : {}) });
+	}
+
+	private treeTarget(target: OpTarget): Result<null> {
+		const now = this.opTarget();
+		if (
+			!now ||
+			now.hostId !== target.hostId ||
+			now.instanceId !== target.instanceId ||
+			now.sessionId !== target.sessionId
+		)
+			return { ok: false, title: "会話が変わりました", text: "チャットからツリーを開き直してください。" };
+		if (this.state.view?.phase !== "ready")
+			return { ok: false, title: "会話を同期しています", text: "少し待ってからお試しください。" };
+		if (!this.state.view.sessionTree)
+			return { ok: false, title: "未対応です", text: "PC の PiMate を更新してください。" };
+		return { ok: true, value: null };
+	}
+
+	async sessionTree(target: OpTarget): Promise<Result<SessionTree>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		const res = await this.guardedRc("session_tree", {}, { discardStale: true });
+		return res.ok ? { ok: true, value: res.value.result as SessionTree } : res;
+	}
+
+	async navigateTree(target: OpTarget, entryId: string, summarize: boolean): Promise<Result<null>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		if (this.state.view?.agentActive || this.state.view?.status !== "idle")
+			return { ok: false, title: "実行中は移動できません", text: "Pi の処理が終わるまでお待ちください。" };
+		this.set({ notice: null });
+		return this.startOp({ kind: "tree", fromSessionId: target.sessionId ?? undefined }, "session_op", {
+			op: "tree",
+			arg: entryId,
+			summarize,
+		});
+	}
+
+	async setTreeLabel(target: OpTarget, entryId: string, label: string): Promise<Result<null>> {
+		const check = this.treeTarget(target);
+		if (!check.ok) return check;
+		const res = await this.guardedRc("set_label", { entryId, label }, { discardStale: true });
+		return res.ok ? { ok: true, value: null } : res;
 	}
 
 	async compact(): Promise<Result<null>> {
