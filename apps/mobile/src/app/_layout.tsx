@@ -10,7 +10,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAppState } from "@/lib/hooks";
 import { notificationTarget } from "@/lib/notifications";
 import { startAppStore } from "@/lib/runtime";
-import { colors } from "@/theme/tokens";
+import { colors, scheme } from "@/theme/tokens";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 startAppStore();
@@ -44,7 +44,7 @@ export default function RootLayout() {
 	if (!ready) return null;
 	return (
 		<GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-			<StatusBar style="dark" />
+			<StatusBar style={scheme === "dark" ? "light" : "dark"} />
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
 				<Stack.Screen name="(main)" />
 				<Stack.Screen name="pair" />
