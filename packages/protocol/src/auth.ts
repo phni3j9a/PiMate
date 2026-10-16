@@ -38,11 +38,11 @@ export interface AuthMethods {
 	/** Also recovers the latest transient flow after reconnect/lost begin receipt, without resending input. */
 	auth_list: { params: Record<string, never>; result: { providers: AuthProviderInfo[]; flow?: AuthFlow } };
 	auth_begin: { params: { provider: AuthProviderId; method: ProviderAuthType }; result: { flow: AuthFlow } };
-	/** One outstanding wait per RC. Wait again only after the previous response; max 25s. */
+	/** One outstanding wait per client; up to 8 independent waits per RC for reconnects. Max 25s. */
 	auth_wait: { params: { flowId: string; afterRevision: number; waitMs?: number }; result: { flow: AuthFlow } };
 	/** Submit once; never automatically retry secrets after a transport failure. */
 	auth_respond: { params: { flowId: string; promptId: string; value: string }; result: { flow: AuthFlow } };
-	/** Cancellation is no longer allowed at the atomic storage commit boundary (`saving` => busy). */
+	/** Cancellation is no longer allowed at the atomic storage commit boundary (`saving` => busy). Runtime loss while saving means outcome unknown. */
 	auth_cancel: { params: { flowId: string }; result: { flow: AuthFlow } };
 	/** Removes only the stored credential. No env/models.json changes or provider revocation. */
 	auth_logout: { params: { provider: AuthProviderId }; result: { refreshRequired: boolean } };

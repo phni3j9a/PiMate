@@ -55,10 +55,10 @@ export function createProviderAuth(ctx: ExtensionContext): ProviderAuth {
 	);
 }
 
-/** One transient operation and one long-poll per RC. Auth inputs never enter events or history. */
+/** One transient operation per RC. Bounded independent waits allow reconnects without invalidating other clients. */
 export class ProviderAuth {
 	private operation?: Operation;
-	private waiter?: () => void;
+	private waiters = new Set<() => void>();
 	private mutating = false;
 	private disposed = false;
 	private lifetime = new AbortController();
@@ -140,16 +140,16 @@ export class ProviderAuth {
 			waitMs > AUTH_MAX_WAIT_MS
 		)
 			throw inputError();
-		if (this.waiter) throw new RcError("busy", "An auth wait is already active");
 		if (op.state.revision === afterRevision && !terminal(op.state) && waitMs) {
+			if (this.waiters.size >= 8) throw new RcError("busy", "Too many auth waits");
 			await new Promise<void>((resolve) => {
 				const finish = () => {
 					clearTimeout(timer);
-					this.waiter = undefined;
+					this.waiters.delete(finish);
 					resolve();
 				};
 				const timer = setTimeout(finish, waitMs).unref();
-				this.waiter = finish;
+				this.waiters.add(finish);
 			});
 		}
 		return this.result(op);
@@ -197,8 +197,13 @@ export class ProviderAuth {
 	dispose(): void {
 		this.disposed = true;
 		this.lifetime.abort();
-		if (this.operation && active(this.operation.state)) this.end(this.operation, "cancelled");
-		this.waiter?.();
+		const op = this.operation;
+		if (op?.state.status === "saving") {
+			// Storage may already have committed: retain saving/outcome-unknown instead of claiming cancellation.
+			clearTimeout(op.timer);
+			op.controller.abort();
+		} else if (op && active(op.state)) this.end(op, "cancelled");
+		for (const wake of this.waiters) wake();
 	}
 
 	private check(): void {
@@ -226,7 +231,7 @@ export class ProviderAuth {
 	}
 	private update(op: Operation, patch: Partial<AuthFlow>): void {
 		op.state = { ...op.state, ...patch, revision: op.state.revision + 1 };
-		this.waiter?.();
+		for (const wake of this.waiters) wake();
 	}
 	private end(op: Operation, status: AuthFlow["status"], error?: AuthFlow["error"]): void {
 		clearTimeout(op.timer);
@@ -251,7 +256,7 @@ export class ProviderAuth {
 		try {
 			const runtime = await this.runtime;
 			signal.throwIfAborted();
-			const commit = (credential: Credential) => {
+			const commit = <T extends Credential>(credential: T): T => {
 				signal.throwIfAborted();
 				if (
 					credential.type !== op.state.method ||
@@ -262,6 +267,10 @@ export class ProviderAuth {
 				this.update(op, { status: "saving", prompt: undefined, authorization: undefined });
 				clearTimeout(op.timer);
 				op.timer = setTimeout(() => op.controller.abort(), 30000).unref();
+				// Pi auth.json values are templates: $$ preserves literal $ without resolving environment variables.
+				return credential.type === "api_key"
+					? { ...credential, key: credential.key!.replaceAll("$", () => "$$") }
+					: credential;
 			};
 			const auth = provider.auth;
 			runtime.registerNativeProvider({
@@ -274,8 +283,7 @@ export class ProviderAuth {
 									...auth.oauth,
 									login: async (interaction, options) => {
 										const credential = await auth.oauth!.login(interaction, options);
-										commit(credential);
-										return credential;
+										return commit(credential);
 									},
 								},
 							}
@@ -286,8 +294,7 @@ export class ProviderAuth {
 									...auth.apiKey,
 									login: async (interaction) => {
 										const credential = await auth.apiKey!.login!(interaction);
-										commit(credential);
-										return credential;
+										return commit(credential);
 									},
 								},
 							}

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	AuthInteraction,
 	Credential,
@@ -135,7 +138,7 @@ it.each(["openai", "anthropic"] as const)(
 		expect(JSON.stringify(receipt)).not.toContain("SECRET");
 		await tick();
 		expect((await state(flow)).status).toBe("succeeded");
-		expect(credentials.get(id)).toEqual({ type: "api_key", key: "SECRET_KEY-$LITERAL" });
+		expect(credentials.get(id)).toEqual({ type: "api_key", key: "SECRET_KEY-$$LITERAL" });
 		expect(registry.refresh).toHaveBeenCalledWith(expect.objectContaining({ allowNetwork: false, providers: [id] }));
 		expect(device).not.toHaveBeenCalled();
 		expect(() => auth.respond(flow.id, flow.prompt!.id, "SECRET_KEY")).toThrow("no longer active");
@@ -224,12 +227,13 @@ it.each(["cancel", "expire", "dispose"])("%s aborts provider work and prevents a
 	expect(credentials.size).toBe(0);
 	if (mode !== "dispose") expect((await state(flow)).status).toBe(mode === "expire" ? "expired" : "cancelled");
 });
-it("long-polls changes or deadline, bounds one outstanding wait, and rejects stale flows", async () => {
+it("long-polls changes or deadline, bounds independent waits, and rejects stale flows", async () => {
 	vi.useFakeTimers();
 	const { auth, state } = setup(async () => new Promise(() => {}));
 	const { flow } = auth.begin("anthropic", "oauth");
 	await tick();
 	const waiting = auth.wait(flow.id, flow.revision, 25000);
+	const reconnects = Array.from({ length: 7 }, () => auth.wait(flow.id, flow.revision, 25000));
 	await expect(auth.wait(flow.id, flow.revision, 25000)).rejects.toMatchObject({ code: "busy" });
 	await expect(auth.wait(flow.id, 999, 0)).rejects.toMatchObject({ code: "bad_request" });
 	await vi.advanceTimersByTimeAsync(24999);
@@ -241,6 +245,7 @@ it("long-polls changes or deadline, bounds one outstanding wait, and rejects sta
 	expect(settled).toBe(false);
 	await vi.advanceTimersByTimeAsync(1);
 	expect((await waiting).flow.revision).toBe(flow.revision);
+	expect((await Promise.all(reconnects)).every((reply) => reply.flow.revision === flow.revision)).toBe(true);
 	auth.cancel(flow.id);
 	auth.begin("openai-codex", "oauth");
 	await expect(state(flow)).rejects.toMatchObject({ code: "not_found" });
@@ -505,4 +510,119 @@ it("does not fall back to a localhost OAuth method when the mobile method is una
 	await tick();
 	expect(await state(flow)).toMatchObject({ status: "failed", error: "login_failed" });
 	expect(credentials.size).toBe(0);
+});
+it("reconnect waits have independent deadlines and all receive the same state change", async () => {
+	vi.useFakeTimers();
+	const { auth } = setup(async () => new Promise(() => {}));
+	const { flow } = auth.begin("anthropic", "oauth");
+	await tick();
+	const abandoned = auth.wait(flow.id, flow.revision, 25000);
+	await vi.advanceTimersByTimeAsync(10000);
+	const reconnect = auth.wait(flow.id, flow.revision, 25000);
+	let reconnected = false;
+	void reconnect.then(() => {
+		reconnected = true;
+	});
+	await vi.advanceTimersByTimeAsync(15000);
+	expect((await abandoned).flow.status).toBe("working");
+	expect(reconnected).toBe(false);
+	const otherPhone = auth.wait(flow.id, flow.revision, 25000);
+	auth.cancel(flow.id);
+	expect((await reconnect).flow.status).toBe("cancelled");
+	expect((await otherPhone).flow.status).toBe("cancelled");
+});
+it("dispose during saving does not claim cancellation after credentials have already committed", async () => {
+	const { auth, runtime, state, credentials } = setup();
+	let release!: () => void;
+	const original = runtime.login.getMockImplementation()!;
+	runtime.login.mockImplementation(async (...args) => {
+		const result = await original(...args);
+		await new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		return result;
+	});
+	const { flow } = auth.begin("anthropic", "oauth");
+	await tick();
+	const saving = await state(flow);
+	expect(saving.status).toBe("saving");
+	expect(credentials.has("anthropic")).toBe(true);
+	const abandoned = auth.wait(flow.id, saving.revision);
+	const reconnect = auth.wait(flow.id, saving.revision);
+	auth.dispose();
+	expect((await abandoned).flow.status).toBe("saving");
+	expect((await reconnect).flow.status).toBe("saving");
+	await expect(auth.wait(flow.id, saving.revision, 0)).rejects.toMatchObject({ code: "not_ready" });
+	release();
+	await tick();
+	expect(credentials.has("anthropic")).toBe(true);
+});
+it("actual public ModelRuntime persists literal keys/OAuth metadata and logs out in an isolated temporary auth file", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "pimate-auth-api-"));
+	try {
+		const runtime = await ModelRuntime.create({
+			authPath: join(dir, "auth.json"),
+			modelsPath: null,
+			refreshOnCreate: false,
+			allowModelNetwork: false,
+		});
+		// Registration normally checks every builtin's ambient auth; this test exercises only the fake provider/store.
+		vi.spyOn(runtime, "refresh").mockResolvedValue({ aborted: false, errors: new Map() });
+		const provider: Provider = {
+			id: "anthropic",
+			name: "Fake Anthropic",
+			getModels: () => [],
+			stream: () => {
+				throw new Error("Network forbidden");
+			},
+			streamSimple: () => {
+				throw new Error("Network forbidden");
+			},
+			auth: {
+				apiKey: {
+					name: "Fake key",
+					login: async (i) => ({ type: "api_key", key: await i.prompt({ type: "secret", message: "Fake key" }) }),
+					check: async ({ credential }) => (credential?.key ? { type: "api_key", source: "stored" } : undefined),
+					resolve: async ({ credential }) =>
+						credential?.key ? { auth: { apiKey: credential.key }, source: "stored" } : undefined,
+				},
+				oauth: {
+					name: "Fake OAuth",
+					login: async () => ({ ...oauth, type: "oauth" }),
+					refresh: async (credential) => credential,
+					toAuth: async (credential) => ({ apiKey: credential.access }),
+				},
+			},
+		};
+		const registry = {
+			getProvider: () => provider,
+			getProviderAuthStatus: (id: string) => runtime.getProviderAuthStatus(id),
+			refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
+		};
+		const auth = new ProviderAuth(registry, Promise.resolve(runtime), async () => uuid);
+		instances.push(auth);
+		const settle = async (initial: AuthFlow) => {
+			let flow = initial;
+			while (["working", "saving"].includes(flow.status)) flow = (await auth.wait(flow.id, flow.revision)).flow;
+			return flow;
+		};
+		vi.stubEnv("PIMATE_LITERAL_ONLY", "MUST_NOT_BE_EXPANDED");
+		const literal = "FAKE-$PIMATE_LITERAL_ONLY-${PIMATE_LITERAL_ONLY}-$$-$!";
+		let flow = await settle(auth.begin("anthropic", "api_key").flow);
+		expect(flow.prompt?.kind).toBe("api_key");
+		flow = await settle(auth.respond(flow.id, flow.prompt!.id, literal).flow);
+		expect(flow.status).toBe("succeeded");
+		expect(await runtime.listCredentials()).toEqual([{ providerId: "anthropic", type: "api_key" }]);
+		expect((await runtime.getAuth("anthropic"))?.auth.apiKey).toBe(literal);
+		expect((await auth.list()).providers[2].stored).toBe("api_key");
+		flow = await settle(auth.begin("anthropic", "oauth").flow);
+		expect(flow.status).toBe("succeeded");
+		expect(await runtime.listCredentials()).toEqual([{ providerId: "anthropic", type: "oauth" }]);
+		expect((await auth.list()).providers[2].stored).toBe("oauth");
+		expect(await auth.logout("anthropic")).toEqual({ refreshRequired: false });
+		expect(await runtime.listCredentials()).toEqual([]);
+		auth.dispose();
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
