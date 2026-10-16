@@ -16,7 +16,7 @@ lingerは表示するだけで変更しません。Tailscaleがない場合はlo
 
 表示されるQRまたは `pimate://` リンクをPiMate Androidアプリで開いてペアリングします。
 コードは10分・1回限りです。ペアリング済み端末はPiの操作権限を持つため、リンクを公開しないでください。
-Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j9a/PiMate/releases) から取得できます。PCパッケージ0.1.2はアプリ0.1.1と互換です。
+Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j9a/PiMate/releases) から取得できます。PCパッケージ0.1.3はアプリ0.1.2と互換です（モデルのお気に入りは0.1.3以上が必要。古いアプリでもチャットは使えます）。
 
 - `/pimate pair`: 新しいQRを表示
 - `/pimate devices`: 一覧・失効
