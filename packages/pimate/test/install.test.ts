@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -7,7 +7,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { registerSetup } from "../src/extension/setup.ts";
 import { getLocalUI, patchUI } from "../src/extension/ui.ts";
 import { HostCore, resolveAbduco } from "../src/host/index.ts";
-import { hostEnv, serviceUnit, systemdQuote } from "../src/host/service.ts";
+import {
+	commandStatus,
+	hostEnv,
+	installCommand,
+	removeCommand,
+	serviceUnit,
+	systemdQuote,
+} from "../src/host/service.ts";
 
 const dirs: string[] = [];
 const temp = () => {
@@ -123,4 +130,24 @@ it("refuses /pimate in RPC and print mode before accessing Host", async () => {
 		await handler("setup", { mode, ui: { notify } });
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("only in the PC TUI"), "error");
 	}
+});
+it("links the pimate command in the XDG bin dir and only removes its own link", () => {
+	const root = temp();
+	const target = join(root, "cli.js");
+	writeFileSync(target, "");
+	const env = { XDG_BIN_HOME: join(root, "bin"), PATH: `/usr/bin:${join(root, "bin")}` };
+	expect(commandStatus(env, target)).toMatchObject({ path: join(root, "bin/pimate"), linked: false, onPath: true });
+	installCommand(env, target);
+	installCommand(env, target);
+	expect(readlinkSync(join(root, "bin/pimate"))).toBe(target);
+	expect(commandStatus(env, target)).toMatchObject({ linked: true, conflict: false });
+	expect(removeCommand(env, join(root, "other.js"))).toBe(false);
+	expect(removeCommand(env, target)).toBe(true);
+	writeFileSync(join(root, "bin/pimate"), "user's own");
+	expect(() => installCommand(env, target)).toThrow("not PiMate's link");
+	expect(removeCommand(env, target)).toBe(false);
+	expect(readFileSync(join(root, "bin/pimate"), "utf8")).toBe("user's own");
+	const data = { XDG_DATA_HOME: join(root, "share"), XDG_BIN_HOME: "relative", PATH: "" };
+	expect(commandStatus(data, target)).toMatchObject({ dir: join(root, "bin"), onPath: false });
+	expect(commandStatus({}, target).dir).toBe(join(homedir(), ".local/bin"));
 });
