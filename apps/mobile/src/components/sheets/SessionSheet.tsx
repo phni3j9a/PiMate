@@ -23,16 +23,24 @@ import { colors, fontFamily, typography } from "@/theme/tokens";
 
 type Page = "main" | "sessions" | "fork";
 
-export function SessionSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function SessionSheet({
+	visible,
+	onClose,
+	initialPage = "main",
+}: {
+	visible: boolean;
+	onClose: () => void;
+	initialPage?: Page;
+}) {
 	return (
 		<Sheet visible={visible} onClose={onClose} label="セッション">
-			{visible ? <Body onClose={onClose} /> : null}
+			{visible ? <Body onClose={onClose} initialPage={initialPage} /> : null}
 		</Sheet>
 	);
 }
 
-function Body({ onClose }: { onClose: () => void }) {
-	const [page, setPage] = useState<Page>("main");
+function Body({ onClose, initialPage }: { onClose: () => void; initialPage: Page }) {
+	const [page, setPage] = useState<Page>(initialPage);
 	if (page === "sessions") return <SessionsPage onBack={() => setPage("main")} onDone={onClose} />;
 	if (page === "fork") return <ForkPage onBack={() => setPage("main")} onDone={onClose} />;
 	return <MainPage onPage={setPage} onClose={onClose} />;

@@ -7,12 +7,14 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ModelRef } from "@pimate/protocol";
+import { type ModelRef, slashCommandName } from "@pimate/protocol";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
 import { rpc } from "./subagents/registry.ts";
 import { normalizeBranch } from "./transcript.ts";
+
+const internalCommand = /^(?:pimate|pimate-session)(?::.*)?$/i;
 
 const ref = (m: ModelRef): ModelRef => ({ provider: m.provider, id: m.id });
 
@@ -40,23 +42,31 @@ export function createHandlers(h: Hub): Handlers {
 		hello: () => ({ snapshot: h.snapshot() }),
 		history: () => ({ session: h.session, items: normalizeBranch(ready().ctx.sessionManager.getBranch()) }),
 		prompt: (p) => {
-			if (/^\s*\/pimate(?::\S*)?(?:\s|$)/i.test(p.text)) throw new RcError("unsupported", "/pimate is PC TUI only");
+			if (/^\s*\/(?:pimate|pimate-session)(?::\S*)?(?:\s|$)/i.test(p.text))
+				throw new RcError("unsupported", "/pimate is PC TUI only");
 			// Pi exposes duplicate command names as `/pimate:1`, `/pimate:2`; those are rejected above too.
 			const { pi, ctx } = ready();
 			if (p.images?.length && !ctx.model?.input.includes("image"))
 				throw new RcError("unsupported", "このモデルは画像を扱えません。画像対応モデルを選んでください");
+			const name = p.expandTemplates ? slashCommandName(p.text) : null;
+			const command = name ? pi.getCommands().find((c) => c.name === name) : undefined;
+			if (name && !command) throw new RcError("unsupported", "このコマンドは使えません。一覧を確認してください");
+			const extension = command?.source === "extension";
+			if (extension && p.images?.length) throw new RcError("unsupported", "Extension コマンドには画像を添付できません");
+			// Pi parses extension arguments at a literal space, not tabs or newlines.
+			const text = command ? p.text.replace(/^(\/[^\s]+)\s/, "$1 ") : p.text;
 			const content = p.images?.length
 				? [
-						...(p.text ? [{ type: "text" as const, text: p.text }] : []),
+						...(text ? [{ type: "text" as const, text }] : []),
 						...p.images.map(({ mimeType, data }) => ({ type: "image" as const, mimeType, data })),
 					]
-				: p.text;
+				: text;
 			const deliverAs = p.deliverAs ?? (ctx.isIdle() ? undefined : "followUp");
 			pi.sendUserMessage(content, {
 				...(deliverAs ? { deliverAs } : {}),
 				expandPromptTemplates: p.expandTemplates ?? false,
 			});
-			return { deliveredAs: deliverAs ?? "prompt" };
+			return { deliveredAs: extension ? "command" : (deliverAs ?? "prompt") };
 		},
 		abort: () => {
 			const { ctx } = ready();
@@ -155,6 +165,7 @@ export function createHandlers(h: Hub): Handlers {
 		commands: () => ({
 			commands: ready()
 				.pi.getCommands()
+				.filter((c) => !internalCommand.test(c.name))
 				.map((c) => ({ name: c.name, description: c.description, source: c.source })),
 		}),
 		subagent_transcript: (p) => {

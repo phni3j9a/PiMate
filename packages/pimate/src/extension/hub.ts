@@ -105,6 +105,7 @@ export class Hub {
 			status: this.status,
 			agentActive: this.agentActive,
 			promptImages: true,
+			slashCommands: true,
 			model: this.ctx?.model ? { provider: this.ctx.model.provider, id: this.ctx.model.id } : null,
 			thinking: this.pi?.getThinkingLevel() ?? null,
 			pendingUI: [...this.pendingUI.values()].map((p) => p.request),
