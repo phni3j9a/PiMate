@@ -230,6 +230,28 @@ describe("ProviderAuthController", () => {
 		expect(c.state.flow).toBeNull();
 	});
 
+	it("does not mistake the last observed success for a new begin with an unknown outcome", async () => {
+		const { c } = await ready();
+		void c.begin("openai", "api_key");
+		reply(last("auth_begin"), { flow: flow() });
+		await flush();
+		const succeeded = flow({ revision: 1, status: "succeeded" });
+		reply(last("auth_wait"), { flow: succeeded });
+		await flush();
+		reply(last("auth_list"), { providers, flow: succeeded });
+		await flush();
+		c.dismissFlow();
+		void c.begin("openai", "api_key");
+		fail(last("auth_begin"), "internal");
+		await flush();
+		reply(last("hello"), { snapshot: { providerAuth: true } });
+		await flush();
+		reply(last("auth_list"), { providers, flow: succeeded });
+		await flush();
+		expect(c.state.flow).toBeNull();
+		expect(c.state.notice?.title).toBe("手続きは見つかりませんでした");
+	});
+
 	it("follows a new flow once an older wait settles, still one wait at a time", async () => {
 		const { c } = await ready();
 		void c.begin("openai", "api_key");

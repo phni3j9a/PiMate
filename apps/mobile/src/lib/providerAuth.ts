@@ -300,6 +300,7 @@ export class ProviderAuthController {
 	private apply(next: AuthFlow): void {
 		const current = this.state.flow;
 		if (current && next.id === current.id && next.revision < current.revision) return;
+		this.listedId = next.id;
 		if (next.status === "saving") this.sawSaving = true;
 		// The runtime was lost while saving (or it failed storing): whether it was saved is unknown.
 		const unknownSave =
