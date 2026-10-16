@@ -937,7 +937,8 @@ function fullScript(prompt) {
 	];
 }
 
-/** Reply to a phone prompt starting with "md": every Markdown block the chat renders. */
+/** Reply to a phone prompt starting with "md" (full-width too, as typed by a Japanese IME): every Markdown block. */
+const wantsMarkdown = (prompt) => /^md\b/i.test(prompt.normalize("NFKC"));
 const MARKDOWN_SAMPLE = `## 変更の概要
 
 \`--shout\` フラグを追加しました。**「大文字で出力」**する *だけ* の ~~小さな~~ 変更です。詳しくは [README](https://github.com/phni3j9a/PiMate) を参照。
@@ -974,7 +975,7 @@ function shortScript(prompt = "") {
 		{
 			ms: 200,
 			stream: "text",
-			text: /^md\b/i.test(prompt) ? MARKDOWN_SAMPLE : "了解しました。README の使い方にも追記しておきます。",
+			text: wantsMarkdown(prompt) ? MARKDOWN_SAMPLE : "了解しました。README の使い方にも追記しておきます。",
 		},
 		{ ms: 200, run: (id, turn) => assistantEnd(id, turn, turn.text, [], "stop", true) },
 	];
@@ -1016,7 +1017,12 @@ function startTurn(id, prompt, kind) {
 	emit(id, { type: "user_input", text: prompt, source: "rpc" });
 	emit(id, { type: "message_end", item: { kind: "user", entryId: eid(), text: prompt, timestamp: Date.now() } });
 	setStatus(id, "running");
-	const turn = { steps: kind === "full" && !/^md\b/i.test(prompt) ? fullScript(prompt) : shortScript(prompt), timer: null, text: "", thinking: "" };
+	const turn = {
+		steps: kind === "full" && !wantsMarkdown(prompt) ? fullScript(prompt) : shortScript(prompt),
+		timer: null,
+		text: "",
+		thinking: "",
+	};
 	inst.turn = turn;
 	const next = () => {
 		if (inst.turn !== turn) return;
