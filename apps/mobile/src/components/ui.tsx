@@ -1,8 +1,9 @@
 /** Shared controls: icon buttons, the single filled capsule button, text buttons and the screen header. */
+import { Image } from "expo-image";
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from "react-native";
 
-import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
+import { colors, radii, scheme, sizes, spacing, typography } from "@/theme/tokens";
 
 import { BackIcon } from "./icons";
 
@@ -139,6 +140,18 @@ export function ScreenHeader({
 					{title}
 				</Text>
 			) : null}
+		</View>
+	);
+}
+
+const brandMark =
+	scheme === "dark" ? require("../../assets/brand/mark-dark.png") : require("../../assets/brand/mark-light.png");
+
+/** The PiMate Mt mark (docs/design/icon-kit), decorative: the app name is always shown as text nearby. */
+export function BrandMark({ size, style }: { size: number; style?: StyleProp<ViewStyle> }) {
+	return (
+		<View style={style} accessible={false} importantForAccessibility="no-hide-descendants">
+			<Image source={brandMark} style={{ width: size, height: size }} contentFit="contain" />
 		</View>
 	);
 }

@@ -2,6 +2,8 @@
 
 Expo（SDK 57、expo-router）のアプリです。Android優先で作っています。見た目は [docs/design/](../../docs/design/README.md) のモックに合わせます。ライト / ダークは起動時の OS の設定に従います（起動中に OS 側で切り替えた場合は次の起動から。[#23](https://github.com/phni3j9a/PiMate/issues/23)）。ダークも色の役割は同じで、線や影ではなく面の濃淡で区切ります。本文は 15px です。
 
+アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
+
 ## できること
 
 M1:

@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PlusIcon } from "@/components/icons";
 import { StatusMark } from "@/components/StatusMark";
-import { ScreenHeader, TextButton } from "@/components/ui";
+import { BrandMark, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
 import { hostConnectionLabel, hostSummary } from "@/lib/presentation";
 import { appStore, appVersion, notificationCenter } from "@/lib/runtime";
@@ -128,7 +128,10 @@ export default function SettingsScreen() {
 				) : null}
 				<View style={styles.spacer} />
 			</ScrollView>
-			<Text style={styles.version}>PiMate {appVersion}</Text>
+			<View style={styles.version}>
+				<BrandMark size={16} />
+				<Text style={styles.versionText}>PiMate {appVersion}</Text>
+			</View>
 		</SafeAreaView>
 	);
 }
@@ -154,10 +157,12 @@ const styles = StyleSheet.create({
 	},
 	explanation: { fontSize: 12, lineHeight: 19, color: colors.textSecondary, marginVertical: 8 },
 	version: {
-		...typography.caption,
-		textAlign: "center",
-		color: colors.textSecondary,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 6,
 		paddingBottom: 16,
 		paddingTop: 8,
 	},
+	versionText: { ...typography.caption, color: colors.textSecondary },
 });

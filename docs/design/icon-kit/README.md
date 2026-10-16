@@ -34,7 +34,7 @@
 | `splash/` | ライト／ダーク背景用の透過マークPNG |
 | `web/` | SVG／ICO favicon、16〜512px PNG、192／512px maskableアイコン、manifest雛形 |
 | `desktop/` | Windows用ICO、macOS用ICNS・iconset、Linux等用16〜1024px PNG、トレイ用単色PNG |
-| `integration/` | 現在のPiMate（Expo SDK 57）への導入手順と設定例 |
+| `integration/` | PiMate（Expo SDK 57）への導入手順と設定例。素材を作り直したときの再反映にも使う |
 | `preview.png`, `preview.svg` | 見た目の確認用シート。丸角・円形の表示はプレビュー用 |
 | `manifest.json` | 生成ファイルのサイズ・SHA-256とAndroidの余白検証値 |
 
@@ -42,7 +42,7 @@
 
 通常のPNG／Asset Catalog経路で使用できます。1024px画像はRGB・sRGB・アルファチャンネルなしの正方形です。角丸や影は焼き込まず、OS側の処理に任せます。Tintedはグレースケールの元画像で、最終的な着色はOSが行います。
 
-Expoでは `ios.icon` にLight／Dark／TintedのPNGを指定できます。現在のPiMateは `./assets/expo.icon` を参照しているため、**トップレベルの `icon` を差し替えるだけではiOSには反映されません**。具体的な変更点は [CODEX-HANDOFF.md](integration/CODEX-HANDOFF.md) を参照してください。
+Expoでは `ios.icon` にLight／Dark／TintedのPNGを指定します。PiMateでは組み込み済みです（[#45](https://github.com/phni3j9a/PiMate/issues/45)）。
 
 新しいIcon Composer経路も選べるようにSVGレイヤーを用意しました。ただし、このキットはコンパイル済みの `.icon` ドキュメントを含みません。必要ならXcodeのIcon Composerに各レイヤーを取り込み、背景色とappearanceを設定し、位置を維持して保存してください。PNG／Asset Catalog経路と `.icon` 経路はどちらかを選びます。
 

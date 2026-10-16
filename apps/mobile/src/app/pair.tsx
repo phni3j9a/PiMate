@@ -11,7 +11,7 @@ import { BackHandler, Linking, ScrollView, StyleSheet, Text, TextInput, View } f
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CloseIcon, ServerIcon } from "@/components/icons";
-import { IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
+import { BrandMark, IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
 import { formatPairingLink, PairingFailure, pairingErrorMessage, parsePairingLink } from "@/lib/pairing";
 import { appStore } from "@/lib/runtime";
@@ -173,6 +173,7 @@ export default function PairScreen() {
 			<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 				{hasHosts ? null : (
 					<>
+						<BrandMark size={56} style={styles.mark} />
 						<Text style={styles.title} accessibilityRole="header">
 							PC の Pi とつなぐ
 						</Text>
@@ -288,6 +289,7 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
+	mark: { marginBottom: 20 },
 	title: { fontSize: 22, lineHeight: 30, fontWeight: "600", color: colors.text },
 	body: { ...typography.body, color: colors.textSecondary, marginTop: 12 },
 	steps: { marginTop: 32, gap: 24 },

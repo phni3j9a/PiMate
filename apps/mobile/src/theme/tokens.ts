@@ -33,13 +33,13 @@ const light = {
 	/** Foreground on accent fills. */
 	onAccent: "#FFFFFF",
 
-	/** 入力待ち (logo yellow). Mark color; pair with statusWaitingText. */
+	/** 入力待ち (PiMate mark yellow). Mark color; pair with statusWaitingText. */
 	statusWaiting: "#E1AD42",
 	statusWaitingText: "#8B5D20",
-	/** 失敗 (logo coral). Mark color; pair with statusFailedText (also destructive actions). */
+	/** 失敗 (PiMate mark coral). Mark color; pair with statusFailedText (also destructive actions). */
 	statusFailed: "#E37769",
 	statusFailedText: "#A84D45",
-	/** 完了・接続中 (logo blue). Mark only; label text uses `textSecondary`/`text`. */
+	/** 完了・接続中 (PiMate mark blue). Mark only; label text uses `textSecondary`/`text`. */
 	statusDone: "#4D9ABF",
 	/** 待機: idle dot is textSecondary at 50% opacity (Tokens.dc.html). */
 	statusIdle: "#5E686D",
