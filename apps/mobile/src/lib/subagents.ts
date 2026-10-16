@@ -526,13 +526,9 @@ export function detailState(child: SubagentChild, run: SubagentRun, now: number)
 	return time ? `${STATE_WORD[child.state]} · ${time}` : STATE_WORD[child.state];
 }
 
-export type SendMode = "steer" | "follow_up";
-
-export const SEND_MODE_LABEL: Record<SendMode, string> = { steer: "割り込む", follow_up: "後で伝える" };
-
 export interface ChildControls {
-	/** Text delivery while the child runs (steer / follow_up), in menu order. */
-	modes: SendMode[];
+	/** Only steer is offered; follow_up-only children remain read-only. */
+	steer: boolean;
 	/** Stop for this child: stop_child, else the whole run's stop / interrupt. */
 	stop: { action: "stop_child" | "stop" | "interrupt"; runWide: boolean } | null;
 	/** Continue a finished/paused child with a message (starts a new run). */
@@ -544,7 +540,7 @@ export interface ChildControls {
 }
 
 export function childControls(run: SubagentRun, child: SubagentChild): ChildControls {
-	const modes = (["steer", "follow_up"] as const).filter((a) => child.actions.includes(a));
+	const steer = child.actions.includes("steer");
 	let stop: ChildControls["stop"] = null;
 	const working = isSubagentActive(child.state) && child.state !== "stopping";
 	if (working && child.actions.includes("stop_child")) stop = { action: "stop_child", runWide: false };
@@ -553,7 +549,7 @@ export function childControls(run: SubagentRun, child: SubagentChild): ChildCont
 		stop = { action: "interrupt", runWide: run.children.length > 1 };
 	const resume = child.actions.includes("resume") && !isSubagentActive(child.state);
 	const abortParent = run.actions.includes("abort_parent");
-	return { modes, stop, resume, abortParent, canSend: modes.length > 0 || resume };
+	return { steer, stop, resume, abortParent, canSend: steer || resume };
 }
 
 /** Chain agents for the request card, with the current step marked. */

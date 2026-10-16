@@ -424,11 +424,17 @@ describe("detail", () => {
 			children: [child({ id: "c", actions: ["steer", "follow_up", "stop_child", "resume"] })],
 		});
 		expect(childControls(full, full.children[0]!)).toEqual({
-			modes: ["steer", "follow_up"],
+			steer: true,
 			stop: { action: "stop_child", runWide: false },
 			resume: false,
 			abortParent: false,
 			canSend: true,
+		});
+		const followOnly = child({ id: "follow-only", actions: ["follow_up", "stop_child"] });
+		expect(childControls(full, followOnly)).toMatchObject({
+			steer: false,
+			canSend: false,
+			stop: { action: "stop_child", runWide: false },
 		});
 		const queued = child({ id: "queued", state: "queued", actions: ["stop_child"] });
 		expect(childControls(full, queued)).toMatchObject({
@@ -448,7 +454,7 @@ describe("detail", () => {
 		expect(childControls(full, stopping).stop).toBeNull();
 		const example = run({ id: "e", backend: "example", actions: ["abort_parent"], children: [child({ id: "x" })] });
 		expect(childControls(example, example.children[0]!)).toEqual({
-			modes: [],
+			steer: false,
 			stop: null,
 			resume: false,
 			abortParent: true,

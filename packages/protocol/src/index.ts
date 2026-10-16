@@ -249,7 +249,7 @@ export interface CommandInfo {
 export interface RcMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
-	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. */
+	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. */
 	prompt: {
 		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
 		result: { deliveredAs: "prompt" | "steer" | "followUp" };

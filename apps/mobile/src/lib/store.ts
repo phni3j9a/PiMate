@@ -610,11 +610,13 @@ export class AppStore {
 		patch.view = next;
 		if (msg.type === "subscribed" && this.state.models?.key !== key) void this.loadModels();
 		if (view.phase === "ready" && next.phase === "resyncing") this.connections.get(hostId)?.resubscribe();
-		if (msg.type === "event" && msg.event.type === "agent_settled")
+		if (msg.type === "event" && msg.event.type === "agent_settled" && !msg.event.aborted)
 			patch.outbox = (patch.outbox ?? this.state.outbox).filter((e) => e.state !== "queued");
 
 		this.set(patch);
 		this.reconcileOutbox(msg.type === "subscribed");
+		if (msg.type === "event" && msg.event.type === "agent_settled" && msg.event.aborted)
+			this.retainStoppedSends(key, msg.sessionId);
 	}
 
 	/** Finishes phone-started operations from their result events. */
@@ -767,7 +769,7 @@ export class AppStore {
 		return null;
 	}
 
-	async send(deliverAs?: "steer" | "followUp"): Promise<void> {
+	async send(): Promise<void> {
 		const { selection, view } = this.state;
 		if (!selection || !view || this.sendBlocker() !== null) return;
 		const conn = this.connections.get(selection.hostId);
@@ -785,15 +787,24 @@ export class AppStore {
 			sessionId: view.session?.id,
 			sentAt: this.now(),
 		};
-		// A new send supersedes older unconfirmed ones (the user decided).
-		this.set({ outbox: [...this.state.outbox.filter((e) => e.state !== "unconfirmed"), entry], notice: null });
+		// A manual retry supersedes only the matching unconfirmed send, not other stopped drafts.
+		this.set({
+			outbox: [
+				...this.state.outbox.filter(
+					(e) => e.state !== "unconfirmed" || e.text !== text || !samePromptImages(e.images, images),
+				),
+				entry,
+			],
+			notice: null,
+		});
 		const request: Request<"prompt"> = {
 			id,
 			method: "prompt",
 			params: {
 				text,
 				...(images.length ? { images } : {}),
-				...(view.status !== "idle" && deliverAs ? { deliverAs } : {}),
+				// Pi applies this only while busy; sending it even when apparently idle avoids a PC-start race.
+				deliverAs: "steer",
 			},
 			expectInstanceId: selection.instanceId,
 			...(view.session ? { expectSessionId: view.session.id } : {}),
@@ -808,6 +819,11 @@ export class AppStore {
 			return;
 		}
 		if (res.ok) {
+			// A stop can settle before this ACK; acceptance must not erase the recovered draft.
+			if (this.isCurrent(key) && !this.state.outbox.some((e) => e.id === id && e.state === "sending")) {
+				this.reconcileOutbox(false);
+				return;
+			}
 			const deliveredAs = (res.result as { deliveredAs?: OutboxEntry["deliveredAs"] }).deliveredAs ?? "prompt";
 			const showImageReceipt =
 				images.length > 0 &&
@@ -820,7 +836,7 @@ export class AppStore {
 				clearDraft: text,
 				clearImages: images,
 				deliveredAs,
-				...(images.length ? { remove: true } : {}),
+				...(images.length && deliveredAs === "prompt" ? { remove: true } : {}),
 				...(showImageReceipt
 					? {
 							notice: {
@@ -923,6 +939,46 @@ export class AppStore {
 		this.reconcileOutbox(false);
 	}
 
+	/** TUI abort restores queued input on the PC, not in the transcript. Keep a phone copy too. */
+	private retainStoppedSends(key: string, sessionId: string | null): void {
+		const { view } = this.state;
+		if (!view || !this.isCurrent(key) || view.session?.id !== sessionId) return;
+		const pending = this.state.outbox.filter(
+			(e) =>
+				e.sessionId === sessionId &&
+				(e.state === "queued" || e.state === "sending") &&
+				!findDeliveredUserItem(view, e.text, e.known, e.images),
+		);
+		if (!pending.length) return;
+		this.set({
+			outbox: this.state.outbox.map((e) => (pending.includes(e) ? { ...e, state: "unconfirmed" as const } : e)),
+			notice: {
+				kind: "unconfirmed",
+				title: "割り込みが届いていない可能性があります",
+				text: "停止前の指示を未確認の下書きとして残しました。履歴を確認してから、必要なら入力欄へ戻してください（自動で再送しません）。",
+			},
+		});
+	}
+
+	/** Restores one uncertain send only into an empty composer; never sends it. */
+	restoreOutboxDraft(id: string): boolean {
+		const { selection, view, drafts, attachments, outbox } = this.state;
+		if (!selection || view?.phase !== "ready") return false;
+		const key = draftKey(selection);
+		const entry = outbox.find((e) => e.id === id && e.state === "unconfirmed" && e.sessionId === view.session?.id);
+		if (!entry || drafts[key] || attachments[key]?.length) return false;
+		const remaining = outbox.filter((e) => e !== entry);
+		this.set({
+			drafts: { ...drafts, [key]: entry.text },
+			attachments: { ...attachments, [key]: entry.images ?? [] },
+			outbox: remaining,
+			...(!remaining.some((e) => e.state === "unconfirmed") && this.state.notice?.kind === "unconfirmed"
+				? { notice: null }
+				: {}),
+		});
+		return true;
+	}
+
 	async abort(): Promise<void> {
 		const { selection, aborting, view } = this.state;
 		// Without a known session the stop could hit a conversation the user is not looking at.
@@ -939,12 +995,21 @@ export class AppStore {
 				expectInstanceId: selection.instanceId,
 				expectSessionId: sessionId,
 			});
-			if (!res.ok && this.isCurrent(draftKey(selection)))
+			if (res.ok || res.error.code === "timeout" || res.error.code === "internal") {
+				this.reconcileOutbox(false);
+				this.retainStoppedSends(draftKey(selection), sessionId);
+			}
+			if (
+				!res.ok &&
+				this.isCurrent(draftKey(selection)) &&
+				(!["timeout", "internal"].includes(res.error.code) || this.state.notice?.kind !== "unconfirmed")
+			)
 				this.set({
 					notice: { kind: "error", title: "停止できませんでした", text: res.error.message ?? res.error.code },
 				});
 		} catch {
-			if (this.isCurrent(draftKey(selection)))
+			this.retainStoppedSends(draftKey(selection), sessionId);
+			if (this.isCurrent(draftKey(selection)) && this.state.notice?.kind !== "unconfirmed")
 				this.set({
 					notice: {
 						kind: "error",

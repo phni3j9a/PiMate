@@ -20,7 +20,6 @@ import { DialogContext, type DialogContextValue } from "@/components/chat/Dialog
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
-import { Sheet } from "@/components/Sheet";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { ModelSheet } from "@/components/sheets/ModelSheet";
 import { SessionSheet } from "@/components/sheets/SessionSheet";
@@ -63,7 +62,7 @@ export default function ChatScreen() {
 	const aborting = useAppState((s) => s.aborting);
 	const models = useAppState((s) => s.models);
 	const answering = useAppState((s) => s.answering);
-	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | "timing" | null>(null);
+	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | null>(null);
 	const closeSheet = useCallback(() => setSheet(null), []);
 
 	const host = hosts.find((h) => h.hostId === selection?.hostId);
@@ -125,12 +124,10 @@ export default function ChatScreen() {
 			setPicking(false);
 		}
 	};
-	const [timing, setTiming] = useState<{ key: string | null; mode: "steer" | "followUp" } | null>(null);
-	const sendMode = timing?.key === key ? timing.mode : "followUp";
 	const sending = outbox.some((e) => e.state === "sending");
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
 	const blocker = useAppState(() => appStore.sendBlocker());
-	const queued = outbox.filter((e) => e.state === "queued");
+	const queued = outbox.filter((e) => e.state === "queued" || e.state === "unconfirmed");
 	const placeholder =
 		blocker === "dialog"
 			? "上の質問に回答すると入力できます"
@@ -280,7 +277,7 @@ export default function ChatScreen() {
 							canSend={blocker === null && !picking}
 							sending={sending}
 							onSend={() => {
-								if (!pickingRef.current) void appStore.send(sendMode);
+								if (!pickingRef.current) void appStore.send();
 							}}
 							attachment={{
 								image,
@@ -292,11 +289,7 @@ export default function ChatScreen() {
 									if (target) appStore.setImages([], target);
 								},
 							}}
-							sendMode={
-								working
-									? { label: sendMode === "steer" ? "割り込む" : "後で伝える", onPress: () => setSheet("timing") }
-									: undefined
-							}
+							sendLabel={working ? "割り込む" : "送信"}
 							// Only a turn can be stopped: an extension command's dialog outside one is answered, not stopped.
 							showStop={!!view?.agentActive && view.phase === "ready" && connected}
 							stopping={aborting}
@@ -307,24 +300,16 @@ export default function ChatScreen() {
 							onOpenModel={() => setSheet("model")}
 						>
 							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
-							<QueuedRows entries={queued} />
+							<QueuedRows
+								entries={queued}
+								canRestore={view?.phase === "ready" && !draft && !image}
+								sessionId={view?.session?.id}
+								onRestore={(id) => appStore.restoreOutboxDraft(id)}
+							/>
 						</Composer>
 					</View>
 				) : null}
 			</KeyboardAvoidingView>
-			<Sheet visible={sheet === "timing"} onClose={closeSheet} label="送信のタイミング">
-				<Text style={styles.emptyTitle}>送信のタイミング</Text>
-				{(["followUp", "steer"] as const).map((mode) => (
-					<TextButton
-						key={mode}
-						label={`${mode === sendMode ? "✓ " : ""}${mode === "steer" ? "割り込む · 作業の区切りで伝える" : "後で伝える · 今の作業が終わってから"}`}
-						onPress={() => {
-							setTiming({ key, mode });
-							closeSheet();
-						}}
-					/>
-				))}
-			</Sheet>
 			<SessionSheet visible={sheet === "session"} onClose={closeSheet} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
 			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />

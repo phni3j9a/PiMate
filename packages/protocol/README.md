@@ -5,7 +5,7 @@
 ## 親プロンプトの画像
 
 - `InstanceSnapshot.promptImages?: boolean`: **厳密に `true` の場合だけ**画像を送信できます。未指定/false の古い RC は未知の `images` を捨てるため、画像の送信要求自体を抑止します。テキストのみは影響を受けません。
-- `prompt.params`: 必須の `text: string` に任意の `images: PromptImage[]`。本文が空でも画像があれば有効。idle / steer / followUp とも同じ配列です。
+- `prompt.params`: 必須の `text: string` に任意の `images: PromptImage[]`。本文が空でも画像があれば有効。idle / steer / followUp とも同じ配列です。スマホは常に `deliverAs: "steer"` を指定し、RC は idle なら `deliveredAs: "prompt"`、busy なら `"steer"` を返します。省略時の busy followUp と明示 followUp は旧クライアント互換のため残します。
 - `PromptImage`: `{ type: "image", mimeType: "image/jpeg" | "image/png" | "image/webp", data: string }`。`data` は data URI でない、パディングつき base64。最大1枚、decoded `MAX_PROMPT_IMAGE_BYTES = 512 * 1024` bytes。`validPromptImages` は配列数・形式・base64・decoded 上限を検査します（画像デコーダではありません）。
 - 画像つき本文は `MAX_IMAGE_PROMPT_TEXT = 32 * 1024` UTF-16 code units まで。テキストのみの既存の制限は変更しません。この組み合わせで画像要求を Host の受信 WebSocket 上限 1 MiB 内に収めます。
 - RC は画像非対応の現在モデルを `unsupported` で拒否し、Pi の標準 text/image content API に渡します。画像だけを無視してテキスト送信へフォールバックしません。

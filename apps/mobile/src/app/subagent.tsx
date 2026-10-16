@@ -13,7 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { type Banner, Composer } from "@/components/chat/Composer";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
-import { BackIcon, ChevronDownIcon, ChevronRightIcon } from "@/components/icons";
+import { BackIcon, ChevronRightIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
@@ -31,8 +31,6 @@ import {
 	detailSubtitle,
 	findChild,
 	runStop,
-	SEND_MODE_LABEL,
-	type SendMode,
 } from "@/lib/subagents";
 import { colors, spacing, typography } from "@/theme/tokens";
 
@@ -126,14 +124,7 @@ function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; ru
 
 	// ------------------------------------------------------------ controls
 	const controls = run && child ? childControls(run, child) : null;
-	const [mode, setMode] = useState<SendMode>("steer");
-	const [menu, setMenu] = useState(false);
-	const modes = controls?.modes ?? [];
-	const sendMode: SendMode | "resume" | null = controls?.resume
-		? "resume"
-		: modes.includes(mode)
-			? mode
-			: (modes[0] ?? null);
+	const sendMode = controls?.resume ? "resume" : controls?.steer ? "steer" : null;
 	const [text, setText] = useState("");
 	const [sending, setSending] = useState(false);
 	const [stopping, setStopping] = useState(false);
@@ -424,27 +415,6 @@ function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; ru
 
 				{showComposer ? (
 					<View style={[styles.footer, { paddingBottom: keyboard ? 8 : Math.max(insets.bottom, 12) + 4 }]}>
-						{menu && sendMode !== "resume" && modes.length > 1 ? (
-							<View style={styles.menu} accessibilityRole="menu">
-								{modes.map((m) => (
-									<Pressable
-										key={m}
-										accessibilityRole="menuitem"
-										accessibilityState={{ selected: m === sendMode }}
-										onPress={() => {
-											setMode(m);
-											setMenu(false);
-										}}
-										style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.6 }]}
-									>
-										<Text style={[styles.menuText, m === sendMode && styles.menuTextOn]}>{SEND_MODE_LABEL[m]}</Text>
-										<Text style={styles.menuHint}>
-											{m === "steer" ? "今の作業に割り込んで伝えます" : "今の作業が終わってから伝えます"}
-										</Text>
-									</Pressable>
-								))}
-							</View>
-						) : null}
 						<Composer
 							draft={text}
 							onChangeDraft={setText}
@@ -459,22 +429,7 @@ function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; ru
 							stopLabel={controls.stop?.action === "interrupt" ? "一時停止" : "停止"}
 							onStop={stop}
 							banners={banners}
-							leading={
-								sendMode && sendMode !== "resume" ? (
-									<Pressable
-										accessibilityRole="button"
-										accessibilityLabel={`送信のタイミング: ${SEND_MODE_LABEL[sendMode]}`}
-										accessibilityState={{ expanded: menu, disabled: modes.length < 2 }}
-										disabled={modes.length < 2}
-										onPress={() => setMenu((m) => !m)}
-										hitSlop={6}
-										style={({ pressed }) => [styles.mode, pressed && { opacity: 0.6 }]}
-									>
-										<Text style={styles.modeText}>{SEND_MODE_LABEL[sendMode]}</Text>
-										{modes.length > 1 ? <ChevronDownIcon size={12} color={colors.textSecondary} /> : null}
-									</Pressable>
-								) : null
-							}
+							sendLabel={sendMode === "resume" ? "続きを依頼" : "割り込む"}
 						/>
 					</View>
 				) : (
@@ -491,6 +446,9 @@ function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; ru
 									? "この Extension では、サブエージェントに指示を送れません。\n止めると、親の Pi の作業もまとめて止まります。"
 									: "この Extension では、サブエージェントに指示を送れません。"}
 							</Text>
+						) : null}
+						{child.actions.includes("follow_up") && !controls.steer ? (
+							<Text style={styles.readonlyText}>この子は割り込みに未対応のため、指示を送れません。</Text>
 						) : null}
 						{controls.stop ? (
 							<TextButton
@@ -564,20 +522,6 @@ const styles = StyleSheet.create({
 	link: { marginTop: 8, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4 },
 	linkText: { fontSize: 14, fontWeight: "600", color: colors.accentText },
 	footer: { paddingTop: 6, paddingHorizontal: 16 },
-	mode: { minHeight: 36, marginLeft: -6, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", gap: 3 },
-	modeText: { fontSize: 13, color: colors.textSecondary },
-	menu: {
-		marginBottom: 6,
-		paddingVertical: 4,
-		borderRadius: 16,
-		backgroundColor: colors.background,
-		borderWidth: StyleSheet.hairlineWidth,
-		borderColor: colors.control,
-	},
-	menuItem: { minHeight: 52, paddingHorizontal: 14, justifyContent: "center" },
-	menuText: { fontSize: 15, color: colors.text },
-	menuTextOn: { fontWeight: "600" },
-	menuHint: { fontSize: 12, lineHeight: 17, color: colors.textSecondary },
 	readonly: { paddingTop: 14, paddingHorizontal: spacing.screenSide, alignItems: "center", gap: 4 },
 	readonlyText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, textAlign: "center" },
 });
