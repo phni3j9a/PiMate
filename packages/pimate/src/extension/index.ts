@@ -84,6 +84,7 @@ export default function pimate(pi: ExtensionAPI): void {
 				expectSessionId = parsed.expectSessionId;
 				p = validateRequest({ id: "internal", method: "session_op", params: parsed }).params as ParamsOf<"session_op">;
 			} catch {
+				h.treeNavigating = false;
 				ctx.ui.notify("Invalid PiMate session operation", "error");
 				return;
 			}
