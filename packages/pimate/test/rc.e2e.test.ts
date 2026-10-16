@@ -40,6 +40,7 @@ it.skipIf(!pi || !abduco)(
 				PI_CODING_AGENT_DIR: join(dir, "agent"),
 				PIMATE_E2E: "1",
 				PIMATE_E2E_WRITE_DIFF: "1",
+				PIMATE_E2E_IMAGE_RESIZE: "1",
 			},
 		});
 		try {
@@ -86,7 +87,13 @@ it.skipIf(!pi || !abduco)(
 					}),
 				);
 			expect(cli("list")).toEqual(expect.arrayContaining([expect.objectContaining({ instanceId, reachable: true })]));
-			expect(cli("prompt", instanceId, "say hello")).toEqual({ deliveredAs: "prompt" });
+			expect((await client.request("hello", {})).snapshot.promptImages).toBe(true);
+			const image = {
+				type: "image" as const,
+				mimeType: "image/png" as const,
+				data: readFileSync(join(root, "packages/pimate/test/fixtures/prompt-image.png")).toString("base64"),
+			};
+			expect(await client.request("prompt", { text: "say hello", images: [image] })).toEqual({ deliveredAs: "prompt" });
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),
@@ -106,12 +113,22 @@ it.skipIf(!pi || !abduco)(
 				]),
 			);
 			const history = await client.request("history", {});
+			const userImage = history.items.find((item) => item.kind === "user");
+			expect(userImage).toMatchObject({
+				kind: "user",
+				imageCount: 1,
+				images: [expect.objectContaining({ type: "image" })],
+			});
+			if (userImage?.kind !== "user") throw new Error("Missing image user entry");
+			expect(userImage.text).toContain("say hello");
+			expect(userImage.text).toContain("1024");
+			expect(userImage.images?.[0]?.data).not.toBe(image.data);
 			for (const e of events) {
 				if (e.event.type === "message_end") expect(history.items).toContainEqual(e.event.item);
 			}
 			expect(events.every((e, i) => !i || e.seq === events[i - 1].seq + 1)).toBe(true);
 			events.length = 0;
-			await client.request("prompt", { text: "write and edit a file" });
+			expect(cli("prompt", instanceId, "write and edit a file")).toEqual({ deliveredAs: "prompt" });
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),

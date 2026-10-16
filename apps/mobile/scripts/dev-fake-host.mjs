@@ -534,12 +534,14 @@ class Peer {
 		setTimeout(() => {
 			if (request.method === "prompt") {
 				const text = String(request.params?.text ?? "");
+				const images = request.params?.images ?? [];
 				if (inst.turn) {
-					inst.followUps.push(text);
-					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs: "followUp" } });
+					inst.followUps.push({ text, images });
+					const deliveredAs = request.params?.deliverAs === "steer" ? "steer" : "followUp";
+					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs } });
 				} else {
 					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs: "prompt" } });
-					startTurn(id, text, "full");
+					startTurn(id, text, "full", images);
 				}
 			} else if (request.method === "abort") {
 				abortTurn(id);
@@ -800,6 +802,7 @@ function snapshot(id) {
 	const s = inst.summary;
 	return {
 		protocol: 1,
+		promptImages: true,
 		instanceId: id,
 		pid: 4242,
 		cwd: s.cwd,
@@ -1020,11 +1023,20 @@ function toolEnd(id, toolCallId, toolName, text, isError = false, details = unde
 	});
 }
 
-function startTurn(id, prompt, kind) {
+function startTurn(id, prompt, kind, images = []) {
 	const inst = instances.get(id);
 	if (!inst) return;
 	emit(id, { type: "user_input", text: prompt, source: "rpc" });
-	emit(id, { type: "message_end", item: { kind: "user", entryId: eid(), text: prompt, timestamp: Date.now() } });
+	emit(id, {
+		type: "message_end",
+		item: {
+			kind: "user",
+			entryId: eid(),
+			text: prompt,
+			...(images.length ? { images, imageCount: images.length } : {}),
+			timestamp: Date.now(),
+		},
+	});
 	setStatus(id, "running");
 	const turn = {
 		steps: kind === "full" && !wantsMarkdown(prompt) ? fullScript(prompt) : shortScript(prompt),
@@ -1068,7 +1080,12 @@ function finishTurn(id, aborted) {
 	const follow = !aborted && inst.followUps.shift();
 	if (follow) {
 		inst.turn = null;
-		startTurn(id, follow, "short");
+		startTurn(
+			id,
+			typeof follow === "string" ? follow : follow.text,
+			"short",
+			typeof follow === "string" ? [] : follow.images,
+		);
 		return;
 	}
 	inst.turn = null;

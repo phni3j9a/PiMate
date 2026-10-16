@@ -30,7 +30,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
+      ]
     },
     "web": {
       "output": "static",
@@ -54,7 +60,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PC \u306b\u8868\u793a\u3055\u308c\u305f PiMate \u306e\u30da\u30a2\u30ea\u30f3\u30b0\u7528 QR \u30b3\u30fc\u30c9\u3092\u8aad\u307f\u53d6\u308b\u305f\u3081\u306b\u30ab\u30e1\u30e9\u3092\u4f7f\u3044\u307e\u3059\u3002",
+          "cameraPermission": "PC に表示された PiMate のペアリング用 QR コードを読み取るためにカメラを使います。",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
@@ -67,7 +73,15 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": false,
+          "cameraPermission": "PC に表示された PiMate のペアリング用 QR コードを読み取るためにカメラを使います。",
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

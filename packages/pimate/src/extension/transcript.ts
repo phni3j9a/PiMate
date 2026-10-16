@@ -1,4 +1,7 @@
-import type { TranscriptItem } from "@pimate/protocol";
+import { type TranscriptItem, validPromptImages } from "@pimate/protocol";
+
+/** History-only budget; newest previews win, and omitted ones retain imageCount. */
+export const MAX_HISTORY_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export const MAX_TOOL_TEXT = 32 * 1024;
 export const MAX_TOOL_DETAILS_BYTES = 256 * 1024;
@@ -37,7 +40,22 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 	const body = text(m.content);
 	const base = { entryId, ...(typeof m.timestamp === "number" ? { timestamp: m.timestamp } : {}) };
 	if (m.role === "system" && !body.trim()) return null;
-	if (m.role === "user") return { ...base, kind: "user", text: body };
+	if (m.role === "user") {
+		const images = Array.isArray(m.content) ? m.content.filter((c) => c?.type === "image") : [];
+		// Display only a bounded first image; original content stays in Pi's session.
+		const first = images[0] ? [{ type: "image", mimeType: images[0].mimeType, data: images[0].data }] : [];
+		return {
+			...base,
+			kind: "user",
+			text: body,
+			...(images.length
+				? {
+						imageCount: images.length,
+						...(validPromptImages(first) && first.length ? { images: first } : {}),
+					}
+				: {}),
+		};
+	}
 	if (m.role === "assistant") {
 		const blocks = Array.isArray(m.content) ? m.content : [];
 		return {
@@ -87,7 +105,7 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 	return { ...base, kind: "other", label: m.customType ?? m.role ?? "message", text: body };
 }
 export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
-	return entries.flatMap((value) => {
+	const items: TranscriptItem[] = entries.flatMap((value) => {
 		const e = record(value);
 		if (e.type === "message") {
 			const m = normalizeMessage(e.message, e.id);
@@ -105,6 +123,20 @@ export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
 			];
 		return [];
 	});
+	let remaining = MAX_HISTORY_IMAGE_BYTES;
+	for (let i = items.length - 1; i >= 0; i--) {
+		const item = items[i];
+		if (item.kind !== "user" || !item.images?.length) continue;
+		const data = item.images[0].data;
+		const bytes = (data.length / 4) * 3 - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
+		if (bytes <= remaining) remaining -= bytes;
+		else {
+			const placeholder = { ...item };
+			delete placeholder.images;
+			items[i] = placeholder;
+		}
+	}
+	return items;
 }
 
 /** Finds the session entry Pi persisted for a live message_end, so live items and history share an entryId. */

@@ -6,6 +6,7 @@ import type { Hub } from "../src/extension/hub.ts";
 function setup(idle = true) {
 	const ctx = {
 		hasUI: true,
+		model: { input: ["text", "image"] },
 		isIdle: () => idle,
 		abort: vi.fn(),
 		modelRegistry: { find: vi.fn(() => ({ provider: "faux", id: "one" })) },
@@ -207,4 +208,29 @@ it("saves scoped models like /scoped-models (all = no filter) and rejects unknow
 	await expect(handlers.set_scoped_models({ models: [{ provider: "faux", id: "zz" }] })).rejects.toMatchObject({
 		code: "not_found",
 	});
+});
+
+it.each(["prompt", "steer", "followUp"] as const)("delivers image content arrays as %s", async (mode) => {
+	const { handlers, pi } = setup(mode === "prompt");
+	const image = { type: "image", mimeType: "image/jpeg", data: "YQ==" } as const;
+	for (const text of ["describe", ""]) {
+		expect(await handlers.prompt({ text, images: [image], ...(mode === "prompt" ? {} : { deliverAs: mode }) })).toEqual(
+			{ deliveredAs: mode },
+		);
+		expect(pi.sendUserMessage).toHaveBeenLastCalledWith([...(text ? [{ type: "text", text }] : []), image], {
+			...(mode === "prompt" ? {} : { deliverAs: mode }),
+			expandPromptTemplates: false,
+		});
+	}
+});
+it.each(["text-only", "unknown"])("rejects images on a %s model without sending, but allows text", async (model) => {
+	const { handlers, ctx, pi } = setup();
+	ctx.model.input = ["text"];
+	if (model === "unknown") Object.assign(ctx, { model: undefined });
+	expect(() =>
+		handlers.prompt({ text: "", images: [{ type: "image", mimeType: "image/jpeg", data: "YQ==" }] }),
+	).toThrow("画像対応モデル");
+	expect(pi.sendUserMessage).not.toHaveBeenCalled();
+	await handlers.prompt({ text: "text only" });
+	expect(pi.sendUserMessage).toHaveBeenCalledWith("text only", { expandPromptTemplates: false });
 });

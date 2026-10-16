@@ -1,6 +1,7 @@
 /** Chat composer (Main.html footer) with the in-card status notices of Chat-Edge.html. */
+import type { PromptImage } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import {
 	ArrowUpIcon,
@@ -8,6 +9,7 @@ import {
 	ChevronDownIcon,
 	ClockIcon,
 	CloseIcon,
+	PlusIcon,
 	QueuedIcon,
 	RingIcon,
 	StopIcon,
@@ -18,6 +20,7 @@ import { Spinner } from "@/components/StatusMark";
 import { IconButton } from "@/components/ui";
 import type { OutboxEntry } from "@/lib/store";
 import { colors, radii, sizes, typography } from "@/theme/tokens";
+import { PromptImageView } from "./PromptImageView";
 
 export type BannerTone = "normal" | "waiting" | "failed";
 
@@ -85,11 +88,12 @@ export function QueuedRows({ entries }: { entries: OutboxEntry[] }) {
 					key={e.id}
 					style={styles.queuedRow}
 					accessible
-					accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.text}`}
+					accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.images?.length ? "画像1枚 " : ""}${e.text}`}
 				>
 					<QueuedIcon color={colors.textSecondary} />
 					<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
 					<Text style={styles.queuedText} numberOfLines={1}>
+						{e.images?.length ? `画像1枚${e.text ? " · " : ""}` : ""}
 						{e.text}
 					</Text>
 				</View>
@@ -118,6 +122,7 @@ export function Composer({
 	sendMode,
 	inputLabel = "メッセージ",
 	stopLabel = "停止",
+	attachment,
 }: {
 	draft: string;
 	onChangeDraft: (text: string) => void;
@@ -141,7 +146,11 @@ export function Composer({
 	sendMode?: { label: string; onPress: () => void };
 	inputLabel?: string;
 	stopLabel?: string;
+	/** Parent only; omitted by the child composer. */
+	attachment?: { image?: PromptImage; picking: boolean; disabled: boolean; onPick: () => void; onRemove: () => void };
 }) {
+	const { width } = useWindowDimensions();
+	const showContext = !attachment || width >= 380;
 	return (
 		<View>
 			{children}
@@ -149,6 +158,14 @@ export function Composer({
 				{banners.map((b) => (
 					<BannerView key={b.key} banner={b} />
 				))}
+				{attachment?.image ? (
+					<View style={styles.attachment}>
+						<PromptImageView image={attachment.image} compact />
+						<IconButton label="添付画像を削除" onPress={attachment.onRemove} disabled={attachment.picking}>
+							<CloseIcon size={18} color={colors.textSecondary} />
+						</IconButton>
+					</View>
+				) : null}
 				<TextInput
 					style={styles.input}
 					value={draft}
@@ -160,6 +177,19 @@ export function Composer({
 					multiline
 				/>
 				<View style={styles.actions}>
+					{attachment ? (
+						<IconButton
+							label={attachment.picking ? "画像を準備中" : attachment.image ? "添付画像を変更" : "画像を添付"}
+							onPress={attachment.onPick}
+							disabled={attachment.disabled || attachment.picking}
+						>
+							{attachment.picking ? (
+								<Spinner />
+							) : (
+								<PlusIcon size={20} color={attachment.disabled ? colors.textSecondary : colors.text} />
+							)}
+						</IconButton>
+					) : null}
 					{model && onOpenModel ? (
 						<Pressable
 							accessibilityRole="button"
@@ -173,7 +203,7 @@ export function Composer({
 								{model}
 							</Text>
 							<ChevronDownIcon size={12} strokeWidth={2.2} color={colors.textSecondary} />
-							{contextPercent != null ? (
+							{contextPercent != null && showContext ? (
 								<View style={styles.context}>
 									<RingIcon percent={contextPercent} />
 									<Text style={styles.contextText}>{Math.round(contextPercent)}%</Text>
@@ -227,6 +257,7 @@ const styles = StyleSheet.create({
 		borderRadius: radii.input,
 		backgroundColor: colors.surface,
 	},
+	attachment: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 },
 	input: {
 		...typography.composer,
 		color: colors.text,
