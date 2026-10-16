@@ -81,7 +81,12 @@ export function QueuedRows({ entries }: { entries: OutboxEntry[] }) {
 	return (
 		<View style={styles.queued}>
 			{entries.map((e) => (
-				<View key={e.id} style={styles.queuedRow} accessible accessibilityLabel={`完了後に送信: ${e.text}`}>
+				<View
+					key={e.id}
+					style={styles.queuedRow}
+					accessible
+					accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.text}`}
+				>
 					<QueuedIcon color={colors.textSecondary} />
 					<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
 					<Text style={styles.queuedText} numberOfLines={1}>
@@ -110,6 +115,7 @@ export function Composer({
 	contextPercent,
 	onOpenModel,
 	leading,
+	sendMode,
 	inputLabel = "メッセージ",
 	stopLabel = "停止",
 }: {
@@ -131,6 +137,8 @@ export function Composer({
 	onOpenModel?: () => void;
 	/** Left side of the action row when there is no model button (e.g. the subagent send mode). */
 	leading?: ReactNode;
+	/** Parent prompt timing, while Pi is running. */
+	sendMode?: { label: string; onPress: () => void };
 	inputLabel?: string;
 	stopLabel?: string;
 }) {
@@ -176,6 +184,17 @@ export function Composer({
 						leading
 					)}
 					<View style={styles.spacer} />
+					{sendMode ? (
+						<Pressable
+							accessibilityRole="button"
+							accessibilityLabel={`送信のタイミング: ${sendMode.label}`}
+							onPress={sendMode.onPress}
+							style={({ pressed }) => [styles.mode, pressed && styles.pressed]}
+						>
+							<Text style={styles.modelText}>{sendMode.label}</Text>
+							<ChevronDownIcon size={12} color={colors.textSecondary} />
+						</Pressable>
+					) : null}
 					{showStop ? (
 						<IconButton label={stopLabel} onPress={onStop} size={sizes.composerControl} disabled={stopping}>
 							{stopping ? <Spinner size={18} /> : <StopIcon />}
@@ -183,7 +202,7 @@ export function Composer({
 					) : null}
 					<Pressable
 						accessibilityRole="button"
-						accessibilityLabel={sending ? "送信中" : "送信"}
+						accessibilityLabel={sending ? "送信中" : sendMode ? `${sendMode.label}で送信` : "送信"}
 						accessibilityState={{ disabled: !canSend, busy: sending }}
 						disabled={!canSend}
 						onPress={onSend}
@@ -219,6 +238,7 @@ const styles = StyleSheet.create({
 	},
 	actions: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 2 },
 	spacer: { flex: 1 },
+	mode: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 4 },
 	model: { flexShrink: 1, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 4 },
 	modelText: { flexShrink: 1, fontSize: 13, color: colors.textSecondary },
 	context: { flexDirection: "row", alignItems: "center", gap: 5, marginLeft: 14 },

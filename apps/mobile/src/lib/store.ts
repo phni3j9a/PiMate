@@ -726,7 +726,7 @@ export class AppStore {
 		return null;
 	}
 
-	async send(): Promise<void> {
+	async send(deliverAs?: "steer" | "followUp"): Promise<void> {
 		const { selection, view } = this.state;
 		if (!selection || !view || this.sendBlocker() !== null) return;
 		const conn = this.connections.get(selection.hostId);
@@ -747,7 +747,7 @@ export class AppStore {
 		const request: Request<"prompt"> = {
 			id,
 			method: "prompt",
-			params: { text },
+			params: { text, ...(view.status !== "idle" && deliverAs ? { deliverAs } : {}) },
 			expectInstanceId: selection.instanceId,
 			...(view.session ? { expectSessionId: view.session.id } : {}),
 		};

@@ -20,6 +20,7 @@ import { DialogContext, type DialogContextValue } from "@/components/chat/Dialog
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
+import { Sheet } from "@/components/Sheet";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { ModelSheet } from "@/components/sheets/ModelSheet";
 import { SessionSheet } from "@/components/sheets/SessionSheet";
@@ -57,7 +58,7 @@ export default function ChatScreen() {
 	const aborting = useAppState((s) => s.aborting);
 	const models = useAppState((s) => s.models);
 	const answering = useAppState((s) => s.answering);
-	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | null>(null);
+	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | "timing" | null>(null);
 	const closeSheet = useCallback(() => setSheet(null), []);
 
 	const host = hosts.find((h) => h.hostId === selection?.hostId);
@@ -101,6 +102,8 @@ export default function ChatScreen() {
 
 	const key = selection ? draftKey(selection) : null;
 	const draft = key ? (drafts[key] ?? "") : "";
+	const [timing, setTiming] = useState<{ key: string | null; mode: "steer" | "followUp" } | null>(null);
+	const sendMode = timing?.key === key ? timing.mode : "followUp";
 	const sending = outbox.some((e) => e.state === "sending");
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
 	const blocker = useAppState(() => appStore.sendBlocker());
@@ -228,7 +231,12 @@ export default function ChatScreen() {
 							editable
 							canSend={blocker === null}
 							sending={sending}
-							onSend={() => void appStore.send()}
+							onSend={() => void appStore.send(sendMode)}
+							sendMode={
+								working
+									? { label: sendMode === "steer" ? "割り込む" : "後で伝える", onPress: () => setSheet("timing") }
+									: undefined
+							}
 							// Only a turn can be stopped: an extension command's dialog outside one is answered, not stopped.
 							showStop={!!view?.agentActive && view.phase === "ready" && connected}
 							stopping={aborting}
@@ -244,6 +252,19 @@ export default function ChatScreen() {
 					</View>
 				) : null}
 			</KeyboardAvoidingView>
+			<Sheet visible={sheet === "timing"} onClose={closeSheet} label="送信のタイミング">
+				<Text style={styles.emptyTitle}>送信のタイミング</Text>
+				{(["followUp", "steer"] as const).map((mode) => (
+					<TextButton
+						key={mode}
+						label={`${mode === sendMode ? "✓ " : ""}${mode === "steer" ? "割り込む · 作業の区切りで伝える" : "後で伝える · 今の作業が終わってから"}`}
+						onPress={() => {
+							setTiming({ key, mode });
+							closeSheet();
+						}}
+					/>
+				))}
+			</Sheet>
 			<SessionSheet visible={sheet === "session"} onClose={closeSheet} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
 			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />
