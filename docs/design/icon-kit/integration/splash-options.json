@@ -1,9 +1,9 @@
 {
-  "backgroundColor": "#F1EEE9",
-  "image": "./assets/brand/splash-light.png",
+  "backgroundColor": "#FFFFFF",
+  "image": "./assets/brand/mark-light.png",
   "imageWidth": 76,
   "dark": {
-    "backgroundColor": "#121B2C",
-    "image": "./assets/brand/splash-dark.png"
+    "backgroundColor": "#131618",
+    "image": "./assets/brand/mark-dark.png"
   }
 }

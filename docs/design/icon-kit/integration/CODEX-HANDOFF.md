@@ -1,40 +1,38 @@
 # Codex / Claude Code向け導入メモ
 
-## 対象
+## 対象と現状
 
-`phni3j9a/PiMate` の `apps/mobile`。作成時に確認したmainは `03ac171`、Expoは `~57.0.28` です。実装前に最新の設定を読み直してください。このPRは素材キットの追加だけで、アプリの設定や表示はまだ変更していません。
+`phni3j9a/PiMate` の `apps/mobile`（Expo SDK 57）。組み込みは [#45](https://github.com/phni3j9a/PiMate/issues/45) で完了しています。このメモは、キットを再生成したあとに素材をアプリへ反映し直すときの手順です。
 
-## 作業手順
+## 再反映の手順
 
 1. `apps/mobile/AGENTS.md` を読む。
-2. 次の9ファイルを `apps/mobile/assets/brand/` へコピーする。元画像の切り抜きではなく、このキットの書き出し済み素材を使う。
-3. `apps/mobile/app.json` の対象キーだけに `expo-icon-fragment.json` の値を反映する。ファイル全体の置換や浅いオブジェクトマージはしない。bundleIdentifier、package、permissions、plugins等の既存設定を保持する。
-4. 既存 `plugins` 配列の `expo-splash-screen` エントリー内だけに `splash-options.json` を反映する。他のプラグインを消さない。
-5. `apps/mobile/app.config.js` はapp.jsonを読み、Android versionCodeを算出している。その処理は維持する。
-6. リポジトリ所定のlint・typecheckを行い、Expoの解決済みconfigでアイコンのパスを確認する。アイコン更新はネイティブ再ビルドが必要。OTA更新のみでの差し替えを期待しない。
-7. iOSはLight／Dark／Tinted、Androidは通常／テーマアイコンと円形マスクで実機確認する。
+2. 次の10ファイルを `apps/mobile/assets/brand/` へ上書きコピーする。元画像の切り抜きではなく、このキットの書き出し済み素材を使う。
+3. パスを変えた場合だけ `apps/mobile/app.json` の対象キーを直す（値の例は `expo-icon-fragment.json` と `splash-options.json`）。ファイル全体の置換はしない。`app.config.js` のversionCode算出も維持する。
+4. lint・typecheckを行い、`npx expo config --type public` でパスを確認する。アイコンの変更はネイティブの再ビルドが必要で、OTA更新では反映されない。
+5. iOSはLight／Dark／Tinted、Androidは通常／テーマアイコンと円形マスク、通知、スプラッシュ（ライト／ダーク）を実機で確認する。
 
-| キット内のファイル | `apps/mobile/assets/brand/` 内の名前 |
-|---|---|
-| `ios/AppIcon.appiconset/icon-light-1024.png` | `icon-light.png` |
-| `ios/AppIcon.appiconset/icon-dark-1024.png` | `icon-dark.png` |
-| `ios/AppIcon.appiconset/icon-tinted-1024.png` | `icon-tinted.png` |
-| `android/adaptive/foreground-light-1024.png` | `android-foreground.png` |
-| `android/adaptive/background-light-1024.png` | `android-background.png` |
-| `android/adaptive/monochrome-1024.png` | `android-monochrome.png` |
-| `web/icon-light-48.png` | `favicon.png` |
-| `splash/mark-light-1024.png` | `splash-light.png` |
-| `splash/mark-dark-1024.png` | `splash-dark.png` |
+| キット内のファイル | `apps/mobile/assets/brand/` 内の名前 | 使う場所 |
+|---|---|---|
+| `ios/AppIcon.appiconset/icon-light-1024.png` | `icon-light.png` | `icon`、`ios.icon.light` |
+| `ios/AppIcon.appiconset/icon-dark-1024.png` | `icon-dark.png` | `ios.icon.dark` |
+| `ios/AppIcon.appiconset/icon-tinted-1024.png` | `icon-tinted.png` | `ios.icon.tinted` |
+| `android/adaptive/foreground-light-1024.png` | `android-foreground.png` | `android.adaptiveIcon` |
+| `android/adaptive/background-light-1024.png` | `android-background.png` | `android.adaptiveIcon` |
+| `android/adaptive/monochrome-1024.png` | `android-monochrome.png` | `android.adaptiveIcon`（テーマアイコン） |
+| `web/icon-light-48.png` | `favicon.png` | `web.favicon` |
+| `splash/mark-light-1024.png` | `mark-light.png` | スプラッシュ（ライト）、アプリ内のマーク |
+| `splash/mark-dark-1024.png` | `mark-dark.png` | スプラッシュ（ダーク）、アプリ内のマーク |
+| `android/notification/notification-96.png` | `notification.png` | `expo-notifications` プラグインの `icon` |
 
-## 見落としやすい点
+## 決めたこと
 
-- 現在の `ios.icon` は `./assets/expo.icon`。これをPNGオブジェクトへ置き換える。トップレベル `icon` の変更だけではExpoの初期ロゴが残る。
-- 現在のAndroidは `backgroundImage` を設定している。`backgroundColor` だけを変えても既存背景画像が優先されるため、画像のパスも差し替える。
-- `ios/` と `android/` のネイティブ生成ディレクトリを手書きで追加しない。
-- Androidのダーク版を使う場合は前景と背景を両方darkに差し替える。システムのダークモードと自動連動する設定ではない。
-- 元画像のワードマークや背景グリッドをアイコンへ追加しない。ホーム画面ではマークだけを使う。
-- ロゴに合わせてアプリ全体のテーマやUIを変更する必要はない。
+- AndroidのランチャーアイコンはライトのMtマークを使う。OSのダークモードに合わせて自動で切り替える設定はない。ダークモードの人には単色版のテーマアイコンを使ってもらう。
+- スプラッシュの背景はキットの紙色ではなく、アプリの背景色（ライト `#FFFFFF`／ダーク `#131618`）にする。起動直後の色の切り替わりを見せないため。
+- 通知の色はアクセントの `#1B6B91`。
+- アプリ内では、ペアリングの最初の画面と設定のバージョン表示にだけマークを置く（`BrandMark`、`src/components/ui.tsx`）。UIの配色はマークに合わせて変えない。
+- `ios/` と `android/` は生成されるディレクトリなので、手で編集しない。元画像のワードマークや背景グリッドはアイコンに入れない。
 
 ## 将来のWeb / desktop
 
-Web公開時は `web/` を利用し、manifestのscope・start_url・配置パスを実際の公開URLに合わせる。Electron／Tauri等を採用したら `desktop/windows/*.ico`、`desktop/macos/*.icns`、`desktop/png/` をビルド設定へ渡す。トレイは単色素材を使用する。
+Webで公開するときは `web/` を使い、manifestのscope・start_url・配置パスを公開URLに合わせる。Electron／Tauri等を採用したら `desktop/windows/*.ico`、`desktop/macos/*.icns`、`desktop/png/` をビルド設定へ渡す。トレイには単色素材を使う。
