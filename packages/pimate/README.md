@@ -73,6 +73,14 @@ RC は `hello` snapshot の `promptImages: true` で画像対応を通知しま�
 
 履歴と live のユーザー項目は `imageCount`（元の総枚数）、`images`（最初の対応画像、サイズ上限内のみ）を含みます。履歴の画像 preview は decoded 合計 2 MiB を最新側から優先し、収まらない項目は件数と本文だけを返します。live 配信や Pi の原本は削りません。モバイル側は表示できない画像を placeholder にし、テキストを落としません。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
+## コマンド一覧と実行（#37）
+
+RC は `snapshot.slashCommands:true` で、`commands` による一覧取得と明示的なコマンド受付を通知します。一覧は Pi の Extension / prompt / skill を名前・説明・source 付きで返し、PiMate 管理用の `pimate` / 内部 `pimate-session`（重複名の `:1` 等も含む）を除外します。これらの管理用コマンドは remote prompt でも拒否し、セッション操作には専用の `session_op` を使います。
+
+先頭トークンが `/[\w:.-]+` に一致する `prompt` を `expandTemplates:true` で送る場合、RC は現在の `pi.getCommands()` で正確な名前を確認します。削除済み・未知の名前は `unsupported` で拒否し、LLM へ流しません。Extension なら作業中も Pi が即実行するため、結果は `deliveredAs:"command"`（受付確認。操作の成功そのものではない）を返し、クライアントは履歴への user 項目を待ってはいけません。Extension の画像添付も拒否します。テンプレート / Skill は展開後に通常送信または steer / followUp のキューに入ります。明示しない送信は従来どおり展開なしです。要求は再送しません。
+
+Pi 組み込みコマンドはこの一覧には含まれません。対応するモバイル画面がある `/model` / `/new` / `/resume` / `/fork` / `/compact` / `/tree`（`sessionTree` 対応 RC のみ）はアプリ側が既存操作へ割り当てます。
+
 ## 日常操作とスマホからの起動（M2）
 
 - RC `models`: Piの認証済みモデル一覧。thinkingLevelsはPi 1.2.0と同じ `getSupportedThinkingLevels()` で求め、非reasoningモデルはoffのみ、xhigh/maxはモデルの対応表に従います。

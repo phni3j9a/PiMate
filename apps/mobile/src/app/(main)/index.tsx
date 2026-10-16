@@ -15,6 +15,7 @@ import {
 	View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { CommandPalette } from "@/components/chat/CommandPalette";
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
@@ -62,8 +63,10 @@ export default function ChatScreen() {
 	const targetChanged = useAppState((s) => s.targetChanged);
 	const aborting = useAppState((s) => s.aborting);
 	const models = useAppState((s) => s.models);
+	const commands = useAppState((s) => s.commands);
 	const answering = useAppState((s) => s.answering);
 	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | "timing" | null>(null);
+	const [sessionPage, setSessionPage] = useState<"main" | "sessions" | "fork">("main");
 	const closeSheet = useCallback(() => setSheet(null), []);
 
 	const host = hosts.find((h) => h.hostId === selection?.hostId);
@@ -250,7 +253,13 @@ export default function ChatScreen() {
 					</View>
 				) : null}
 				{selection && view ? (
-					<IconButton label="セッションのメニュー" onPress={() => setSheet("session")}>
+					<IconButton
+						label="セッションのメニュー"
+						onPress={() => {
+							setSessionPage("main");
+							setSheet("session");
+						}}
+					>
 						<MoreIcon />
 					</IconButton>
 				) : null}
@@ -280,7 +289,25 @@ export default function ChatScreen() {
 							canSend={blocker === null && !picking}
 							sending={sending}
 							onSend={() => {
-								if (!pickingRef.current) void appStore.send(sendMode);
+								if (pickingRef.current) return;
+								const target = appStore.opTarget();
+								void appStore.send(sendMode).then((action) => {
+									const current = appStore.opTarget();
+									if (
+										!action ||
+										!target ||
+										current?.hostId !== target.hostId ||
+										current.instanceId !== target.instanceId ||
+										current.sessionId !== target.sessionId
+									)
+										return;
+									if (action === "model") setSheet("model");
+									else if (action === "tree") router.push("/tree");
+									else if (action === "resume" || action === "fork") {
+										setSessionPage(action === "resume" ? "sessions" : "fork");
+										setSheet("session");
+									}
+								});
 							}}
 							attachment={{
 								image,
@@ -308,6 +335,15 @@ export default function ChatScreen() {
 						>
 							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
 							<QueuedRows entries={queued} />
+							{view?.slashCommands === true && view.phase === "ready" ? (
+								<CommandPalette
+									draft={draft}
+									catalog={key ? commands[key] : undefined}
+									tree={view.sessionTree === true}
+									onSelect={(text) => appStore.setDraft(text)}
+									onRetry={() => void appStore.loadCommands(true)}
+								/>
+							) : null}
 						</Composer>
 					</View>
 				) : null}
@@ -325,7 +361,7 @@ export default function ChatScreen() {
 					/>
 				))}
 			</Sheet>
-			<SessionSheet visible={sheet === "session"} onClose={closeSheet} />
+			<SessionSheet visible={sheet === "session"} onClose={closeSheet} initialPage={sessionPage} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
 			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />
 		</SafeAreaView>

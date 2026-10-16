@@ -189,6 +189,8 @@ export interface InstanceSnapshot {
 	promptImages?: boolean;
 	/** Session tree read, navigation and labels. Absent on older RCs. */
 	sessionTree?: boolean;
+	/** RC command discovery, expansion and explicit command acknowledgements. */
+	slashCommands?: boolean;
 	model: ModelRef | null;
 	thinking: ThinkingLevel | null;
 	pendingUI: UIRequest[];
@@ -267,13 +269,19 @@ export interface CommandInfo {
 	source: string;
 }
 
+/** Only a complete leading command token; paths such as /home/x remain ordinary text. */
+export function slashCommandName(text: string): string | null {
+	const token = text.split(/\s/, 1)[0]!;
+	return /^\/[\w:.-]+$/.test(token) ? token.slice(1) : null;
+}
+
 export interface RcMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
-	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. */
+	/** idle: starts a turn. busy: queued as followUp unless deliverAs is given. Expanded extension commands run immediately and return "command" (no user transcript entry). */
 	prompt: {
 		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };
-		result: { deliveredAs: "prompt" | "steer" | "followUp" };
+		result: { deliveredAs: "prompt" | "steer" | "followUp" | "command" };
 	};
 	abort: { params: Record<string, never>; result: Record<string, never> };
 	ui_respond: {

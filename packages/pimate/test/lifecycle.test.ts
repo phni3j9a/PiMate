@@ -41,6 +41,10 @@ it.each([
 	expect(hooks.has("project_trust")).toBe(false);
 	expect(process.env.PIMATE_TRUST).toBeUndefined();
 });
+it("advertises slash command discovery and command acknowledgements", () => {
+	const { h } = setup();
+	expect(h.snapshot().slashCommands).toBe(true);
+});
 it("tracks PC-only prompts and context in snapshots/events", () => {
 	const { hooks, h } = setup();
 	const context = { tokens: 20, percent: 1, contextWindow: 2000 };
