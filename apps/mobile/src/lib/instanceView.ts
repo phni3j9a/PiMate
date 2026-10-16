@@ -57,6 +57,7 @@ export interface InstanceView {
 	instanceId: string;
 	phase: ViewPhase;
 	promptImages?: boolean;
+	slashCommands?: boolean;
 	error?: { code: string; message?: string };
 	cwd: string | null;
 	session: SessionRef | null;
@@ -214,6 +215,7 @@ function applySubscribed(
 		session,
 		status: snapshot.status,
 		promptImages: snapshot.promptImages === true,
+		slashCommands: snapshot.slashCommands === true,
 		model: snapshot.model,
 		thinking: snapshot.thinking,
 		items: dedupeItems(history.items),

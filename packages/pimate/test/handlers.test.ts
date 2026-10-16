@@ -234,3 +234,66 @@ it.each(["text-only", "unknown"])("rejects images on a %s model without sending,
 	await handlers.prompt({ text: "text only" });
 	expect(pi.sendUserMessage).toHaveBeenCalledWith("text only", { expandPromptTemplates: false });
 });
+
+it.each([true, false])("acknowledges extension commands without a transcript, idle=%s", async (idle) => {
+	const { handlers, pi } = setup(idle);
+	for (const text of ["/hello", "/hello name", "/hello\tname", "/hello\nname"])
+		expect(await handlers.prompt({ text, expandTemplates: true })).toEqual({ deliveredAs: "command" });
+	expect(pi.sendUserMessage).toHaveBeenLastCalledWith("/hello name", {
+		expandPromptTemplates: true,
+		...(idle ? {} : { deliverAs: "followUp" }),
+	});
+	// Without expansion it is an ordinary user message, even when the name is registered.
+	expect(await handlers.prompt({ text: "/hello" })).toEqual({ deliveredAs: idle ? "prompt" : "followUp" });
+});
+
+it.each(["prompt", "skill"])(
+	"expands %s commands but does not acknowledge them as extension commands",
+	async (source) => {
+		const { handlers, pi } = setup(false);
+		const name = source === "skill" ? "skill:review" : "review";
+		vi.spyOn(pi, "getCommands").mockReturnValue([{ name, source, description: "review" }]);
+		expect(await handlers.prompt({ text: `/${name} code`, expandTemplates: true, deliverAs: "steer" })).toEqual({
+			deliveredAs: "steer",
+		});
+		expect(pi.sendUserMessage).toHaveBeenCalledWith(`/${name} code`, {
+			expandPromptTemplates: true,
+			deliverAs: "steer",
+		});
+	},
+);
+
+it("checks exact live command names, rejects removed commands and preserves paths", async () => {
+	const { handlers, pi } = setup();
+	vi.spyOn(pi, "getCommands").mockReturnValue([{ name: "hello:1", source: "extension", description: "alias" }]);
+	expect(await handlers.prompt({ text: "/hello:1 arg", expandTemplates: true })).toEqual({ deliveredAs: "command" });
+	pi.sendUserMessage.mockClear();
+	for (const text of ["/hello", "/unknown", "/hello:2 arg"])
+		expect(() => handlers.prompt({ text, expandTemplates: true })).toThrow("一覧を確認");
+	expect(pi.sendUserMessage).not.toHaveBeenCalled();
+	expect(await handlers.prompt({ text: "/home/x", expandTemplates: true })).toEqual({ deliveredAs: "prompt" });
+});
+
+it("hides management and internal trampoline commands, including duplicate aliases", async () => {
+	const { handlers, pi } = setup();
+	const hidden = ["pimate", "pimate:1", "pimate-session", "pimate-session:1"];
+	vi.spyOn(pi, "getCommands").mockReturnValue(
+		[...hidden, "hello"].map((name) => ({ name, description: name, source: "extension" })),
+	);
+	expect((await handlers.commands({})).commands.map((c) => c.name)).toEqual(["hello"]);
+	for (const name of hidden)
+		expect(() => handlers.prompt({ text: `/${name}`, expandTemplates: true })).toThrow("PC TUI only");
+	expect(pi.sendUserMessage).not.toHaveBeenCalled();
+});
+
+it("rejects image attachments on extension commands instead of silently discarding them", () => {
+	const { handlers, pi } = setup();
+	expect(() =>
+		handlers.prompt({
+			text: "/hello",
+			expandTemplates: true,
+			images: [{ type: "image", mimeType: "image/jpeg", data: "YQ==" }],
+		}),
+	).toThrow("画像を添付できません");
+	expect(pi.sendUserMessage).not.toHaveBeenCalled();
+});
