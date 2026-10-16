@@ -36,7 +36,7 @@ pi
 3. Hostの起動を確認し、常駐する場合のみ **systemd user service登録** に同意。
    `pimate-host.service` をログイン時に起動します。断ると一時起動し、Piを閉じてもHostは動き続けます。
    linger状態は表示するだけで変更しません。ログアウト後の生存はOS側設定に依存します。
-   続けて、同意した場合のみ `pimate` コマンド（`pimate attach` など）のリンクを `$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` の最初のディレクトリに作ります（Pi公式インストーラーの `~/.local/bin/pi` と同じ場所）。
+   続けて、同意した場合のみ（PCパッケージ0.1.5以上）`pimate` コマンド（`pimate attach` など）のリンクを `$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` の最初のディレクトリに作ります（Pi公式インストーラーの `~/.local/bin/pi` と同じ場所）。
    そのディレクトリがPATHに無ければ追記する行を表示します。シェルの設定ファイルは変更しません。既存の別ファイルは上書きしません。導入済みの場合も `/pimate setup` を再実行すると追加できます。
 4. PiMate の「QRコードを読み取る」でカメラを許可し、PC の **`/pimate setup` が表示した QR** を読み取る。
    マシン名・アドレスを確認してペアリングします。`pimate://` リンクの貼り付けも使えます。コードは10分・1回限りです。
