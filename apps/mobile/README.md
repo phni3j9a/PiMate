@@ -4,15 +4,15 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.4 / PCパッケージ0.1.6 です。スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.5 / PCパッケージ0.1.7 です。プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
-## プロバイダーへのログイン／ログアウト（開発版・未リリース）
+## プロバイダーへのログイン／ログアウト
 
 チャットで対象の Pi を開き、**設定 → プロバイダーのログイン**から OpenAI・OpenAI Codex・Anthropic を操作できます。OpenAI / Anthropic は API キーにも対応します。スマホのブラウザを使い、Codex はデバイスコード、Anthropic は表示コードの貼り付け、OpenAI の ChatGPT 認証は戻り先 URL 全体の貼り付けで完了します。
 
-認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。アプリ・Host・対象 Pi の RC の更新が必要です。既存の Android 0.1.4 / PC 0.1.6 には含まれません。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。Android 0.1.5 / PC 0.1.7 以上が必要で、アプリ・Host・対象 Pi の RC をすべて更新してください。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
 開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`badurl=1|0` は不正 URL を再現します。対象は既存の `i=<instanceId>` で指定できます。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
 
@@ -34,7 +34,7 @@ M2:
 - PC でしか操作できない画面（Extension の独自 UI など）は「PC のターミナルで操作が必要です」カードと `pimate attach` のコマンド（コピー可）を表示
 - セッションのメニュー（ヘッダーの「…」）: 統計（メッセージ・トークン・コスト）、新しいセッション、過去のセッションを開く、ここから分岐（ユーザーのメッセージを選ぶ。選んだ文は入力欄に入る）、コンテキストを圧縮、起動元・PC の接続状態・attach コマンド、この Pi を終了（確認あり）
 - モデル・Thinking（入力欄のモデル名）: プロバイダーごとのモデル、そのモデルで使える Thinking レベル、コンテキスト使用量とコスト、圧縮。変更は PC の Pi にも反映される。「お気に入り」は PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）と共通で、PC の `/model` と同じくお気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。PC パッケージ 0.1.2 以前では ☆ を出さない（[#23](https://github.com/phni3j9a/PiMate/issues/23)）
-- 利用枠（開発版・未リリース、[#53](https://github.com/phni3j9a/PiMate/issues/53)）: モデル・Thinking シートに Codex（`openai-codex` の ChatGPT ログイン）と Claude（Pro/Max ログイン）の 5時間・週間の使用率とリセット日時、取得時刻を表示する。その Pi の通常の応答に含まれる値だけを使い、利用状況 API への追加リクエストやポーリングはしない（Pi 起動後、各サブスクの最初の応答までは表示されない。他の端末・Pi での利用は次の応答まで反映されない）。リセット日時を過ぎた値は「—」にする。Codex は 100% でも追加クレジットで応答が続くことがあるため、使えるかどうかの判定には使わない。新しい OpenAI の ChatGPT ログイン（`openai`）と API キー利用は対象外。PC の RC が未対応なら更新を案内する
+- 利用枠（Android 0.1.5 / PC 0.1.7 以上、[#53](https://github.com/phni3j9a/PiMate/issues/53)）: モデル・Thinking シートに Codex（`openai-codex` の ChatGPT ログイン）と Claude（Pro/Max ログイン）の 5時間・週間の使用率とリセット日時、取得時刻を表示する。その Pi の通常の応答に含まれる値だけを使い、利用状況 API への追加リクエストやポーリングはしない（Pi 起動後、各サブスクの最初の応答までは表示されない。他の端末・Pi での利用は次の応答まで反映されない）。リセット日時を過ぎた値は「—」にする。Codex は 100% でも追加クレジットで応答が続くことがあるため、使えるかどうかの判定には使わない。新しい OpenAI の ChatGPT ログイン（`openai`）と API キー利用は対象外。PC の RC が未対応なら更新を案内する
 - PC 側の変化に追従: `/resume` などでセッションが変わったら区切りを表示し、下書きがあれば送信前に確認を求める。モデル・Thinking の変更も反映
 
 M3（表示）:
@@ -125,7 +125,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.4.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.5.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -145,14 +145,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.4.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.5.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.4 apps/mobile/dist/pimate-0.1.4.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.4' --notes-file <リリースノート>
+gh release create app-v0.1.5 apps/mobile/dist/pimate-0.1.5.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.5' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。

@@ -22,12 +22,12 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 
 Android 0.1.4 / PCパッケージ0.1.6では、スラッシュコマンド候補・セッションツリー・Mtアイコンを追加しました。アプリの作業中の送信は「割り込む」のみになり、停止後の未確認メッセージは「下書きへ戻す」で編集できます。詳細は [mobile README](apps/mobile/README.md) を参照してください。
 
-開発版では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできます。スマホのブラウザでの認証方法と PC 側への影響は [プロバイダー認証](docs/provider-auth.md) を参照してください。**配布済みの上記バージョンには未収録です。**
+Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。
 
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.4 / PCパッケージ0.1.6。スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.5 / PCパッケージ0.1.7。プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
