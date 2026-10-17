@@ -144,4 +144,19 @@ describe("PC-wide shared quota", () => {
 			{ type: "quota", quota: claude(30, NOW + 5) },
 		]);
 	});
+
+	it("picks up another process's write while the RC server runs", async () => {
+		dir = mkdtempSync(join(tmpdir(), "pimate-quota-"));
+		vi.stubEnv("PIMATE_RUN_DIR", dir);
+		const ours = new Hub();
+		await ours.start();
+		try {
+			const emit = vi.spyOn(ours, "emit");
+			writeSharedQuota(dir, claude(42, Date.now()));
+			await vi.waitFor(() => expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: "quota" })));
+			expect(ours.snapshot().quotas?.[0]?.windows[0]?.usedPercent).toBe(42);
+		} finally {
+			ours.stop();
+		}
+	});
 });

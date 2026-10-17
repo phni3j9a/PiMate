@@ -29,19 +29,21 @@ export function useNow(intervalMs: number, enabled = true): number {
 
 /** Current time, refreshed when the next quota window resets and when the app returns to the foreground. */
 export function useQuotaClock(quotas: readonly SubscriptionQuota[] | null): number {
-	const [, setTick] = useState(0);
+	// State, not Date.now() in render: the React Compiler caches dependency-free expressions.
+	const [now, setNow] = useState(() => Date.now());
 	useEffect(() => {
-		const tick = () => setTick((n) => n + 1);
+		const tick = () => setNow(Date.now());
 		const sub = RNAppState.addEventListener("change", (s) => s === "active" && tick());
-		const next = nextQuotaReset(quotas, Date.now());
+		// From the rendered `now`: a reset that passed before new figures arrived fires at once and refreshes it.
+		const next = nextQuotaReset(quotas, now);
 		// setTimeout overflows past ~24.8 days; a longer wait just re-arms.
 		const timer = next === null ? undefined : setTimeout(tick, Math.min(next - Date.now() + 500, 2 ** 31 - 1));
 		return () => {
 			sub.remove();
 			clearTimeout(timer);
 		};
-	});
-	return Date.now();
+	}, [quotas, now]);
+	return now;
 }
 
 /** Whether the software keyboard is shown (the composer drops its bottom inset then). */
