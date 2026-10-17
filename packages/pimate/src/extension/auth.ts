@@ -6,7 +6,6 @@ import {
 	type ExtensionContext,
 	getAgentDir,
 	ModelRuntime,
-	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
 	AUTH_FLOW_TTL_MS,
@@ -47,13 +46,6 @@ export function createProviderAuth(ctx: ExtensionContext): ProviderAuth {
 			refreshOnCreate: false,
 			allowModelNetwork: false,
 		}),
-		async () => {
-			const settings = SettingsManager.create(ctx.cwd, agentDir);
-			const id = settings.getOrCreateDeviceId();
-			await settings.flush();
-			if (settings.drainErrors().length) throw new Error("Device ID unavailable");
-			return id;
-		},
 	);
 }
 
@@ -66,11 +58,9 @@ export class ProviderAuth {
 	private lifetime = new AbortController();
 	private registry: Registry;
 	private runtime: Promise<AuthRuntime>;
-	private getDeviceId: () => Promise<string>;
-	constructor(registry: Registry, runtime: Promise<AuthRuntime>, getDeviceId: () => Promise<string>) {
+	constructor(registry: Registry, runtime: Promise<AuthRuntime>) {
 		this.registry = registry;
 		this.runtime = runtime;
-		this.getDeviceId = getDeviceId;
 		void runtime.catch(() => {});
 	}
 
@@ -89,7 +79,7 @@ export class ProviderAuth {
 					return {
 						id,
 						methods: [
-							...(provider?.auth?.oauth ? ["oauth" as const] : []),
+							...(id !== "openai" && provider?.auth?.oauth ? ["oauth" as const] : []),
 							...(provider?.auth?.apiKey?.login ? ["api_key" as const] : []),
 						],
 						stored: type === "oauth" || type === "api_key" ? type : null,
@@ -108,7 +98,7 @@ export class ProviderAuth {
 		const provider = this.provider(providerId);
 		if (
 			!(["oauth", "api_key"] as string[]).includes(method) ||
-			!(method === "oauth" ? provider.auth?.oauth?.login : provider.auth?.apiKey?.login)
+			!(method === "oauth" ? providerId !== "openai" && provider.auth?.oauth?.login : provider.auth?.apiKey?.login)
 		)
 			throw new RcError("unsupported", "Authentication method unavailable");
 		const state: AuthFlow = {
@@ -162,7 +152,7 @@ export class ProviderAuth {
 		const pending = op.pending;
 		if (op.state.status !== "input" || !pending || pending.id !== promptId)
 			throw new RcError("no_such_request", "Auth prompt is no longer active");
-		if (!validInput(pending.kind, value, op.state.authorization?.url)) throw inputError();
+		if (!validInput(pending.kind, value)) throw inputError();
 		pending.resolve(value);
 		return this.result(op);
 	}
@@ -303,21 +293,14 @@ export class ProviderAuth {
 						: {}),
 				},
 			});
-			const deviceId =
-				op.state.provider === "openai" && op.state.method === "oauth" ? await this.getDeviceId() : undefined;
 			signal.throwIfAborted();
 			let syncFailed = false;
 			try {
-				await runtime.login(
-					op.state.provider,
-					op.state.method,
-					{
-						signal,
-						prompt: (prompt) => this.prompt(op, prompt),
-						notify: (event) => this.notify(op, event),
-					},
-					{ getDeviceId: () => deviceId! },
-				);
+				await runtime.login(op.state.provider, op.state.method, {
+					signal,
+					prompt: (prompt) => this.prompt(op, prompt),
+					notify: (event) => this.notify(op, event),
+				});
 			} catch (error) {
 				if (!(error instanceof CredentialSynchronizationError)) throw error;
 				syncFailed = true; // Persistence succeeded; never report this as a failed login or encourage resubmission.
@@ -330,7 +313,7 @@ export class ProviderAuth {
 				this.end(op, "failed", op.state.status === "saving" ? "storage_failed" : "login_failed");
 		}
 	}
-	// OpenAI installs cleanup after these callbacks, so cancellation must not synchronously escape them.
+	// Return prompt failures asynchronously so provider cleanup can still be installed.
 	private async prompt(op: Operation, prompt: AuthPrompt): Promise<string> {
 		op.controller.signal.throwIfAborted();
 		if (prompt.signal?.aborted) return Promise.reject(new Error("Auth prompt cancelled"));
@@ -349,10 +332,8 @@ export class ProviderAuth {
 		const kind =
 			op.state.method === "api_key" && prompt.type === "secret"
 				? "api_key"
-				: op.state.method === "oauth" && prompt.type === "manual_code" && op.state.provider !== "openai-codex"
-					? op.state.provider === "openai"
-						? "callback_url"
-						: "code"
+				: op.state.method === "oauth" && prompt.type === "manual_code" && op.state.provider === "anthropic"
+					? "code"
 					: undefined;
 		if (!kind) return Promise.reject(new Error("Unsupported auth prompt"));
 		return new Promise<string>((resolve, reject) => {
@@ -403,12 +384,7 @@ function validAuthUrl(provider: AuthProviderId, value: string): boolean {
 		return false;
 	try {
 		const url = new URL(value);
-		const endpoint =
-			provider === "openai"
-				? "https://auth.openai.com/api/accounts/authorize"
-				: provider === "anthropic"
-					? "https://claude.ai/oauth/authorize"
-					: "";
+		const endpoint = provider === "anthropic" ? "https://claude.ai/oauth/authorize" : "";
 		return (
 			`${url.origin}${url.pathname}` === endpoint &&
 			!url.username &&
@@ -437,7 +413,7 @@ function validAuthUrl(provider: AuthProviderId, value: string): boolean {
 	}
 }
 
-function validInput(kind: NonNullable<AuthFlow["prompt"]>["kind"], value: string, authorizationUrl?: string): boolean {
+function validInput(kind: NonNullable<AuthFlow["prompt"]>["kind"], value: string): boolean {
 	if (
 		typeof value !== "string" ||
 		!value.length ||
@@ -446,23 +422,5 @@ function validInput(kind: NonNullable<AuthFlow["prompt"]>["kind"], value: string
 	)
 		return false;
 	if (kind === "api_key") return value.length <= 4096 && !value.startsWith("!");
-	if (kind === "code") return /^[A-Za-z0-9._~+/%=-]+(?:#[A-Za-z0-9._~+/%=-]+)?$/.test(value);
-	try {
-		const url = new URL(value);
-		return (
-			url.origin === "http://127.0.0.1:1455" &&
-			url.pathname === "/auth/callback" &&
-			!url.username &&
-			!url.password &&
-			!url.hash &&
-			["code", "state", "client_id"].every(
-				(k) => url.searchParams.getAll(k).length === 1 && !!url.searchParams.get(k),
-			) &&
-			[...url.searchParams.keys()].every((k) => ["code", "state", "client_id"].includes(k)) &&
-			!!authorizationUrl &&
-			url.searchParams.get("state") === new URL(authorizationUrl).searchParams.get("state")
-		);
-	} catch {
-		return false;
-	}
+	return kind === "code" && /^[A-Za-z0-9._~+/%=-]+(?:#[A-Za-z0-9._~+/%=-]+)?$/.test(value);
 }

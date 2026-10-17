@@ -218,12 +218,11 @@ function FlowPanel({
 	}, [copied]);
 
 	const url = authBrowserUrl(flow);
-	const kind = flow.status === "input" ? flow.prompt?.kind : undefined;
+	const promptKind = flow.status === "input" ? flow.prompt?.kind : undefined;
+	const kind = promptKind === "api_key" || promptKind === "code" ? promptKind : undefined;
 	const trimmed = value.trim();
-	const callbackLooksWrong =
-		kind === "callback_url" && !!trimmed && !trimmed.startsWith("http://127.0.0.1:1455/auth/callback?");
 	const submit = () => {
-		if (busy || offline || !trimmed || callbackLooksWrong) return;
+		if (busy || offline || !trimmed) return;
 		setValue("");
 		void controller.respond(trimmed);
 	};
@@ -277,18 +276,6 @@ function FlowPanel({
 					</Text>
 				</>
 			) : null}
-			{!done && url && flow.provider === "openai" ? (
-				<>
-					<Text style={styles.step}>1. 「ブラウザで開く」で ChatGPT にログインし、許可します。</Text>
-					<Text style={styles.step}>
-						2. 最後に http://127.0.0.1:1455/…
-						が「接続できません」などと表示されます。スマホで開いているためで、この表示だけでログインの失敗とは判断しません。
-					</Text>
-					<Text style={styles.step}>
-						3. そのページのアドレスバーの URL 全体（code=・state=・client_id= を含む）をコピーして、下に貼り付けます。
-					</Text>
-				</>
-			) : null}
 			{!done && url && flow.provider === "anthropic" ? (
 				<>
 					<Text style={styles.step}>1. 「ブラウザで開く」で Claude にログインし、許可します。</Text>
@@ -307,18 +294,11 @@ function FlowPanel({
 							value={value}
 							onChangeText={setValue}
 							onSubmitEditing={submit}
-							placeholder={
-								kind === "api_key"
-									? "API キー"
-									: kind === "code"
-										? "コード"
-										: "http://127.0.0.1:1455/auth/callback?code=…"
-							}
+							placeholder={kind === "api_key" ? "API キー" : "コード"}
 							placeholderTextColor={colors.textTertiary}
-							accessibilityLabel={kind === "api_key" ? "API キー" : kind === "code" ? "コード" : "ブラウザの URL"}
+							accessibilityLabel={kind === "api_key" ? "API キー" : "コード"}
 							secureTextEntry={kind === "api_key"}
 							maxLength={kind === "api_key" ? 4096 : AUTH_MAX_INPUT_LENGTH}
-							keyboardType={kind === "callback_url" ? "url" : "default"}
 							autoCapitalize="none"
 							autoCorrect={false}
 							spellCheck={false}
@@ -330,11 +310,6 @@ function FlowPanel({
 							style={styles.input}
 						/>
 					</View>
-					{callbackLooksWrong ? (
-						<Text style={styles.message}>
-							http://127.0.0.1:1455/auth/callback?… で始まる URL 全体を貼り付けてください。
-						</Text>
-					) : null}
 				</>
 			) : null}
 
@@ -382,7 +357,7 @@ function FlowPanel({
 						label={kind === "api_key" ? "保存" : "送信"}
 						onPress={submit}
 						busy={busy === "respond"}
-						disabled={!!busy || !trimmed || callbackLooksWrong || offline}
+						disabled={!!busy || !trimmed || offline}
 					/>
 				) : null}
 				{!kind && codex && open && !done ? <PrimaryButton label="ブラウザで開く" onPress={open} /> : null}

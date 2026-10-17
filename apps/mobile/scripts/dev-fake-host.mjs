@@ -661,7 +661,7 @@ const AUTH_RC = {
 			result: {
 				providers: ["openai", "openai-codex", "anthropic"].map((provider) => ({
 					id: provider,
-					methods: provider === "openai-codex" ? ["oauth"] : ["oauth", "api_key"],
+					methods: provider === "openai" ? ["api_key"] : provider === "openai-codex" ? ["oauth"] : ["oauth", "api_key"],
 					stored: authStored.get(provider) ?? null,
 					configured: authStored.has(provider),
 				})),
@@ -674,7 +674,8 @@ const AUTH_RC = {
 			authOptions.old ||
 			!["openai", "openai-codex", "anthropic"].includes(provider) ||
 			!["oauth", "api_key"].includes(method) ||
-			(provider === "openai-codex" && method !== "oauth")
+			(provider === "openai-codex" && method !== "oauth") ||
+			(provider === "openai" && method === "oauth")
 		)
 			return { error: "unsupported" };
 		if (authActive(authFlows.get(id))) return { error: "busy" };
@@ -694,12 +695,9 @@ const AUTH_RC = {
 			};
 		else {
 			flow.authorization = {
-				url:
-					provider === "openai"
-						? "https://auth.openai.com/api/accounts/authorize?client_id=pimate-fake&state=pimate-fake"
-						: "https://claude.ai/oauth/authorize?client_id=pimate-fake&state=pimate-fake",
+				url: "https://claude.ai/oauth/authorize?client_id=pimate-fake&state=pimate-fake",
 			};
-			flow.prompt = { id: randomUUID(), kind: provider === "openai" ? "callback_url" : "code" };
+			flow.prompt = { id: randomUUID(), kind: "code" };
 		}
 		if (authOptions.badurl && flow.authorization) flow.authorization.url = "https://example.invalid/not-auth";
 		authFlows.set(id, flow);
@@ -729,7 +727,7 @@ const AUTH_RC = {
 		if (flow?.id !== flowId || flow.status !== "input" || flow.prompt?.id !== promptId)
 			return { error: "no_such_request" };
 		if (typeof value !== "string" || !value.trim() || value.length > 8192) return { error: "bad_request" };
-		// Deliberately discard input: fixtures keep metadata only, never keys/codes/callback URLs.
+		// Deliberately discard input: fixtures keep metadata only, never keys/codes.
 		saveAuth(id);
 		return authResult(id);
 	},

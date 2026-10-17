@@ -22,7 +22,7 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 
 Android 0.1.4 / PCパッケージ0.1.6では、スラッシュコマンド候補・セッションツリー・Mtアイコンを追加しました。アプリの作業中の送信は「割り込む」のみになり、停止後の未確認メッセージは「下書きへ戻す」で編集できます。詳細は [mobile README](apps/mobile/README.md) を参照してください。
 
-Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。
+Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。 現在、OpenAI（`openai`）の ChatGPT ログインは削除して API キーのみとし、Codex・Anthropic のログインは維持しています。
 
 ## PCにインストール・スマホとペアリング
 

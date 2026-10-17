@@ -4,7 +4,7 @@
 
 ## プロバイダー認証
 
-`HostInfo.providerAuth === true` **かつ** `InstanceSnapshot.providerAuth === true` の場合だけ、[`src/auth.ts`](src/auth.ts) の `auth_list` / `auth_begin` / `auth_wait` / `auth_respond` / `auth_cancel` / `auth_logout` を使えます。対象は OpenAI / OpenAI Codex / Anthropic の3つです。認証は会話ではなく、その Pi の標準 CLI agent directory に共通のため `expectInstanceId` で対象を固定します。
+`HostInfo.providerAuth === true` **かつ** `InstanceSnapshot.providerAuth === true` の場合だけ、[`src/auth.ts`](src/auth.ts) の `auth_list` / `auth_begin` / `auth_wait` / `auth_respond` / `auth_cancel` / `auth_logout` を使えます。対象は OpenAI（API キーのみ）/ OpenAI Codex（OAuth）/ Anthropic（OAuth・API キー）の3つです。OpenAI（`openai`）の OAuth は提供しません。認証は会話ではなく、その Pi の標準 CLI agent directory に共通のため `expectInstanceId` で対象を固定します。
 
 `auth_list` は秘密を含まない保存状態・利用可能方式と、最新の一時 `flow`（完了済みを含む）を返します。`auth_wait` は revision の変化を最大25秒待ち、クライアントごとに1本、RC ごとに最大8本です。認証キー・コードは `auth_respond` だけで渡し、イベント・履歴へ流したり自動再送したりしません。`saving` は中止不可、`storage_failed` や保存中の runtime 消失は結果不明の可能性があります。詳細は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
