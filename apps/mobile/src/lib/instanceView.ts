@@ -15,6 +15,7 @@ import type {
 	ModelRef,
 	SessionRef,
 	SubagentsState,
+	SubscriptionQuota,
 	ThinkingLevel,
 	TranscriptItem,
 	UIRequest,
@@ -75,6 +76,8 @@ export interface InstanceView {
 	uiPrompt: { kind: string; title?: string } | null;
 	uiNotes: UINote[];
 	context: ContextInfo | null;
+	/** Subscription allowances this Pi has seen. null: the RC predates quota reporting. */
+	quotas: SubscriptionQuota[] | null;
 	seq: number;
 	/** Shown at the top of the transcript after the PC switched the conversation. */
 	sessionNotice: SessionNotice | null;
@@ -124,6 +127,7 @@ export function createView(instanceId: string): InstanceView {
 		uiPrompt: null,
 		uiNotes: [],
 		context: null,
+		quotas: null,
 		seq: -1,
 		sessionNotice: null,
 		runningSince: null,
@@ -230,6 +234,7 @@ function applySubscribed(
 		uiPrompt: snapshot.pcPrompt ? { kind: snapshot.pcPrompt.kind, title: snapshot.pcPrompt.title } : null,
 		uiNotes: [],
 		context: snapshot.context ?? null,
+		quotas: snapshot.quotas ?? null,
 		seq: snapshot.seq,
 		sessionNotice,
 		runningSince: snapshot.status === "idle" ? null : (prev.runningSince ?? now),
@@ -452,6 +457,11 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 			return { ...view, uiPrompt: { kind: event.kind, title: event.title } };
 		case "context":
 			return { ...view, context: event.context };
+		case "quota":
+			return {
+				...view,
+				quotas: [...(view.quotas ?? []).filter((q) => q.source !== event.quota.source), event.quota],
+			};
 		case "subagent_run":
 			return { ...view, ...withSubagents(view.subagentWatch, upsertRun(view.subagents, event.run)) };
 		case "subagents_reset":

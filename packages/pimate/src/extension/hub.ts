@@ -11,7 +11,9 @@ import type {
 	InstanceStatus,
 	Origin,
 	PcPrompt,
+	QuotaSource,
 	SessionRef,
+	SubscriptionQuota,
 } from "@pimate/protocol";
 import { countSubagents, encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
 import { PACKAGE_VERSION } from "../package.ts";
@@ -48,6 +50,8 @@ export class Hub {
 	tui?: { requestRender(force?: boolean): void };
 	winchInstalled = false;
 	pcPrompt: PcPrompt | null = null;
+	/** Account-wide, so it survives session switches and reloads for the life of the process. */
+	quotas = new Map<QuotaSource, SubscriptionQuota>();
 	trust?: "yes" | "no";
 	constructor() {
 		this.instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
@@ -88,6 +92,10 @@ export class Hub {
 	emitContext = (): void => {
 		this.emit({ type: "context", context: this.ctx?.getContextUsage() ?? null });
 	};
+	setQuota = (quota: SubscriptionQuota): void => {
+		this.quotas.set(quota.source, quota);
+		this.emit({ type: "quota", quota });
+	};
 	setStatus = (status: InstanceStatus): void => {
 		if (this.status === status) return;
 		this.status = status;
@@ -119,6 +127,7 @@ export class Hub {
 			seq: this.seq,
 			streaming: { ...this.streaming },
 			subagents: this.subagents?.snapshot(),
+			quotas: [...this.quotas.values()],
 		};
 	}
 	writeMeta(): void {
@@ -132,6 +141,7 @@ export class Hub {
 			context: ______,
 			pcPrompt: _______,
 			agentActive: ________,
+			quotas: _________,
 			subagents,
 			...snapshot
 		} = this.snapshot();

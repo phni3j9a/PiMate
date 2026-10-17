@@ -1,5 +1,12 @@
 /** Session and model presentation helpers for the sheets and the composer (pure, no React Native imports). */
-import type { ContextInfo, ModelInfo, ModelRef, ThinkingLevel, TranscriptItem } from "@pimate/protocol";
+import type {
+	ContextInfo,
+	ModelInfo,
+	ModelRef,
+	SubscriptionQuota,
+	ThinkingLevel,
+	TranscriptItem,
+} from "@pimate/protocol";
 import { tokens } from "./format";
 
 export interface SessionStats {
@@ -107,4 +114,54 @@ export function contextLine(context: ContextInfo | null): string | null {
 	if (context.tokens === null) return `? / ${window}`;
 	const pct = context.percent === null ? "" : ` · ${Math.round(context.percent)}%`;
 	return `${tokens(context.tokens).toUpperCase()} / ${window}${pct}`;
+}
+
+const QUOTA_NAMES: Record<SubscriptionQuota["source"], string> = { codex: "Codex", claude: "Claude" };
+
+/** 300 -> 5時間, 10080 -> 週間. */
+export function quotaWindowLabel(minutes: number): string {
+	if (minutes === 7 * 24 * 60) return "週間";
+	if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)}日`;
+	if (minutes % 60 === 0) return `${minutes / 60}時間`;
+	return `${minutes}分`;
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+/** "14:05" today, otherwise "10/24 10:53" (phone's time zone). */
+export function clockTime(at: number, now: number): string {
+	const d = new Date(at);
+	const time = `${d.getHours()}:${pad(d.getMinutes())}`;
+	return d.toDateString() === new Date(now).toDateString() ? time : `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+}
+
+export interface QuotaGroup {
+	source: SubscriptionQuota["source"];
+	name: string;
+	observed: string;
+	/** `percent` is null once the reset time has passed: the old figure no longer applies. */
+	windows: { key: string; label: string; percent: number | null; reset: string }[];
+}
+
+export function quotaGroups(quotas: readonly SubscriptionQuota[], now: number): QuotaGroup[] {
+	return [...quotas]
+		.sort((a, b) => a.source.localeCompare(b.source))
+		.map((q) => ({
+			source: q.source,
+			name: QUOTA_NAMES[q.source] ?? q.source,
+			observed: `${clockTime(q.observedAt, now)} 取得`,
+			windows: q.windows.map((w) => {
+				const passed = w.resetsAt !== undefined && w.resetsAt <= now;
+				return {
+					key: `${w.minutes}`,
+					label: quotaWindowLabel(w.minutes),
+					percent: passed ? null : Math.round(w.usedPercent),
+					reset:
+						w.resetsAt === undefined
+							? "リセット日時不明"
+							: passed
+								? "リセット済み・次の応答で更新"
+								: `${clockTime(w.resetsAt, now)} にリセット`,
+				};
+			}),
+		}));
 }
