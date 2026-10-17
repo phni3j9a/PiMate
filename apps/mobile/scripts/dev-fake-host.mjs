@@ -944,6 +944,29 @@ function snapshot(id) {
 		pendingUI: inst.pendingUI,
 		...(inst.pcPrompt ? { pcPrompt: inst.pcPrompt } : {}),
 		context: inst.context,
+		// Same shape as a real Codex / Claude response (Issue #53); `/_dev/auth?old=1` also hides it like an old RC.
+		...(authOptions.old
+			? {}
+			: {
+					quotas: [
+						{
+							source: "codex",
+							windows: [
+								{ minutes: 300, usedPercent: 12, resetsAt: Date.now() + 3 * 3_600_000 },
+								{ minutes: 10080, usedPercent: 100, resetsAt: Date.now() + 5 * 86_400_000 },
+							],
+							observedAt: Date.now() - 60_000,
+						},
+						{
+							source: "claude",
+							windows: [
+								{ minutes: 300, usedPercent: 35, resetsAt: Date.now() - 60_000 },
+								{ minutes: 10080, usedPercent: 67, resetsAt: Date.now() + 3 * 86_400_000 },
+							],
+							observedAt: Date.now() - 2 * 3_600_000,
+						},
+					],
+				}),
 		...(inst.subagents
 			? { subagents: { runs: inst.subagents.runs.map(publicRun), backends: clone(inst.subagents.backends) } }
 			: {}),

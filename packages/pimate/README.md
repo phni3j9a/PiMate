@@ -90,6 +90,7 @@ Pi 組み込みコマンドはこの一覧には含まれません。対応す�
 ## 日常操作とスマホからの起動（M2）
 
 - RC `models`: Piの認証済みモデル一覧。thinkingLevelsはPi 1.2.0と同じ `getSupportedThinkingLevels()` で求め、非reasoningモデルはoffのみ、xhigh/maxはモデルの対応表に従います。
+- RC `snapshot.quotas` / `quota` event（開発版・未リリース、[#53](https://github.com/phni3j9a/PiMate/issues/53)）: Pi の `after_provider_response` と `provider_stream_event` を見て、Codex OAuth の `x-codex-{primary,secondary}-*` ヘッダー・WebSocket `codex.rate_limits` と Claude OAuth の `anthropic-ratelimit-unified-{5h,7d}-*` ヘッダーから、窓の長さ・使用率・リセット日時だけを取り出します。ヘッダー全体・本文・認証情報は保持も送信もせず、利用状況 API も呼びません。値はプロセス内だけに持ち、Pi の再起動で消えます。`quotas` がない snapshot は旧 RC です。
 - RC `models` の `scoped`: Piのscoped models（`enabledModels` / `/scoped-models`。アプリの「お気に入り」）。起動中のセッションの値を返しますが、ディスクの `enabledModels` がこのPiの読み込み後に変わった場合（スマホや別のPiが保存）はディスクの値をPiと同じ規則で解決して返します。RC `set_scoped_models` はグローバル設定の `enabledModels` に保存します（全モデル・空はフィルターなし）。起動中のPCのPiのCtrl+Pの順番は再起動まで変わりません。
 - RC `sessions`: 現在のcwdと **Piが実際に使用中のsessionDir** から保存会話を更新日時降順で返します。`limit` は任意の正整数、日時はミリ秒、`current` で現在の会話を識別。切替は `session_op` のswitchへpathを渡します。
 - RC `session_tree`: 現在のセッションの表示用ツリー（id・表示上のparentId・種類・本文preview・ラベル・時刻・現在の枝/位置・葉）を返します。ツール結果・状態エントリは畳み、ラベル付きは残します。最大1,000件、preview160文字・label200文字、走査最大10,000件。現在の枝を優先し、それ自体が1,000件を超えた場合は古い祖先を畳んで直近500件を残します。省略は `truncated: true`。Piの原本は変更しません。

@@ -4,6 +4,7 @@ import type { ParamsOf } from "@pimate/protocol";
 import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
+import { quotaFromHeaders, quotaFromStreamEvent } from "./quota.ts";
 import { registerSetup } from "./setup.ts";
 import { SubagentRegistry } from "./subagents/registry.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
@@ -187,6 +188,16 @@ export default function pimate(pi: ExtensionAPI): void {
 				isError: e.isError,
 				durationMs: e.durationMs,
 			});
+		}),
+		pi.on("after_provider_response", (e) => {
+			const quota = quotaFromHeaders(e.headers, Date.now());
+			if (quota) h.setQuota(quota);
+		}),
+		// Awaited for every stream delta: keep the non-matching path a single property check.
+		pi.on("provider_stream_event", (e) => {
+			if ((e.data as { type?: unknown } | null)?.type !== "codex.rate_limits") return;
+			const quota = quotaFromStreamEvent(e.data, Date.now());
+			if (quota) h.setQuota(quota);
 		}),
 		pi.on("session_compact", () => h.emitContext()),
 		pi.on("model_select", (e) => {

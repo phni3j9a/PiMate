@@ -123,6 +123,31 @@ export interface ContextInfo {
 	percent: number | null;
 }
 
+/**
+ * One subscription allowance window, read passively from an ordinary model response (never polled).
+ * Codex keeps serving on credits at 100%, so `usedPercent` is not an availability verdict.
+ */
+export interface QuotaWindow {
+	/** Window length: 300 = 5 hours, 10080 = 7 days. */
+	minutes: number;
+	/** 0-100. */
+	usedPercent: number;
+	/** Epoch ms; absent when the provider did not report it. */
+	resetsAt?: number;
+}
+
+/** `codex`: ChatGPT/Codex OAuth (`openai-codex`). `claude`: Claude Pro/Max OAuth (`anthropic`). */
+export type QuotaSource = "codex" | "claude";
+
+/** Latest allowance this Pi saw for one subscription. Other Pi processes or devices may have used more since. */
+export interface SubscriptionQuota {
+	source: QuotaSource;
+	/** Shortest window first. */
+	windows: QuotaWindow[];
+	/** RC clock (epoch ms) when the response carrying it arrived. */
+	observedAt: number;
+}
+
 /** A TUI-only prompt (ctx.ui.custom() or Pi's own selectors) the phone cannot answer: "needs the PC". */
 export interface PcPrompt {
 	kind: string;
@@ -208,6 +233,8 @@ export interface InstanceSnapshot {
 	piVersion?: string;
 	/** Subagent runs of the current session (M4). Absent from older RCs. */
 	subagents?: SubagentsState;
+	/** Subscription allowances seen since this Pi started. Absent from older RCs; empty = none seen yet. */
+	quotas?: SubscriptionQuota[];
 }
 
 /** Discovery file `<runDir>/<instanceId>.json` written by RC (0600). The socket is `<runDir>/<instanceId>.sock`. */
@@ -254,6 +281,8 @@ export type InstanceEvent =
 	| { type: "session_op_done"; op: SessionOp; cancelled: boolean; error?: string; editorText?: string }
 	| { type: "compact_done" }
 	| { type: "compact_error"; error: string }
+	/** A model response reported this subscription's allowance (replace by source). */
+	| { type: "quota"; quota: SubscriptionQuota }
 	/** A subagent run was added or changed (replace by id). */
 	| { type: "subagent_run"; run: SubagentRun }
 	/** Replace the whole subagent state (session change, backend detected, RC resync). */
