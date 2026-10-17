@@ -1,11 +1,16 @@
 /**
  * Subscription allowances carried by ordinary model responses (Issue #53). Only numbers are kept: no headers,
  * bodies or credentials leave this module, and nothing here makes a request of its own.
+ * Every Pi process on the PC (incl. headless subagent runners) shares its latest numbers through the run dir,
+ * so each Pi can show the PC-wide newest snapshot (Issue #59).
  *
  * - Codex OAuth: HTTP/SSE `x-codex-{primary,secondary}-*` headers, or the WebSocket `codex.rate_limits` event.
  * - Claude OAuth: `anthropic-ratelimit-unified-{5h,7d}-*` headers (utilization is a 0-1 fraction).
  */
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { QuotaWindow, SubscriptionQuota } from "@pimate/protocol";
+import { privateRunDir } from "../runtime.ts";
 
 const FIVE_HOURS = 300;
 const WEEK = 7 * 24 * 60;
@@ -68,4 +73,44 @@ export function quotaFromStreamEvent(data: unknown, now: number): SubscriptionQu
 		return window(r.window_minutes, r.used_percent, r.reset_at);
 	};
 	return quota("codex", [slot("primary"), slot("secondary")], now);
+}
+
+const SOURCES = ["codex", "claude"] as const;
+const quotaFile = (dir: string, source: SubscriptionQuota["source"]) => join(dir, `quota-${source}.json`);
+export const isQuotaFile = (name: string | null) => !!name && SOURCES.some((s) => name === `quota-${s}.json`);
+
+/** Re-validates a stored snapshot: the run dir is private, but a stale or foreign version must not reach the app. */
+function parseShared(value: unknown, source: SubscriptionQuota["source"]): SubscriptionQuota | null {
+	if (!value || typeof value !== "object") return null;
+	const q = value as Record<string, unknown>;
+	const at = num(q.observedAt);
+	if (q.source !== source || !Array.isArray(q.windows) || at === undefined) return null;
+	const windows = q.windows.map((w) => {
+		const r = (w && typeof w === "object" ? w : {}) as Record<string, unknown>;
+		return window(r.minutes, r.usedPercent, r.resetsAt);
+	});
+	return quota(source, windows, at);
+}
+
+export function readSharedQuotas(dir: string): SubscriptionQuota[] {
+	return SOURCES.flatMap((source) => {
+		try {
+			const q = parseShared(JSON.parse(readFileSync(quotaFile(dir, source), "utf8")), source);
+			return q ? [q] : [];
+		} catch {
+			return [];
+		}
+	});
+}
+
+/** Keeps the newest snapshot per source. Errors are the caller's to swallow: sharing must never break Pi. */
+export function writeSharedQuota(dir: string, q: SubscriptionQuota): void {
+	// shortcut: read-then-rename is not a cross-process lock; two writers in the same instant may keep the older one until the next response.
+	const current = readSharedQuotas(dir).find((s) => s.source === q.source);
+	if (current && current.observedAt >= q.observedAt) return;
+	privateRunDir(dir);
+	const file = quotaFile(dir, q.source);
+	const tmp = `${file}.${process.pid}.tmp`;
+	writeFileSync(tmp, JSON.stringify(q), { mode: 0o600 });
+	renameSync(tmp, file);
 }

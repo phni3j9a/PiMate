@@ -29,6 +29,7 @@
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
  *   auth?complete=1       finish fake Codex auth; also expire, fail=1|0, saving=ms, refresh=1|0, old=1|0, oldHost=1|0, badurl=1|0
  *   pair                  print a fresh pairing link
+ *   quota?source=claude|codex&p=85[&reset=60]  a newer PC-wide quota reaches every Pi (5h window, reset in s)
  *
  * M4 subagents: "認証まわりのレビュー" (~/work/api) starts with a pi-subagents background run of 3 reviewers that
  * progress every 3.5 s (activity, transcript via cursor; one finishes first) plus 以前の実行 (complete + failed).
@@ -1999,6 +2000,23 @@ const server = createServer((req, res) => {
 		const id = url.searchParams.get("i") ?? [...instances.keys()][0];
 		const inst = instances.get(id);
 		switch (cmd) {
+			case "quota": {
+				// Issue #59: the RC shares the newest PC-wide snapshot, so every instance gets the same event.
+				const source = url.searchParams.get("source") === "codex" ? "codex" : "claude";
+				const quota = {
+					source,
+					windows: [
+						{
+							minutes: 300,
+							usedPercent: Number(url.searchParams.get("p") ?? 50),
+							resetsAt: Date.now() + Number(url.searchParams.get("reset") ?? 3600) * 1000,
+						},
+					],
+					observedAt: Date.now(),
+				};
+				for (const i of instances.keys()) emit(i, { type: "quota", quota });
+				return reply(200, { ok: true });
+			}
 			case "auth": {
 				if (!inst) return reply(404, {});
 				for (const key of ["old", "oldHost", "fail", "refresh", "badurl"])

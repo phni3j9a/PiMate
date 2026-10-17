@@ -1,7 +1,7 @@
 /** Chat composer (Main.html footer) with the in-card status notices of Chat-Edge.html. */
 import type { PromptImage } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
 	ArrowUpIcon,
@@ -11,7 +11,6 @@ import {
 	CloseIcon,
 	PlusIcon,
 	QueuedIcon,
-	RingIcon,
 	StopIcon,
 	SwapIcon,
 	WifiOffIcon,
@@ -145,8 +144,8 @@ export function Composer({
 	banners,
 	children,
 	model,
-	contextPercent,
 	onOpenModel,
+	gauges,
 	sendLabel = "送信",
 	inputLabel = "メッセージ",
 	stopLabel = "停止",
@@ -166,16 +165,15 @@ export function Composer({
 	children?: ReactNode;
 	/** "Opus 5.5 · high"; opens the model sheet (Sheet-Model). */
 	model?: string | null;
-	contextPercent?: number | null;
 	onOpenModel?: () => void;
+	/** Usage rings next to the model (parent only). */
+	gauges?: ReactNode;
 	sendLabel?: string;
 	inputLabel?: string;
 	stopLabel?: string;
 	/** Parent only; omitted by the child composer. */
 	attachment?: { image?: PromptImage; picking: boolean; disabled: boolean; onPick: () => void; onRemove: () => void };
 }) {
-	const { width } = useWindowDimensions();
-	const showContext = !attachment || width >= 380;
 	return (
 		<View>
 			{children}
@@ -218,7 +216,7 @@ export function Composer({
 					{model && onOpenModel ? (
 						<Pressable
 							accessibilityRole="button"
-							accessibilityLabel={`モデル: ${model}${contextPercent != null ? `、コンテキスト ${Math.round(contextPercent)}%` : ""}`}
+							accessibilityLabel={`モデル: ${model}`}
 							accessibilityHint="モデルと Thinking を変更します"
 							onPress={onOpenModel}
 							hitSlop={6}
@@ -228,14 +226,9 @@ export function Composer({
 								{model}
 							</Text>
 							<ChevronDownIcon size={12} strokeWidth={2.2} color={colors.textSecondary} />
-							{contextPercent != null && showContext ? (
-								<View style={styles.context}>
-									<RingIcon percent={contextPercent} />
-									<Text style={styles.contextText}>{Math.round(contextPercent)}%</Text>
-								</View>
-							) : null}
 						</Pressable>
 					) : null}
+					{gauges}
 					<View style={styles.spacer} />
 					{showStop ? (
 						<IconButton label={stopLabel} onPress={onStop} size={sizes.composerControl} disabled={stopping}>
@@ -283,8 +276,6 @@ const styles = StyleSheet.create({
 	spacer: { flex: 1 },
 	model: { flexShrink: 1, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 4 },
 	modelText: { flexShrink: 1, fontSize: 13, color: colors.textSecondary },
-	context: { flexDirection: "row", alignItems: "center", gap: 5, marginLeft: 14 },
-	contextText: { ...typography.meta, color: colors.textSecondary },
 	send: {
 		width: sizes.composerControl,
 		height: sizes.composerControl,

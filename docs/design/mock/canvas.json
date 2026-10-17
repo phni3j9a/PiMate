@@ -128,6 +128,14 @@
       "h": 844,
       "title": "サブエージェント — 公式サンプル（見るだけ）",
       "radius": 40
+    },
+    "Sheet-Usage.dc.html": {
+      "x": 1880,
+      "y": 1264,
+      "w": 390,
+      "h": 844,
+      "title": "使用状況シート",
+      "radius": 40
     }
   },
   "order": [
@@ -137,6 +145,7 @@
     "Chat-Edge.dc.html",
     "Chat-Attach.dc.html",
     "Sheet-Model.dc.html",
+    "Sheet-Usage.dc.html",
     "Sheet-Session.dc.html",
     "Review.dc.html",
     "New-Pi.dc.html",

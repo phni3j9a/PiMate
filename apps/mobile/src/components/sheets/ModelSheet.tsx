@@ -1,5 +1,5 @@
 /** Model / Thinking sheet (docs/design/html/Sheet-Model.html). Changes apply to the Pi on the PC as well. */
-import type { ModelInfo, SubscriptionQuota, ThinkingLevel } from "@pimate/protocol";
+import type { ModelInfo, ThinkingLevel } from "@pimate/protocol";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -11,17 +11,13 @@ import { tokens } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import {
-	contextLine,
 	defaultScope,
 	findModel,
-	formatCost,
 	groupModels,
 	isFavorite,
 	type ModelScope,
 	providerName,
-	quotaGroups,
 	scopeModels,
-	sessionStats,
 	thinkingShort,
 	toggleFavorite,
 } from "@/lib/sessionInfo";
@@ -60,9 +56,6 @@ function ModelSheetBody() {
 	};
 	const groups = list ? groupModels(scopeModels(list, scoped, scope), query) : [];
 	const levels: ThinkingLevel[] = current?.thinkingLevels ?? [];
-	const stats = sessionStats(view?.items ?? []);
-	const context = view?.context ?? null;
-	const ctxLine = contextLine(context);
 
 	return (
 		<ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -190,83 +183,7 @@ function ModelSheetBody() {
 				</Text>
 			)}
 			{op?.kind === "thinking" ? <Text style={styles.pending}>変更しています…</Text> : null}
-
-			<View style={[styles.sectionRow, { marginTop: 28 }]}>
-				<Text style={styles.section}>コンテキスト</Text>
-				<Text style={styles.contextValue}>{ctxLine ?? "不明"}</Text>
-			</View>
-			<View
-				style={styles.bar}
-				accessibilityRole="progressbar"
-				accessibilityValue={{ min: 0, max: 100, now: context?.percent ?? 0 }}
-			>
-				<View style={[styles.barFill, { width: `${Math.min(100, Math.max(0, context?.percent ?? 0))}%` }]} />
-			</View>
-			<View style={styles.footer}>
-				<Text style={styles.cost}>
-					このセッション · {formatCost(stats.cost)}
-					{stats.tokens ? ` · ${tokens(stats.tokens)} トークン` : ""}
-				</Text>
-				{op?.kind === "compact" ? (
-					<View style={styles.compacting}>
-						<Spinner />
-						<Text style={styles.cost}>圧縮中…</Text>
-					</View>
-				) : (
-					<TextButton label="圧縮する" onPress={() => void appStore.compact()} disabled={!ready || busy} />
-				)}
-			</View>
-
-			<QuotaSection quotas={view?.quotas ?? null} />
 		</ScrollView>
-	);
-}
-
-/** Subscription allowances from this Pi's latest Codex / Claude responses (Issue #53). */
-function QuotaSection({ quotas }: { quotas: SubscriptionQuota[] | null }) {
-	const groups = quotas ? quotaGroups(quotas, Date.now()) : [];
-	return (
-		<>
-			<View style={[styles.sectionRow, { marginTop: 28 }]}>
-				<Text style={styles.section}>利用枠</Text>
-				<Text style={styles.sectionNote}>応答のたびに更新</Text>
-			</View>
-			{groups.length === 0 ? (
-				<Text style={styles.quotaEmpty}>
-					{quotas === null
-						? "PC の PiMate を更新すると表示できます"
-						: "この Pi で Codex / Claude のサブスクを使うと表示されます"}
-				</Text>
-			) : (
-				groups.map((g) => (
-					<View key={g.source} style={styles.quotaGroup}>
-						<View style={styles.sectionRow}>
-							<Text style={styles.quotaName}>{g.name}</Text>
-							<Text style={styles.sectionNote}>{g.observed}</Text>
-						</View>
-						{g.windows.map((w) => (
-							<View key={w.key} style={styles.quotaRow}>
-								<View style={styles.sectionRow}>
-									<Text style={styles.contextValue}>
-										{w.label} · {w.percent === null ? "—" : `${w.percent}% 使用`}
-									</Text>
-									<Text style={styles.sectionNote}>{w.reset}</Text>
-								</View>
-								<View
-									style={styles.bar}
-									accessibilityRole="progressbar"
-									accessibilityLabel={`${g.name} ${w.label}の利用枠、${w.reset}`}
-									accessibilityValue={w.percent === null ? { text: "不明" } : { min: 0, max: 100, now: w.percent }}
-								>
-									<View style={[styles.barFill, { width: `${w.percent ?? 0}%` }]} />
-								</View>
-							</View>
-						))}
-					</View>
-				))
-			)}
-			<Text style={styles.quotaNote}>他の端末や Pi での利用は、この Pi の次の応答まで反映されません</Text>
-		</>
 	);
 }
 
@@ -366,15 +283,4 @@ const styles = StyleSheet.create({
 	segText: { fontSize: 13, color: colors.textSecondary },
 	segTextOn: { color: colors.text, fontWeight: "700" },
 	pending: { ...typography.caption, color: colors.textSecondary, marginTop: 6 },
-	contextValue: { fontSize: 13, color: colors.textSecondary },
-	bar: { height: 4, borderRadius: 2, backgroundColor: colors.surfaceStrong, overflow: "hidden" },
-	barFill: { height: 4, borderRadius: 2, backgroundColor: colors.text },
-	footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
-	cost: { fontSize: 13, color: colors.textSecondary },
-	compacting: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
-	quotaEmpty: { ...typography.caption, color: colors.textSecondary },
-	quotaGroup: { marginBottom: 14 },
-	quotaName: { fontSize: 13, lineHeight: 18, fontWeight: "600", color: colors.text },
-	quotaRow: { marginBottom: 8 },
-	quotaNote: { ...typography.caption, color: colors.textTertiary, marginTop: 4, marginBottom: 8 },
 });

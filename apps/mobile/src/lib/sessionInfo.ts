@@ -134,34 +134,60 @@ export function clockTime(at: number, now: number): string {
 	return d.toDateString() === new Date(now).toDateString() ? time : `${d.getMonth() + 1}/${d.getDate()} ${time}`;
 }
 
+/** "あと1時間25分" / "あと3日4時間" / "あと5分" until `at`. */
+export function timeLeft(at: number, now: number): string {
+	const minutes = Math.max(1, Math.ceil((at - now) / 60_000));
+	const d = Math.floor(minutes / 1440);
+	const h = Math.floor((minutes % 1440) / 60);
+	const m = minutes % 60;
+	if (d) return `あと${d}日${h ? `${h}時間` : ""}`;
+	return h ? `あと${h}時間${m ? `${m}分` : ""}` : `あと${m}分`;
+}
+
 export interface QuotaGroup {
 	source: SubscriptionQuota["source"];
 	name: string;
-	observed: string;
+	/** null: this source has not been seen on this PC yet. */
+	observed: string | null;
+	/** The ring: the most-used window still in effect; null when nothing current is known (never shown as 0%). */
+	gauge: number | null;
 	/** `percent` is null once the reset time has passed: the old figure no longer applies. */
 	windows: { key: string; label: string; percent: number | null; reset: string }[];
 }
 
-export function quotaGroups(quotas: readonly SubscriptionQuota[], now: number): QuotaGroup[] {
-	return [...quotas]
-		.sort((a, b) => a.source.localeCompare(b.source))
-		.map((q) => ({
-			source: q.source,
-			name: QUOTA_NAMES[q.source] ?? q.source,
-			observed: `${clockTime(q.observedAt, now)} 取得`,
-			windows: q.windows.map((w) => {
-				const passed = w.resetsAt !== undefined && w.resetsAt <= now;
-				return {
-					key: `${w.minutes}`,
-					label: quotaWindowLabel(w.minutes),
-					percent: passed ? null : Math.round(w.usedPercent),
-					reset:
-						w.resetsAt === undefined
-							? "リセット日時不明"
-							: passed
-								? "リセット済み・次の応答で更新"
-								: `${clockTime(w.resetsAt, now)} にリセット`,
-				};
-			}),
-		}));
+/** Always both sources, Claude then Codex, so the composer rings never move. */
+export function quotaGroups(quotas: readonly SubscriptionQuota[] | null, now: number): QuotaGroup[] {
+	return (["claude", "codex"] as const).map((source) => {
+		const q = quotas?.find((x) => x.source === source);
+		const windows = (q?.windows ?? []).map((w) => {
+			const passed = w.resetsAt !== undefined && w.resetsAt <= now;
+			return {
+				key: `${w.minutes}`,
+				label: quotaWindowLabel(w.minutes),
+				percent: passed ? null : Math.round(w.usedPercent),
+				reset:
+					w.resetsAt === undefined
+						? "リセット日時不明"
+						: passed
+							? "リセット済み・次の応答で更新"
+							: `${clockTime(w.resetsAt, now)} にリセット（${timeLeft(w.resetsAt, now)}）`,
+			};
+		});
+		const current = windows.flatMap((w) => (w.percent === null ? [] : [w.percent]));
+		return {
+			source,
+			name: QUOTA_NAMES[source],
+			observed: q ? `${clockTime(q.observedAt, now)} 取得` : null,
+			gauge: current.length ? Math.max(...current) : null,
+			windows,
+		};
+	});
+}
+
+/** Earliest future reset, so a ring can drop its stale figure on time. */
+export function nextQuotaReset(quotas: readonly SubscriptionQuota[] | null, now: number): number | null {
+	const future = (quotas ?? []).flatMap((q) =>
+		q.windows.flatMap((w) => (w.resetsAt && w.resetsAt > now ? [w.resetsAt] : [])),
+	);
+	return future.length ? Math.min(...future) : null;
 }

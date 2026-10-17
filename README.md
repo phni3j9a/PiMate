@@ -85,4 +85,8 @@ npm run lint && npm run typecheck && npm test
 npm run test:e2e -w @pimate/pimate   # 実Pi + abduco（LLMは使わない）
 ```
 
+## 商標
+
+Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。アプリでは利用枠がどのプロバイダーのものかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。
+
 以前の詳細仕様書はGit履歴から参照できますが、**現在の設計方針の正本は [docs/SPEC.md](docs/SPEC.md)** です。
