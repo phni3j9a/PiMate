@@ -217,12 +217,13 @@ export class Hub {
 		server.on("error", (e) => this.ctx?.ui.notify(`PiMate socket: ${e.message}`, "error"));
 		server.unref();
 		this.server = server;
-		this.loadSharedQuotas();
+		// Watch before the first read so a write in between is not lost (observedAt dedups the overlap).
 		try {
 			this.quotaWatcher = watch(this.dir, (_, name) => isQuotaFile(name) && this.loadSharedQuotas());
 			this.quotaWatcher.on("error", () => {});
 			this.quotaWatcher.unref();
 		} catch {}
+		this.loadSharedQuotas();
 		process.once("exit", () => this.cleanup());
 	}
 	cleanup(): void {
