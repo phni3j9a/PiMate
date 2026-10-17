@@ -4,7 +4,7 @@
  * - Every request goes to the target instance (expectInstanceId); the chat selection is never changed.
  * - At most one `auth_wait` at a time, sent again only after the previous answer. A lost wait resumes after
  *   reconnect through `auth_list` (read-only); nothing else is ever repeated automatically.
- * - Inputs (keys, codes, callback URLs) are passed straight to `respond` and never stored here.
+ * - Inputs (keys, codes) are passed straight to `respond` and never stored here.
  */
 import {
 	AUTH_MAX_WAIT_MS,
@@ -44,8 +44,7 @@ export interface AuthState {
 export const flowActive = (flow: AuthFlow | null | undefined): boolean =>
 	!!flow && (flow.status === "working" || flow.status === "input" || flow.status === "saving");
 
-const BROWSER_URL: Record<AuthProviderId, RegExp> = {
-	openai: /^https:\/\/auth\.openai\.com\/api\/accounts\/authorize\?[^\s#\\]*$/,
+const BROWSER_URL: Partial<Record<AuthProviderId, RegExp>> = {
 	anthropic: /^https:\/\/claude\.ai\/oauth\/authorize\?[^\s#\\]*$/,
 	"openai-codex": /^https:\/\/auth\.openai\.com\/codex\/device$/,
 };
@@ -129,6 +128,8 @@ export class ProviderAuthController {
 
 	async begin(provider: AuthProviderId, method: ProviderAuthType): Promise<void> {
 		if (this.disposed || this.state.busy || this.state.phase !== "ready" || flowActive(this.state.flow)) return;
+		if (provider === "openai" && method === "oauth")
+			return this.set({ notice: this.errorNotice("unsupported", "開始できませんでした") });
 		this.uncertain = false;
 		this.sawSaving = false;
 		this.lostBegin = null;
@@ -391,6 +392,11 @@ export class ProviderAuthController {
 
 	private set(patch: Partial<AuthState>): void {
 		if (this.disposed) return;
+		// Older PCs may still advertise the removed OpenAI OAuth method.
+		if (patch.providers)
+			patch.providers = patch.providers.map((p) =>
+				p.id === "openai" ? { ...p, methods: p.methods.filter((m) => m !== "oauth") } : p,
+			);
 		this.state = { ...this.state, ...patch };
 		for (const l of this.listeners) l();
 	}

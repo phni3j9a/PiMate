@@ -77,16 +77,20 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 			return flow;
 		}
 		expect((await request("hello", {})).snapshot.providerAuth).toBe(true);
-		for (const provider of ["openai", "anthropic"] as const) {
-			const { flow } = await request("auth_begin", { provider, method: "oauth" });
-			expect(flow.prompt?.kind).toBe(provider === "openai" ? "callback_url" : "code");
-			const receipt = await request("auth_respond", {
-				flowId: flow.id,
-				promptId: flow.prompt!.id,
-				value: "FAKE_SECRET_CODE",
-			});
-			expect((await finish(receipt.flow)).status).toBe("succeeded");
-		}
+		expect((await request("auth_list", {})).providers.map((p) => [p.id, p.methods])).toEqual([
+			["openai", ["api_key"]],
+			["openai-codex", ["oauth"]],
+			["anthropic", ["oauth", "api_key"]],
+		]);
+		await expect(request("auth_begin", { provider: "openai", method: "oauth" })).rejects.toThrow("unsupported");
+		const { flow } = await request("auth_begin", { provider: "anthropic", method: "oauth" });
+		expect(flow.prompt?.kind).toBe("code");
+		const receipt = await request("auth_respond", {
+			flowId: flow.id,
+			promptId: flow.prompt!.id,
+			value: "FAKE_SECRET_CODE",
+		});
+		expect((await finish(receipt.flow)).status).toBe("succeeded");
 		const key = (await request("auth_begin", { provider: "openai", method: "api_key" })).flow;
 		expect(
 			(

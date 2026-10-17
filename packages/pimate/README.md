@@ -67,7 +67,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 
 ## プロバイダー認証（0.1.7以上）
 
-OpenAI・OpenAI Codex・Anthropic のログイン／ログアウトを専用の `auth_*` RPC で扱います。標準 CLI の agent directory を使う認証専用 `ModelRuntime` で保存・削除し、実行中の Pi は既存の通常 TUI のままです。入力やトークンは会話イベントへ流しません。保存先・別端末ブラウザ・共有範囲・制限は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+OpenAI・OpenAI Codex・Anthropic のログイン／ログアウトを専用の `auth_*` RPC で扱います。OpenAI（`openai`）は API キーのみで、ChatGPT ログインは提供しません。Codex のデバイスコード認証と Anthropic の認証は引き続き対応します。標準 CLI の agent directory を使う認証専用 `ModelRuntime` で保存・削除し、実行中の Pi は既存の通常 TUI のままです。入力やトークンは会話イベントへ流しません。保存先・別端末ブラウザ・共有範囲・制限は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
 Host の `auth_ok.host.providerAuth` と RC の `snapshot.providerAuth` の両方が必要です。RC だけ更新した古い Host は認証用 long-poll を正しく待てないため、Host も更新・再起動してください。`RcClient.send` は認証の list / wait / logout にだけ長い timeout を設定し、ほかのメソッドの既定5秒は変えません。
 

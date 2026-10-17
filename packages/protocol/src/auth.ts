@@ -8,6 +8,7 @@ export const AUTH_MAX_INPUT_LENGTH = 8192;
 
 export interface AuthProviderInfo {
 	id: AuthProviderId;
+	/** OpenAI supports API keys only; OAuth is available for Codex and Anthropic. */
 	methods: ProviderAuthType[];
 	/** Stored credential metadata only; not proof that it is valid. */
 	stored: ProviderAuthType | null;
@@ -27,7 +28,7 @@ export interface AuthFlow {
 	status: "working" | "input" | "saving" | "succeeded" | "failed" | "cancelled" | "expired";
 	/** Public authorization URL and optional user-facing device code, never tokens. */
 	authorization?: { url: string; userCode?: string };
-	prompt?: { id: string; kind: "api_key" | "code" | "callback_url" };
+	prompt?: { id: string; kind: "api_key" | "code" };
 	/** Fixed safe messages only. storage_failed may have unknown persistence outcome: inspect metadata, never auto-resend. */
 	error?: "login_failed" | "storage_failed";
 	/** Credential saved but local registry refresh failed. Reopen models/reload Pi; do not resend credentials. */
