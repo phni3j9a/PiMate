@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InstanceSnapshot, Request } from "@pimate/protocol";
 import { encodeLine, LineDecoder } from "@pimate/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostCore, parseAbducoList, RcClient } from "../src/host/index.ts";
 import { privateRunDir } from "../src/runtime.ts";
 
@@ -214,4 +214,27 @@ describe("RcClient", () => {
 	it("rejects path traversal ids", () => {
 		expect(() => new RcClient(temp(), "../outside")).toThrow("Invalid instance");
 	});
+});
+
+it("extends only auth long-poll and storage operation RC timeouts", async () => {
+	const dir = temp();
+	await server(dir, (req, socket) => socket.write(encodeLine({ type: "response", id: req.id, ok: true, result: {} })));
+	const client = new RcClient(dir, "live");
+	clients.push(client);
+	await client.connect();
+	const timer = vi.spyOn(globalThis, "setTimeout");
+	try {
+		for (const [method, params, expected] of [
+			["auth_wait", { flowId: "flow", afterRevision: 0 }, 27000],
+			["auth_list", {}, 32000],
+			["auth_logout", { provider: "anthropic" }, 62000],
+			["models", {}, 5000],
+		] as const) {
+			timer.mockClear();
+			await client.request(method, params);
+			expect(timer.mock.calls.some((call) => call[1] === expected)).toBe(true);
+		}
+	} finally {
+		timer.mockRestore();
+	}
 });

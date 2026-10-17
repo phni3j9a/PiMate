@@ -8,6 +8,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { type ModelRef, slashCommandName } from "@pimate/protocol";
+import { createProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
@@ -39,7 +40,18 @@ export function createHandlers(h: Hub): Handlers {
 		if (!h.pi || !h.ctx?.hasUI) throw new RcError("not_ready");
 		return { pi: h.pi, ctx: h.ctx };
 	};
+	const auth = () => {
+		const { ctx } = ready();
+		h.auth ??= createProviderAuth(ctx);
+		return h.auth;
+	};
 	return {
+		auth_list: () => auth().list(),
+		auth_begin: (p) => auth().begin(p.provider, p.method),
+		auth_wait: (p) => auth().wait(p.flowId, p.afterRevision, p.waitMs),
+		auth_respond: (p) => auth().respond(p.flowId, p.promptId, p.value),
+		auth_cancel: (p) => auth().cancel(p.flowId),
+		auth_logout: (p) => auth().logout(p.provider),
 		hello: () => ({ snapshot: h.snapshot() }),
 		history: () => ({ session: h.session, items: normalizeBranch(ready().ctx.sessionManager.getBranch()) }),
 		session_tree: () => normalizeTree(ready().ctx.sessionManager),

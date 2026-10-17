@@ -73,6 +73,8 @@ export interface PiAlert {
 export interface HostInfo {
 	/** Optional capability: only send watch_alerts when true. */
 	alerts?: boolean;
+	/** Auth RPC timeout/long-poll support; RC providerAuth capability is also required. */
+	providerAuth?: boolean;
 	hostId: string;
 	name: string;
 	protocol: number;

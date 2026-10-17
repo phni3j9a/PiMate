@@ -22,6 +22,8 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 
 Android 0.1.4 / PCパッケージ0.1.6では、スラッシュコマンド候補・セッションツリー・Mtアイコンを追加しました。アプリの作業中の送信は「割り込む」のみになり、停止後の未確認メッセージは「下書きへ戻す」で編集できます。詳細は [mobile README](apps/mobile/README.md) を参照してください。
 
+開発版では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできます。スマホのブラウザでの認証方法と PC 側への影響は [プロバイダー認証](docs/provider-auth.md) を参照してください。**配布済みの上記バージョンには未収録です。**
+
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。

@@ -8,6 +8,14 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
+## プロバイダーへのログイン／ログアウト（開発版・未リリース）
+
+チャットで対象の Pi を開き、**設定 → プロバイダーのログイン**から OpenAI・OpenAI Codex・Anthropic を操作できます。OpenAI / Anthropic は API キーにも対応します。スマホのブラウザを使い、Codex はデバイスコード、Anthropic は表示コードの貼り付け、OpenAI の ChatGPT 認証は戻り先 URL 全体の貼り付けで完了します。
+
+認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。アプリ・Host・対象 Pi の RC の更新が必要です。既存の Android 0.1.4 / PC 0.1.6 には含まれません。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+
+開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`badurl=1|0` は不正 URL を再現します。対象は既存の `i=<instanceId>` で指定できます。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
+
 ## できること
 
 M1:

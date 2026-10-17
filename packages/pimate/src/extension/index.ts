@@ -18,6 +18,8 @@ export default function pimate(pi: ExtensionAPI): void {
 	// but old bus and lifecycle subscriptions must not.
 	for (const off of h.subscriptions) off();
 	h.subagents?.dispose();
+	h.auth?.dispose();
+	h.auth = undefined;
 	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
 	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
@@ -41,6 +43,8 @@ export default function pimate(pi: ExtensionAPI): void {
 		pi.on("session_start", async (event, ctx) => {
 			if (!ctx.hasUI) return;
 			// The previous ctx is already disposed here; replace it before anything can emit.
+			h.auth?.dispose();
+			h.auth = undefined;
 			h.pi = pi;
 			h.treeNavigating = false;
 			h.pcPrompt = null;
@@ -120,6 +124,8 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emitContext();
 		}),
 		pi.on("session_shutdown", (e) => {
+			h.auth?.dispose();
+			h.auth = undefined;
 			h.subagents?.dispose();
 			if (e.reason === "quit" && h.ctx?.hasUI) h.stop();
 		}),

@@ -155,7 +155,7 @@ async function setup(fake = false) {
 	async function authed() {
 		const credentials = (await (await pair()).json()) as PairResponse;
 		const client = await connect(credentials.token);
-		await client.box.next("auth_ok");
+		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true } });
 		await client.box.next("instances");
 		return { ...client, credentials };
 	}
