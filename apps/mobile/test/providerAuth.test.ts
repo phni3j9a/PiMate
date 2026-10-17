@@ -108,7 +108,7 @@ describe("authBrowserUrl", () => {
 	it("allows only the providers' own HTTPS endpoints", () => {
 		const ok = (provider: AuthFlow["provider"], url: string, userCode?: string) =>
 			authBrowserUrl(flow({ provider, method: "oauth", authorization: { url, userCode } }));
-		expect(ok("openai", "https://auth.openai.com/api/accounts/authorize?client_id=x&state=y")).toBeTruthy();
+		expect(ok("openai", "https://auth.openai.com/api/accounts/authorize?client_id=x&state=y")).toBeNull();
 		expect(ok("anthropic", "https://claude.ai/oauth/authorize?code=true&state=y")).toBeTruthy();
 		expect(ok("openai-codex", "https://auth.openai.com/codex/device", "ABCD-1234")).toBeTruthy();
 		for (const [p, u] of [
@@ -137,6 +137,21 @@ describe("ProviderAuthController", () => {
 		}
 		expect(c.state.phase).toBe("ready");
 		expect(c.state.providers).toHaveLength(3);
+	});
+
+	it("hides and refuses OpenAI OAuth advertised by an older PC, including after refresh", async () => {
+		const { c } = await ready();
+		expect(c.state.providers?.find((p) => p.id === "openai")?.methods).toEqual(["api_key"]);
+		expect(c.state.providers?.find((p) => p.id === "openai-codex")?.methods).toEqual(["oauth"]);
+		await c.begin("openai", "oauth");
+		expect(last("auth_begin")).toBeUndefined();
+		expect(c.state.notice?.title).toBe("開始できませんでした");
+		const pending = c.logout("openai");
+		reply(last("auth_logout"), { refreshRequired: false });
+		await flush();
+		reply(last("auth_list"), { providers });
+		await pending;
+		expect(c.state.providers?.find((p) => p.id === "openai")?.methods).toEqual(["api_key"]);
 	});
 
 	it("requires an updated Host as well as RC for long auth requests", async () => {
@@ -274,10 +289,10 @@ describe("ProviderAuthController", () => {
 
 	it("cancels interactive flows when leaving, including one whose begin reply arrives late", async () => {
 		const { c } = await ready();
-		void c.begin("openai", "oauth");
+		void c.begin("anthropic", "oauth");
 		const begin = last("auth_begin");
 		c.dispose();
-		reply(begin, { flow: flow({ id: "late", method: "oauth", status: "working" }) });
+		reply(begin, { flow: flow({ id: "late", provider: "anthropic", method: "oauth", status: "working" }) });
 		await flush();
 		expect(last("auth_cancel").request.params).toEqual({ flowId: "late" });
 		expect(c.state.flow).toBeNull();

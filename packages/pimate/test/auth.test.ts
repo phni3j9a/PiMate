@@ -8,12 +8,7 @@ import type {
 	Provider,
 	ProviderAuthInteraction,
 } from "@earendil-works/pi-ai";
-import {
-	CredentialSynchronizationError,
-	type ExtensionContext,
-	ModelRuntime,
-	SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { CredentialSynchronizationError, type ExtensionContext, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { AUTH_FLOW_TTL_MS, type AuthFlow, type AuthProviderId, type ProviderAuthType } from "@pimate/protocol";
 import { afterEach, expect, it, vi } from "vitest";
 import { createProviderAuth, ProviderAuth } from "../src/extension/auth.ts";
@@ -80,11 +75,10 @@ function setup(login?: (i: ProviderAuthInteraction, options?: LoginOptions) => P
 			credentials.delete(id);
 		}),
 	};
-	const device = vi.fn(async () => "00000000-0000-4000-8000-000000000001");
-	const auth = new ProviderAuth(registry, Promise.resolve(runtime), device);
+	const auth = new ProviderAuth(registry, Promise.resolve(runtime));
 	instances.push(auth);
 	const state = async (flow: AuthFlow) => (await auth.wait(flow.id, 0, 0)).flow;
-	return { auth, runtime, registry, credentials, device, state };
+	return { auth, runtime, registry, credentials, state };
 }
 const uuid = "00000000-0000-4000-8000-000000000001";
 it("validates auth RPC provider, method, IDs and bounded inputs/waits", () => {
@@ -116,7 +110,7 @@ it("lists only safe metadata, methods and registry sources without resolving sto
 	credentials.set("google", oauth);
 	const result = await auth.list();
 	expect(result.providers.map((p) => p.id)).toEqual(["openai", "openai-codex", "anthropic"]);
-	expect(result.providers.map((p) => p.methods)).toEqual([["oauth", "api_key"], ["oauth"], ["oauth", "api_key"]]);
+	expect(result.providers.map((p) => p.methods)).toEqual([["api_key"], ["oauth"], ["oauth", "api_key"]]);
 	expect(result.providers.map((p) => p.stored)).toEqual(["oauth", null, "api_key"]);
 	expect(JSON.stringify(result)).not.toContain("SECRET");
 	expect(registry.refresh).not.toHaveBeenCalled();
@@ -126,7 +120,7 @@ it("lists only safe metadata, methods and registry sources without resolving sto
 it.each(["openai", "anthropic"] as const)(
 	"uses standard API-key login for %s, stores literal input only on PC, and refreshes",
 	async (id) => {
-		const { auth, credentials, state, registry, device } = setup();
+		const { auth, credentials, state, registry } = setup();
 		let { flow } = auth.begin(id, "api_key");
 		await tick();
 		flow = await state(flow);
@@ -140,7 +134,6 @@ it.each(["openai", "anthropic"] as const)(
 		expect((await state(flow)).status).toBe("succeeded");
 		expect(credentials.get(id)).toEqual({ type: "api_key", key: "SECRET_KEY-$$LITERAL" });
 		expect(registry.refresh).toHaveBeenCalledWith(expect.objectContaining({ allowNetwork: false, providers: [id] }));
-		expect(device).not.toHaveBeenCalled();
 		expect(() => auth.respond(flow.id, flow.prompt!.id, "SECRET_KEY")).toThrow("no longer active");
 	},
 );
@@ -173,34 +166,20 @@ it.each([
 	if (id === "anthropic") expect(flow.prompt?.kind).toBe("code");
 	else expect(flow.authorization?.userCode).toBe("ABCD-1234");
 });
-it("OpenAI uses stable Pi device ID and requires FULL callback URL including matching state/client_id", async () => {
-	let received = "";
-	let device = "";
-	const { auth, state } = setup(async (i, options) => {
-		device = options!.getDeviceId!();
-		i.notify({ type: "auth_url", url: "https://auth.openai.com/api/accounts/authorize?state=s" });
-		received = await i.prompt({ type: "manual_code", message: "secret" });
-		return oauth;
-	});
-	let { flow } = auth.begin("openai", "oauth");
+it("rejects OpenAI OAuth without starting provider work or changing stored credentials", async () => {
+	const { auth, runtime, credentials } = setup();
+	credentials.set("openai", oauth);
+	credentials.set("openai-codex", oauth);
+	expect(() => auth.begin("openai", "oauth")).toThrow("Authentication method unavailable");
 	await tick();
-	flow = await state(flow);
-	expect(device).toBe(uuid);
-	expect(flow.prompt?.kind).toBe("callback_url");
-	for (const value of [
-		"code",
-		"javascript:evil",
-		"http://localhost:1455/auth/callback?code=c&state=s&client_id=i",
-		"http://127.0.0.1:1455/auth/callback?code=c&state=wrong&client_id=i",
-		"http://127.0.0.1:1455/auth/callback?code=c&state=s",
-		"http://127.0.0.1:1455/auth/callback?code=c&code=d&state=s&client_id=i",
-	])
-		expect(() => auth.respond(flow.id, flow.prompt!.id, value)).toThrow("Invalid auth input");
-	const value = "http://127.0.0.1:1455/auth/callback?code=SECRET_CODE&state=s&client_id=i";
-	expect(JSON.stringify(auth.respond(flow.id, flow.prompt!.id, value))).not.toContain("SECRET");
-	await tick();
-	expect(received).toBe(value);
-	expect((await state(flow)).status).toBe("succeeded");
+	expect(runtime.login).not.toHaveBeenCalled();
+	expect(runtime.registerNativeProvider).not.toHaveBeenCalled();
+	expect(credentials.get("openai")).toEqual(oauth);
+	expect(credentials.get("openai-codex")).toEqual(oauth);
+	expect((await auth.list()).flow).toBeUndefined();
+	expect(await auth.logout("openai")).toEqual({ refreshRequired: false });
+	expect(credentials.has("openai")).toBe(false);
+	expect(credentials.get("openai-codex")).toEqual(oauth);
 });
 it.each(["cancel", "expire", "dispose"])("%s aborts provider work and prevents a late result saving", async (mode) => {
 	vi.useFakeTimers();
@@ -227,30 +206,30 @@ it.each(["cancel", "expire", "dispose"])("%s aborts provider work and prevents a
 	expect(credentials.size).toBe(0);
 	if (mode !== "dispose") expect((await state(flow)).status).toBe(mode === "expire" ? "expired" : "cancelled");
 });
-it.each(["cancel", "dispose"])("%s during OpenAI setup still reaches provider cleanup", async (mode) => {
+it.each(["cancel", "dispose"])("%s during OAuth setup still reaches provider cleanup", async (mode) => {
 	let prepared!: () => void;
-	const closeCallbackServer = vi.fn();
+	const cleanup = vi.fn();
 	const { auth, credentials } = setup(async (i) => {
 		await new Promise<void>((resolve) => {
 			prepared = resolve;
 		});
-		// Pi's OpenAI provider installs its cleanup after these callbacks.
-		i.notify({ type: "auth_url", url: "https://auth.openai.com/api/accounts/authorize?state=s" });
-		const input = i.prompt({ type: "manual_code", message: "Paste callback URL" });
+		// Providers may install cleanup after these callbacks.
+		i.notify({ type: "auth_url", url: "https://claude.ai/oauth/authorize?state=s" });
+		const input = i.prompt({ type: "manual_code", message: "Paste code" });
 		try {
 			await input;
 			return oauth;
 		} finally {
-			closeCallbackServer();
+			cleanup();
 		}
 	});
-	const { flow } = auth.begin("openai", "oauth");
+	const { flow } = auth.begin("anthropic", "oauth");
 	await tick();
 	if (mode === "cancel") auth.cancel(flow.id);
 	else auth.dispose();
 	prepared();
 	await tick();
-	expect(closeCallbackServer).toHaveBeenCalledOnce();
+	expect(cleanup).toHaveBeenCalledOnce();
 	expect(credentials.size).toBe(0);
 });
 it("long-polls changes or deadline, bounds independent waits, and rejects stale flows", async () => {
@@ -410,12 +389,10 @@ it("routes only auth RPCs, never chat/UI/history/events", async () => {
 	expect(hub.emit).not.toHaveBeenCalled();
 	expect(hub.pendingUI.size).toBe(0);
 });
-it("uses explicit active CLI agent dir and stable global Pi device ID through public APIs", async () => {
+it("uses explicit active CLI agent dir through public APIs", async () => {
 	vi.stubEnv("PI_CODING_AGENT_DIR", "/tmp/FAKE-PIMATE-agent");
 	const { runtime, registry } = setup();
 	const create = vi.spyOn(ModelRuntime, "create").mockResolvedValue(runtime as unknown as ModelRuntime);
-	const settings = { getOrCreateDeviceId: vi.fn(() => uuid), flush: vi.fn(async () => {}), drainErrors: () => [] };
-	const settingsCreate = vi.spyOn(SettingsManager, "create").mockReturnValue(settings as unknown as SettingsManager);
 	const auth = createProviderAuth({ cwd: "/tmp/work", modelRegistry: registry } as unknown as ExtensionContext);
 	instances.push(auth);
 	expect(create).toHaveBeenCalledWith({
@@ -424,11 +401,6 @@ it("uses explicit active CLI agent dir and stable global Pi device ID through pu
 		refreshOnCreate: false,
 		allowModelNetwork: false,
 	});
-	auth.begin("openai", "oauth");
-	await tick();
-	expect(settingsCreate).toHaveBeenCalledWith("/tmp/work", "/tmp/FAKE-PIMATE-agent");
-	expect(settings.getOrCreateDeviceId).toHaveBeenCalledOnce();
-	expect(settings.flush).toHaveBeenCalledOnce();
 });
 it("disposal while waiting for the storage lock aborts before a late commit", async () => {
 	const { auth, runtime, credentials } = setup();
@@ -625,7 +597,7 @@ it("actual public ModelRuntime persists literal keys/OAuth metadata and logs out
 			getProviderAuthStatus: (id: string) => runtime.getProviderAuthStatus(id),
 			refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
 		};
-		const auth = new ProviderAuth(registry, Promise.resolve(runtime), async () => uuid);
+		const auth = new ProviderAuth(registry, Promise.resolve(runtime));
 		instances.push(auth);
 		const settle = async (initial: AuthFlow) => {
 			let flow = initial;
