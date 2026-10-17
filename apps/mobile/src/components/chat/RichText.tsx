@@ -2,6 +2,7 @@ import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui";
@@ -78,6 +79,15 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 const ALIGN: Record<string, TextStyle["textAlign"]> = { left: "left", center: "center", right: "right" };
 
 function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows: Span[][][] }) {
+	const scrollGesture = useMemo(
+		// Recognize horizontal drags before the drawer's 5dp pan, not long presses or vertical drags.
+		() =>
+			Gesture.Simultaneous(
+				Gesture.Pan().activeOffsetX([-2, 2]).failOffsetY([-2, 2]),
+				Gesture.Native().disallowInterruption(true),
+			),
+		[],
+	);
 	// Column widths from the longest cell (no table layout in RN); wide tables scroll sideways.
 	const widths = header.map((h, c) =>
 		Math.min(240, Math.max(56, Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? []))) * 7.5 + 24)),
@@ -96,12 +106,14 @@ function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows
 		</View>
 	);
 	return (
-		<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.table}>
-			<View>
-				{row(header, true, "h")}
-				{rows.map((r, i) => row(r, false, `r${i}`))}
-			</View>
-		</ScrollView>
+		<GestureDetector gesture={scrollGesture}>
+			<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.table}>
+				<View>
+					{row(header, true, "h")}
+					{rows.map((r, i) => row(r, false, `r${i}`))}
+				</View>
+			</ScrollView>
+		</GestureDetector>
 	);
 }
 
