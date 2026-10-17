@@ -22,12 +22,14 @@ Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native +
 
 Android 0.1.4 / PCパッケージ0.1.6では、スラッシュコマンド候補・セッションツリー・Mtアイコンを追加しました。アプリの作業中の送信は「割り込む」のみになり、停止後の未確認メッセージは「下書きへ戻す」で編集できます。詳細は [mobile README](apps/mobile/README.md) を参照してください。
 
-Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。 現在、OpenAI（`openai`）の ChatGPT ログインは削除して API キーのみとし、Codex・Anthropic のログインは維持しています。
+Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。
+
+Android 0.1.6 / PCパッケージ0.1.8では、入力欄のモデル名の横にコンテキスト・Claude・Codex の使用率を円形ゲージで常時表示し、タップで「使用状況」シート（コンテキストと利用枠の詳細）を開きます（[#59](https://github.com/phni3j9a/PiMate/issues/59)）。PC 0.1.8 以上では、利用枠に同じ PC の Pi（バックグラウンドのサブエージェントを含む）で最も新しく観測した値を使います。OpenAI（`openai`）の ChatGPT ログインは削除して API キーのみとし、Codex・Anthropic のログインは維持しています（[#57](https://github.com/phni3j9a/PiMate/issues/57)）。
 
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.5 / PCパッケージ0.1.7。プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.6 / PCパッケージ0.1.8。利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate

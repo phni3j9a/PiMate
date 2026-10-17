@@ -4,7 +4,7 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.5 / PCパッケージ0.1.7 です。プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.6 / PCパッケージ0.1.8 です。利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
@@ -35,7 +35,7 @@ M2:
 - セッションのメニュー（ヘッダーの「…」）: 統計（メッセージ・トークン・コスト）、新しいセッション、過去のセッションを開く、ここから分岐（ユーザーのメッセージを選ぶ。選んだ文は入力欄に入る）、コンテキストを圧縮、起動元・PC の接続状態・attach コマンド、この Pi を終了（確認あり）
 - モデル・Thinking（入力欄のモデル名）: プロバイダーごとのモデル、そのモデルで使える Thinking レベル、コンテキスト使用量とコスト、圧縮。変更は PC の Pi にも反映される。「お気に入り」は PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）と共通で、PC の `/model` と同じくお気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。PC パッケージ 0.1.2 以前では ☆ を出さない（[#23](https://github.com/phni3j9a/PiMate/issues/23)）
 - 利用枠（Android 0.1.5 / PC 0.1.7 以上、[#53](https://github.com/phni3j9a/PiMate/issues/53)）: Codex（`openai-codex` の ChatGPT ログイン）と Claude（Pro/Max ログイン）の 5時間・週間の使用率とリセット日時、取得時刻を表示する。Pi の通常の応答に含まれる値だけを使い、利用状況 API への追加リクエストやポーリングはしない（各サブスクの最初の応答までは表示されない。他の端末での利用は次の応答まで反映されない）。リセット日時を過ぎた値は「—」にする。Codex は 100% でも追加クレジットで応答が続くことがあるため、使えるかどうかの判定には使わない。API キー利用は対象外。PC の RC が未対応なら更新を案内する
-- 使用状況ゲージ（[#59](https://github.com/phni3j9a/PiMate/issues/59)）: 入力欄のモデル名の横に、コンテキスト（書類アイコン）・Claude・Codex（各社ロゴ）の円形ゲージを常時表示する（数字なし）。利用枠の円は 5時間・週間のうち使用率が高い方で、80% 以上で黄、95% 以上で赤。未取得・リセット済み・旧 RC は灰色の点線にし、0% と表示しない。タップで「使用状況」シート（コンテキストと圧縮、各枠の使用率・リセット時刻と残り時間・取得時刻）を開く。モデルシートはモデルと Thinking だけ。利用枠は同じ PC の Pi で最も新しい観測を使う（RC がランディレクトリで共有。バックグラウンドのサブエージェントの応答も反映、フォアグラウンドのサブエージェントは Pi の拡張イベントが届かないため対象外。別アカウントの値も区別しない）。円はリセット時刻とアプリの復帰時に更新する
+- 使用状況ゲージ（Android 0.1.6 以上、[#59](https://github.com/phni3j9a/PiMate/issues/59)）: 入力欄のモデル名の横に、コンテキスト（書類アイコン）・Claude・Codex（各社ロゴ）の円形ゲージを常時表示する（数字なし）。利用枠の円は 5時間・週間のうち使用率が高い方で、80% 以上で黄、95% 以上で赤。未取得・リセット済み・旧 RC は灰色の点線にし、0% と表示しない。タップで「使用状況」シート（コンテキストと圧縮、各枠の使用率・リセット時刻と残り時間・取得時刻）を開く。モデルシートはモデルと Thinking だけ。利用枠は同じ PC の Pi で最も新しい観測を使う（PC 0.1.8 以上。RC がランディレクトリで共有。バックグラウンドのサブエージェントの応答も反映、フォアグラウンドのサブエージェントは Pi の拡張イベントが届かないため対象外。別アカウントの値も区別しない）。円はリセット時刻とアプリの復帰時に更新する
 - PC 側の変化に追従: `/resume` などでセッションが変わったら区切りを表示し、下書きがあれば送信前に確認を求める。モデル・Thinking の変更も反映
 
 M3（表示）:
@@ -126,7 +126,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.5.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.6.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -146,14 +146,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.5.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.6.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.5 apps/mobile/dist/pimate-0.1.5.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.5' --notes-file <リリースノート>
+gh release create app-v0.1.6 apps/mobile/dist/pimate-0.1.6.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.6' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
