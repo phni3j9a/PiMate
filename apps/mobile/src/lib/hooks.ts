@@ -1,7 +1,9 @@
+import type { SubscriptionQuota } from "@pimate/protocol";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Keyboard } from "react-native";
+import { Keyboard, AppState as RNAppState } from "react-native";
 
 import { appStore } from "./runtime";
+import { nextQuotaReset } from "./sessionInfo";
 import type { AppState } from "./store";
 
 /** Reads a slice of the app store. The selector must return stored references (no new objects). */
@@ -22,6 +24,25 @@ export function useNow(intervalMs: number, enabled = true): number {
 		const timer = setInterval(() => setNow(Date.now()), intervalMs);
 		return () => clearInterval(timer);
 	}, [intervalMs, enabled]);
+	return now;
+}
+
+/** Current time, refreshed when the next quota window resets and when the app returns to the foreground. */
+export function useQuotaClock(quotas: readonly SubscriptionQuota[] | null): number {
+	// State, not Date.now() in render: the React Compiler caches dependency-free expressions.
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const tick = () => setNow(Date.now());
+		const sub = RNAppState.addEventListener("change", (s) => s === "active" && tick());
+		// From the rendered `now`: a reset that passed before new figures arrived fires at once and refreshes it.
+		const next = nextQuotaReset(quotas, now);
+		// setTimeout overflows past ~24.8 days; a longer wait just re-arms.
+		const timer = next === null ? undefined : setTimeout(tick, Math.min(next - Date.now() + 500, 2 ** 31 - 1));
+		return () => {
+			sub.remove();
+			clearTimeout(timer);
+		};
+	}, [quotas, now]);
 	return now;
 }
 

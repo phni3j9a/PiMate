@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { quotaFromHeaders, quotaFromStreamEvent } from "../src/extension/quota.ts";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { SubscriptionQuota } from "@pimate/protocol";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Hub } from "../src/extension/hub.ts";
+import { quotaFromHeaders, quotaFromStreamEvent, readSharedQuotas, writeSharedQuota } from "../src/extension/quota.ts";
 
 const NOW = 1_792_200_000_000;
 
@@ -96,5 +101,62 @@ describe("subscription quota", () => {
 			),
 		).toBeNull();
 		expect(quotaFromStreamEvent({ type: "codex.rate_limits", rate_limits: null }, NOW)).toBeNull();
+	});
+});
+
+describe("PC-wide shared quota", () => {
+	let dir = "";
+	afterEach(() => {
+		rmSync(dir, { recursive: true, force: true });
+		vi.unstubAllEnvs();
+	});
+	const claude = (usedPercent: number, observedAt: number): SubscriptionQuota => ({
+		source: "claude",
+		windows: [{ minutes: 300, usedPercent, resetsAt: NOW + 3_600_000 }],
+		observedAt,
+	});
+
+	it("keeps the newest snapshot per source and ignores invalid files", () => {
+		dir = join(mkdtempSync(join(tmpdir(), "pimate-quota-")), "run");
+		expect(readSharedQuotas(dir)).toEqual([]);
+		writeSharedQuota(dir, claude(10, NOW));
+		writeSharedQuota(dir, claude(5, NOW - 1));
+		expect(readSharedQuotas(dir)).toEqual([claude(10, NOW)]);
+		writeSharedQuota(dir, claude(20, NOW + 1));
+		expect(readSharedQuotas(dir)).toEqual([claude(20, NOW + 1)]);
+		writeFileSync(join(dir, "quota-codex.json"), JSON.stringify({ source: "claude", windows: [], observedAt: NOW }));
+		expect(readSharedQuotas(dir).map((q) => q.source)).toEqual(["claude"]);
+	});
+
+	it("adopts only snapshots newer than this Pi's own, emitting each once", () => {
+		dir = mkdtempSync(join(tmpdir(), "pimate-quota-"));
+		vi.stubEnv("PIMATE_RUN_DIR", dir);
+		const ours = new Hub();
+		const other = new Hub();
+		const emit = vi.spyOn(ours, "emit");
+		ours.setQuota(claude(10, NOW));
+		other.setQuota(claude(30, NOW + 5));
+		ours.loadSharedQuotas();
+		ours.loadSharedQuotas();
+		expect(ours.snapshot().quotas).toEqual([claude(30, NOW + 5)]);
+		expect(emit.mock.calls.map(([e]) => e)).toEqual([
+			{ type: "quota", quota: claude(10, NOW) },
+			{ type: "quota", quota: claude(30, NOW + 5) },
+		]);
+	});
+
+	it("picks up another process's write while the RC server runs", async () => {
+		dir = mkdtempSync(join(tmpdir(), "pimate-quota-"));
+		vi.stubEnv("PIMATE_RUN_DIR", dir);
+		const ours = new Hub();
+		await ours.start();
+		try {
+			const emit = vi.spyOn(ours, "emit");
+			writeSharedQuota(dir, claude(42, Date.now()));
+			await vi.waitFor(() => expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: "quota" })));
+			expect(ours.snapshot().quotas?.[0]?.windows[0]?.usedPercent).toBe(42);
+		} finally {
+			ours.stop();
+		}
 	});
 });

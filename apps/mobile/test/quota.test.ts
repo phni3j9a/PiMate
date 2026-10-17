@@ -1,7 +1,7 @@
 import type { HostMessage, InstanceSnapshot, SubscriptionQuota } from "@pimate/protocol";
 import { describe, expect, it } from "vitest";
 import { createView, reduceView } from "../src/lib/instanceView";
-import { quotaGroups, quotaWindowLabel } from "../src/lib/sessionInfo";
+import { nextQuotaReset, quotaGroups, quotaWindowLabel, timeLeft } from "../src/lib/sessionInfo";
 
 const ID = "inst-1";
 const snapshot = (patch: Partial<InstanceSnapshot> = {}): InstanceSnapshot => ({
@@ -81,6 +81,7 @@ describe("subscription quota view", () => {
 			now,
 		);
 		expect(groups.map((g) => g.name)).toEqual(["Claude", "Codex"]);
+		expect(groups.map((g) => g.gauge)).toEqual([65, 100]);
 		expect(groups[0]).toMatchObject({
 			observed: "7:52 取得",
 			windows: [
@@ -89,8 +90,37 @@ describe("subscription quota view", () => {
 			],
 		});
 		expect(groups[1]?.windows).toMatchObject([
-			{ percent: 12, reset: "15:53 にリセット" },
-			{ percent: 100, reset: "10/24 10:03 にリセット" },
+			{ percent: 12, reset: "15:53 にリセット（あと5時間1分）" },
+			{ percent: 100, reset: "10/24 10:03 にリセット（あと6日23時間）" },
+		]);
+		expect(nextQuotaReset(null, now)).toBeNull();
+	});
+
+	it("keeps both rings even when a source is unseen or fully reset, never as 0%", () => {
+		const now = 1_000_000;
+		for (const quotas of [
+			null,
+			[],
+			[{ source: "codex" as const, observedAt: 1, windows: [{ minutes: 300, usedPercent: 50, resetsAt: now }] }],
+		]) {
+			const groups = quotaGroups(quotas, now);
+			expect(groups.map((g) => [g.source, g.gauge])).toEqual([
+				["claude", null],
+				["codex", null],
+			]);
+		}
+		expect(quotaGroups([], now)[0]).toMatchObject({ observed: null, windows: [] });
+		expect(
+			nextQuotaReset(
+				[quota("claude", 1), { ...quota("codex", 1), windows: [{ minutes: 300, usedPercent: 1, resetsAt: now + 9 }] }],
+				now,
+			),
+		).toBe(now + 9);
+		expect([1, 59 * 60_000, 60 * 60_000, 25 * 3_600_000].map((ms) => timeLeft(now + ms, now))).toEqual([
+			"あと1分",
+			"あと59分",
+			"あと1時間",
+			"あと1日1時間",
 		]);
 	});
 });

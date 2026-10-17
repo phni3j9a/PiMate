@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, type FSWatcher, renameSync, rmSync, watch, writeFileSync } from "node:fs";
 import type { Server, Socket } from "node:net";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
 import type { ProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { dispatch } from "./dispatch.ts";
+import { isQuotaFile, readSharedQuotas, writeSharedQuota } from "./quota.ts";
 import type { SubagentRegistry } from "./subagents/registry.ts";
 import type { PendingUI } from "./ui.ts";
 
@@ -52,6 +53,7 @@ export class Hub {
 	pcPrompt: PcPrompt | null = null;
 	/** Account-wide, so it survives session switches and reloads for the life of the process. */
 	quotas = new Map<QuotaSource, SubscriptionQuota>();
+	quotaWatcher?: FSWatcher;
 	trust?: "yes" | "no";
 	constructor() {
 		this.instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
@@ -92,9 +94,21 @@ export class Hub {
 	emitContext = (): void => {
 		this.emit({ type: "context", context: this.ctx?.getContextUsage() ?? null });
 	};
+	/** A quota observed by this process: show it and share it with the other Pi processes on this PC. */
 	setQuota = (quota: SubscriptionQuota): void => {
 		this.quotas.set(quota.source, quota);
 		this.emit({ type: "quota", quota });
+		try {
+			writeSharedQuota(this.dir, quota);
+		} catch {}
+	};
+	/** Adopts snapshots another Pi process (or a subagent runner) observed later than ours. */
+	loadSharedQuotas = (): void => {
+		for (const quota of readSharedQuotas(this.dir)) {
+			if ((this.quotas.get(quota.source)?.observedAt ?? -1) >= quota.observedAt) continue;
+			this.quotas.set(quota.source, quota);
+			this.emit({ type: "quota", quota });
+		}
 	};
 	setStatus = (status: InstanceStatus): void => {
 		if (this.status === status) return;
@@ -203,6 +217,13 @@ export class Hub {
 		server.on("error", (e) => this.ctx?.ui.notify(`PiMate socket: ${e.message}`, "error"));
 		server.unref();
 		this.server = server;
+		// Watch before the first read so a write in between is not lost (observedAt dedups the overlap).
+		try {
+			this.quotaWatcher = watch(this.dir, (_, name) => isQuotaFile(name) && this.loadSharedQuotas());
+			this.quotaWatcher.on("error", () => {});
+			this.quotaWatcher.unref();
+		} catch {}
+		this.loadSharedQuotas();
 		process.once("exit", () => this.cleanup());
 	}
 	cleanup(): void {
@@ -217,6 +238,8 @@ export class Hub {
 		this.clients.clear();
 		this.server?.close();
 		this.server = undefined;
+		this.quotaWatcher?.close();
+		this.quotaWatcher = undefined;
 		this.cleanup();
 	}
 }

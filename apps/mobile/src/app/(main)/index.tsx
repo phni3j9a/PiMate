@@ -20,11 +20,13 @@ import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
+import { UsageGauges } from "@/components/chat/UsageGauges";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import { ModelSheet } from "@/components/sheets/ModelSheet";
 import { SessionSheet } from "@/components/sheets/SessionSheet";
 import { SubagentSheet } from "@/components/sheets/SubagentSheet";
+import { UsageSheet } from "@/components/sheets/UsageSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { notificationVisibility } from "@/lib/notificationRuntime";
@@ -64,7 +66,7 @@ export default function ChatScreen() {
 	const models = useAppState((s) => s.models);
 	const commands = useAppState((s) => s.commands);
 	const answering = useAppState((s) => s.answering);
-	const [sheet, setSheet] = useState<"session" | "model" | "subagents" | null>(null);
+	const [sheet, setSheet] = useState<"session" | "model" | "usage" | "subagents" | null>(null);
 	const [sessionPage, setSessionPage] = useState<"main" | "sessions" | "fork">("main");
 	const closeSheet = useCallback(() => setSheet(null), []);
 
@@ -323,8 +325,14 @@ export default function ChatScreen() {
 							onStop={() => void appStore.abort()}
 							banners={banners}
 							model={label}
-							contextPercent={view?.context?.percent ?? null}
 							onOpenModel={() => setSheet("model")}
+							gauges={
+								<UsageGauges
+									context={view?.context?.percent ?? null}
+									quotas={view?.quotas ?? null}
+									onPress={() => setSheet("usage")}
+								/>
+							}
 						>
 							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
 							<QueuedRows
@@ -348,6 +356,7 @@ export default function ChatScreen() {
 			</KeyboardAvoidingView>
 			<SessionSheet visible={sheet === "session"} onClose={closeSheet} initialPage={sessionPage} />
 			<ModelSheet visible={sheet === "model"} onClose={closeSheet} />
+			<UsageSheet visible={sheet === "usage"} onClose={closeSheet} />
 			<SubagentSheet visible={sheet === "subagents"} onClose={closeSheet} onOpenChild={openChild} />
 		</SafeAreaView>
 	);
