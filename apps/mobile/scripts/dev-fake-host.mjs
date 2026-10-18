@@ -494,6 +494,7 @@ class Peer {
 					version: "0.0.0-fake",
 					platform: "linux",
 					providerAuth: !authOptions.oldHost,
+					dirs: !authOptions.oldHost,
 				},
 			});
 			this.send({ type: "instances", instances: summaries() });
@@ -511,6 +512,8 @@ class Peer {
 				return this.rc(msg.instanceId, msg.request);
 			case "folders":
 				return this.folders(msg);
+			case "dirs":
+				return this.dirs(msg);
 			case "spawn":
 				return this.spawn(msg);
 			default:
@@ -600,6 +603,26 @@ class Peer {
 			}));
 			this.send({ type: "folders_result", requestId: msg.requestId, home: HOME, folders });
 		}, 300);
+	}
+	dirs(msg) {
+		const tree = [
+			"code/demo",
+			"code/website",
+			"work/web",
+			"work/api",
+			"projects/PiMate/apps",
+			"scratch/ocr-test",
+			".config/pi",
+		];
+		const dir = String(msg.path)
+			.replace(/^~(?=\/|$)/, HOME)
+			.replace(/\/*$/, "/");
+		const names = new Set();
+		for (const t of tree) {
+			const full = `${HOME}/${t}/`;
+			if (full.startsWith(dir) && full !== dir) names.add(full.slice(dir.length).split("/")[0]);
+		}
+		this.send({ type: "dirs_result", requestId: msg.requestId, dirs: [...names].sort() });
 	}
 	spawn(msg) {
 		const p = msg.params ?? {};

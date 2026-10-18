@@ -75,6 +75,8 @@ export interface HostInfo {
 	alerts?: boolean;
 	/** Auth RPC timeout/long-poll support; RC providerAuth capability is also required. */
 	providerAuth?: boolean;
+	/** Optional capability: only send `dirs` (folder completion) when true; older Hosts close on unknown messages. */
+	dirs?: boolean;
 	hostId: string;
 	name: string;
 	protocol: number;
@@ -137,6 +139,8 @@ export type AppMessage =
 	| { type: "rc"; instanceId: string; request: Request }
 	| { type: "ping"; t: number }
 	| { type: "folders"; requestId: string }
+	/** Subfolder names of `path` (absolute or `~/...`) for completing the new Pi folder. */
+	| { type: "dirs"; requestId: string; path: string }
 	| { type: "spawn"; requestId: string; params: SpawnParams };
 
 // ---------------------------------------------------------------- Host -> app
@@ -160,6 +164,8 @@ export type HostMessage =
 	| { type: "instance_gone"; instanceId: string }
 	| { type: "pong"; t: number }
 	| { type: "folders_result"; requestId: string; home: string; folders: FolderInfo[] }
+	/** Directory names only (no files), sorted; empty when the path is missing or unreadable. */
+	| { type: "dirs_result"; requestId: string; dirs: string[] }
 	| {
 			type: "spawn_result";
 			requestId: string;

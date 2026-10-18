@@ -805,6 +805,24 @@ describe("AppStore M2", () => {
 		expect(store.getState().notice?.kind).toBe("error");
 	});
 
+	it("lists subfolders only on Hosts that support dirs", async () => {
+		const { store } = await setup();
+		const old = connect();
+		expect(await store.dirs("h1", "~/")).toEqual([]);
+		expect(old.sentOfType("dirs")).toHaveLength(0);
+	});
+
+	it("lists subfolders of a typed path", async () => {
+		const { store } = await setup();
+		const s = FakeSocket.last();
+		authenticate(s, [instance("i1", 5)], { dirs: true });
+		const p = store.dirs("h1", "~/");
+		const [msg] = s.sentOfType("dirs");
+		expect(msg.path).toBe("~/");
+		s.receive({ type: "dirs_result", requestId: msg.requestId, dirs: ["code"] });
+		expect(await p).toEqual(["code"]);
+	});
+
 	it("spawns a Pi, waits for it in the list and opens it", async () => {
 		const { store } = await setup();
 		const s = connect();

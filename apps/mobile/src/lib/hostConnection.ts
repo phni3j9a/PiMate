@@ -7,7 +7,7 @@
  * - Holds at most one desired subscription and re-sends it after every (re)connect.
  * - `rc()` forwards one request and resolves with the matching `rc_result`. A request that was sent but not answered
  *   when the socket drops rejects with `outcome_unknown`; it is never re-sent.
- * - `folders()` / `spawn()` are Host-level requests matched by requestId, with the same failure semantics.
+ * - `folders()` / `dirs()` / `spawn()` are Host-level requests matched by requestId, with the same failure semantics.
  * Pure TS: the WebSocket constructor and timers are injected.
  */
 import {
@@ -23,6 +23,7 @@ import {
 } from "@pimate/protocol";
 
 type FoldersResult = Extract<HostMessage, { type: "folders_result" }>;
+type DirsResult = Extract<HostMessage, { type: "dirs_result" }>;
 type SpawnResult = Extract<HostMessage, { type: "spawn_result" }>;
 
 export type ConnectionState = "idle" | "connecting" | "connected" | "offline" | "auth_failed";
@@ -201,6 +202,11 @@ export class HostConnection {
 		return this.hostRequest<FoldersResult>({ type: "folders", requestId });
 	}
 
+	/** Subfolder names for completing a path; only when `info.dirs` (older Hosts close on unknown messages). */
+	dirs(requestId: string, path: string): Promise<DirsResult> {
+		return this.hostRequest<DirsResult>({ type: "dirs", requestId, path });
+	}
+
 	/** Starts a new Pi on this Host. Never retried: a dropped socket rejects with `outcome_unknown`. */
 	spawn(requestId: string, params: SpawnParams): Promise<SpawnResult> {
 		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
@@ -329,6 +335,7 @@ export class HostConnection {
 				return;
 			}
 			case "folders_result":
+			case "dirs_result":
 			case "spawn_result": {
 				const p = this.hostPending.get(msg.requestId);
 				if (p) {
