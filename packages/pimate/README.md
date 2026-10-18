@@ -107,6 +107,7 @@ Pi 組み込みコマンドはこの一覧には含まれません。対応す�
 - RC `shutdown`: `ctx.shutdown()` による正常終了。Host終了と異なり対象Piが終了します。
 - snapshotに `context` と `pcPrompt`。contextイベントはassistant終了・compaction・モデル/セッション変更後。回答できないTUI promptはPCで操作し、再接続でも開いたpromptが分かります。中断assistantはlive/history共通で `stopReason:"aborted"` に正規化し、通常のAPIエラーはerrorのままです。
 - 認証済みWSの `folders` はhome、保存セッションのcwd、稼働中cwd/台数、最寄り親を含む保存trust判断を返します。既存ディレクトリのみ、最大200件、5秒キャッシュ。`$PI_CODING_AGENT_DIR/sessions`（既定 `~/.pi/agent/sessions`）の更新が新しい200フォルダを対象に、各最大2000ファイルのmtimeと最新ヘッダ先頭16KiBだけを読みます。全履歴は解析しません。独自sessionDirの会話は稼働中cwdには出ますが、停止後の候補探索対象外です。
+- 認証済みWSの `dirs { path }`（`auth_ok` の `host.dirs: true` のときのみ）は、新しい Pi のフォルダ補完用に `path`（絶対パスか `~/...`）直下のフォルダ名だけを返します（フォルダへのsymlinkを含む。ファイル名・中身は返さない。名前順で最大1000件、読めないときは空）。古いHostは未知のメッセージで接続を閉じるため、アプリは対応Hostにだけ送ります。
 - WS `spawn` は絶対パス/`~/...` の既存ディレクトリ、model、thinking、trust、任意の初回messageのみ受け付けます。リモート任意CLI引数やOSコマンドは公開しません。Host全体で同時起動1件、起動間隔3秒。自動retry/resendはありません。
 - 初回messageをPiのCLI引数には渡しません。RCがreadyになるまで最大30秒待ち、`prompt` をsession/instance guard付き・template展開なしで **1回だけ** 送ります。message指定時のspawn_resultはその応答まで待ちます。起動後に送信できなかった場合は `ok:true` のまま `messageError` を付けて返し、再送しません（届いたかは一覧・履歴で確認）。
 - Host起動Piへ `PIMATE_TRUST=yes|no` を渡し、RCの `project_trust` handlerが**今回のみ**決定します。trust省略はnoで、保存判断にかかわらず自動承認しません。環境変数はRCロード時に消し、ツールの子プロセスへ引き継ぎません。PCから通常起動したPiのtrustフローは変更せず、trust.jsonも書き換えません。Piのtrustはsandboxではありません。PiのCLI `--approve/--no-approve` や先に決定する別のuser extensionは優先されるため、起動コマンド/拡張設定は信頼できるものにしてください。

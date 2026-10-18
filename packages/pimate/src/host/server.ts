@@ -21,7 +21,7 @@ import { AlertTracker } from "./alerts.ts";
 import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
 import { HostCore } from "./index.ts";
-import { hostHome, listFolders, SpawnError, validateSpawn } from "./operations.ts";
+import { hostHome, listDirs, listFolders, SpawnError, validateSpawn } from "./operations.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -272,6 +272,7 @@ export class HostServer {
 							platform: process.platform,
 							alerts: true,
 							providerAuth: true,
+							dirs: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });
@@ -286,11 +287,17 @@ export class HostServer {
 					this.send(peer, { type: "pong", t: message.t });
 					return;
 				}
-				if (message.type === "folders" || message.type === "spawn") {
+				if (message.type === "folders" || message.type === "dirs" || message.type === "spawn") {
 					if (typeof message.requestId !== "string" || !message.requestId || message.requestId.length > 200)
 						throw new Error("Invalid requestId");
 					if (message.type === "folders") void this.folders(peer, message.requestId);
-					else void this.spawn(peer, message.requestId, message.params);
+					else if (message.type === "dirs") {
+						if (typeof message.path !== "string" || message.path.length > 4096) throw new Error("Invalid path");
+						const requestId = message.requestId;
+						void listDirs(message.path, hostHome(this.core.env)).then((dirs) =>
+							this.send(peer, { type: "dirs_result", requestId, dirs }),
+						);
+					} else void this.spawn(peer, message.requestId, message.params);
 					return;
 				}
 				if (typeof message.instanceId !== "string" || !validInstanceId(message.instanceId))

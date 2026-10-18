@@ -1267,6 +1267,17 @@ export class AppStore {
 		}
 	}
 
+	/** Subfolder names of `path` on the Host; empty when offline, failed or unsupported by the Host. */
+	async dirs(hostId: string, path: string): Promise<string[]> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected" || conn.info?.dirs !== true) return [];
+		try {
+			return (await conn.dirs(this.deps.randomUUID(), path)).dirs;
+		} catch {
+			return [];
+		}
+	}
+
 	/**
 	 * Starts a new Pi and opens it once it appears in the Host's list. Never retried: if the outcome is unknown,
 	 * the user is told to check the list instead. `wanted` is asked at the end: when the caller has gone away

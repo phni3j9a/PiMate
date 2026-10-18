@@ -35,7 +35,7 @@ export async function validateSpawn(value: unknown, home: string): Promise<Spawn
 				/[\s\0]/.test(p.model.id)))
 	)
 		throw new SpawnError("bad_request", "Invalid spawn params");
-	const cwd = p.cwd === "~" ? home : p.cwd.startsWith("~/") ? join(home, p.cwd.slice(2)) : p.cwd;
+	const cwd = expandHome(p.cwd, home);
 	if (!isAbsolute(cwd)) throw new SpawnError("bad_request", "cwd must be absolute or ~/...");
 	try {
 		if (!(await stat(cwd)).isDirectory()) throw new SpawnError("not_directory", "cwd is not a directory");
@@ -44,6 +44,33 @@ export async function validateSpawn(value: unknown, home: string): Promise<Spawn
 		throw new SpawnError("not_found", "cwd does not exist or is inaccessible");
 	}
 	return { ...p, cwd: await realpath(cwd) };
+}
+
+function expandHome(path: string, home: string): string {
+	return path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path;
+}
+
+/** Subfolder names for path completion: names only, never file names or contents. */
+export async function listDirs(path: string, home: string): Promise<string[]> {
+	const dir = expandHome(path, home);
+	if (!isAbsolute(dir) || dir.includes("\0")) return [];
+	try {
+		const entries = (await readdir(dir, { withFileTypes: true })).slice(0, 5000);
+		const names = await Promise.all(
+			entries.map(async (e) =>
+				e.isDirectory() || (e.isSymbolicLink() && (await stat(join(dir, e.name)).catch(() => null))?.isDirectory())
+					? e.name
+					: null,
+			),
+		);
+		// shortcut: huge folders are cut at 1000 names before the app filters by prefix; filter on the Host if that bites.
+		return names
+			.filter((n): n is string => n !== null)
+			.sort((a, b) => a.localeCompare(b))
+			.slice(0, 1000);
+	} catch {
+		return [];
+	}
 }
 
 /** Only read one bounded session header per folder; never parse complete transcripts. */

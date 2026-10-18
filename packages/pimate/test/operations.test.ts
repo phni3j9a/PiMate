@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InstanceSummary } from "@pimate/protocol";
 import { afterEach, expect, it } from "vitest";
-import { listFolders, validateSpawn } from "../src/host/operations.ts";
+import { listDirs, listFolders, validateSpawn } from "../src/host/operations.ts";
 
 const dirs: string[] = [];
 function temp() {
@@ -58,4 +58,18 @@ it("merges recent saved session headers, live cwd counts and nearest saved trust
 	]);
 	expect(folders).toEqual([{ path: child, running: 2, trusted: false, lastUsed: expect.any(Number) }]);
 	expect(await listFolders({ HOME: temp() }, [])).toEqual([]);
+});
+it("lists only subfolder names (incl. hidden and linked folders) for completion", async () => {
+	const home = temp();
+	mkdirSync(join(home, "code", "b"), { recursive: true });
+	mkdirSync(join(home, "code", "A"));
+	mkdirSync(join(home, "code", ".hidden"));
+	writeFileSync(join(home, "code", "file"), "x");
+	symlinkSync(join(home, "code", "b"), join(home, "code", "link"));
+	symlinkSync(join(home, "code", "file"), join(home, "code", "filelink"));
+	expect(await listDirs("~/code/", home)).toEqual([".hidden", "A", "b", "link"]);
+	expect(await listDirs(join(home, "code"), home)).toEqual([".hidden", "A", "b", "link"]);
+	expect(await listDirs("~/code/file", home)).toEqual([]);
+	expect(await listDirs("~/missing/", home)).toEqual([]);
+	expect(await listDirs("code/", home)).toEqual([]);
 });

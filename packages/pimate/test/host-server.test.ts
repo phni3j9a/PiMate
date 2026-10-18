@@ -155,7 +155,7 @@ async function setup(fake = false) {
 	async function authed() {
 		const credentials = (await (await pair()).json()) as PairResponse;
 		const client = await connect(credentials.token);
-		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true } });
+		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true, dirs: true } });
 		await client.box.next("instances");
 		return { ...client, credentials };
 	}
@@ -448,6 +448,8 @@ it("supports authenticated folders and rejects invalid spawn without invoking th
 		home: expect.any(String),
 		folders: expect.any(Array),
 	});
+	c.send({ type: "dirs", requestId: "dirs", path: "/" });
+	expect(await c.box.next("dirs_result")).toMatchObject({ requestId: "dirs", dirs: expect.arrayContaining(["tmp"]) });
 	c.send({ type: "spawn", requestId: "bad", params: { cwd: "relative" } });
 	expect(await c.box.next("spawn_result")).toMatchObject({ requestId: "bad", ok: false, code: "bad_request" });
 	expect(spawn).not.toHaveBeenCalled();

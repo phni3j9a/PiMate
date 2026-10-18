@@ -11,6 +11,7 @@ import { Spinner } from "@/components/StatusMark";
 import { IconButton, PrimaryButton, TextButton } from "@/components/ui";
 import { ago } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
+import { matchDirs, splitPath } from "@/lib/pathComplete";
 import { appStore } from "@/lib/runtime";
 import {
 	defaultScope,
@@ -56,6 +57,8 @@ export default function NewPiScreen() {
 
 	const [folders, setFolders] = useState<Folders>(null);
 	const [path, setPath] = useState("");
+	const [pathFocused, setPathFocused] = useState(false);
+	const [listing, setListing] = useState<{ hostId: string; parent: string; names: string[] } | null>(null);
 	const [trust, setTrust] = useState(false);
 	const [models, setModels] = useState<Models>(null);
 	const [model, setModel] = useState<ModelRef | null>(null);
@@ -93,7 +96,31 @@ export default function NewPiScreen() {
 
 	const home = folders && "home" in folders ? folders.home : undefined;
 	const list = folders && "folders" in folders ? folders.folders : [];
-	const match = (p: string) => list.find((f) => f.path === p.trim() || shortPath(f.path, home) === p.trim());
+	const match = (p: string) => {
+		const t = p.trim().replace(/(.)\/+$/, "$1");
+		return list.find((f) => f.path === t || shortPath(f.path, home) === t);
+	};
+
+	// Completion: list the typed parent folder on the Host (once per parent), filter by the typed name locally.
+	const split = splitPath(path.trim());
+	const parent = split?.parent;
+	useEffect(() => {
+		if (!hostId || !connected || !parent) return;
+		let live = true;
+		const timer = setTimeout(() => {
+			void appStore.dirs(hostId, parent).then((names) => {
+				if (live) setListing({ hostId, parent, names });
+			});
+		}, 150);
+		return () => {
+			live = false;
+			clearTimeout(timer);
+		};
+	}, [hostId, connected, parent]);
+	const suggestions =
+		pathFocused && split && listing?.hostId === hostId && listing.parent === split.parent
+			? matchDirs(listing.names, split.prefix)
+			: [];
 
 	const pickFolder = (f: FolderInfo) => {
 		setPath(shortPath(f.path, home));
@@ -181,8 +208,25 @@ export default function NewPiScreen() {
 							autoCorrect={false}
 							style={styles.pathInput}
 							accessibilityLabel="フォルダのパス"
+							onFocus={() => setPathFocused(true)}
+							onBlur={() => setPathFocused(false)}
 						/>
 					</View>
+					{split
+						? suggestions.map((name) => (
+								<Pressable
+									key={name}
+									accessibilityRole="button"
+									accessibilityLabel={`${name} フォルダを入力`}
+									onPress={() => typePath(`${split.parent}${name}/`)}
+									style={({ pressed }) => [styles.folder, pressed && styles.pressed]}
+								>
+									<Text style={styles.folderPath} numberOfLines={1} ellipsizeMode="head">
+										{`${name}/`}
+									</Text>
+								</Pressable>
+							))
+						: null}
 					<FolderList folders={folders} home={home} now={now} connected={connected} onPick={pickFolder} />
 
 					<View style={styles.trust}>
