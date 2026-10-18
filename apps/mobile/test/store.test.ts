@@ -2013,6 +2013,10 @@ describe("Markdown file image retrieval", () => {
 		});
 		expect(await full).toEqual(image);
 		expect(opRcs(socket)).toHaveLength(2);
+		// A later answer may show an overwritten file at the same path.
+		store.fileImage(target, "./x.png", true, "answer-2").catch(() => {});
+		await flush();
+		expect(opRcs(socket)).toHaveLength(3);
 		store.dispose();
 	});
 	it("gates the capability and rejects changed host/instance/session/cwd, including in-flight replies", async () => {

@@ -6,7 +6,9 @@ import type { MarkdownImage } from "@/lib/markdownImages";
 import { colors, radii } from "@/theme/tokens";
 
 /** Like entry images, the chat captures the host/instance/session/cwd before providing this loader. */
-export const FileImageContext = createContext<((path: string, thumbnail: boolean) => Promise<ViewImage>) | null>(null);
+export const FileImageContext = createContext<
+	((path: string, thumbnail: boolean, scope?: string) => Promise<ViewImage>) | null
+>(null);
 
 export function MarkdownImageTile({ image, onPress }: { image: MarkdownImage; onPress: () => void }) {
 	const load = useContext(FileImageContext);

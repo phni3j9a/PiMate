@@ -143,7 +143,8 @@ export default function ChatScreen() {
 	const loadFileImage = useMemo(() => {
 		if (!selection || !view?.fileImages || view.phase !== "ready") return null;
 		const target = { ...selection, sessionId: view.session?.id ?? null, cwd: view.cwd };
-		return (path: string, thumbnail: boolean): Promise<ViewImage> => appStore.fileImage(target, path, thumbnail);
+		return (path: string, thumbnail: boolean, scope?: string): Promise<ViewImage> =>
+			appStore.fileImage(target, path, thumbnail, scope);
 	}, [selection, view?.fileImages, view?.phase, view?.session?.id, view?.cwd]);
 
 	const sending = outbox.some((e) => e.state === "sending");

@@ -218,14 +218,21 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 }
 
 /** Assistant Markdown (Main.html <p>/<code>): headings, lists, code, quotes, tables, links. */
-export function RichText({ text }: { text: string }) {
-	const loadFile = useContext(FileImageContext);
+export function RichText({ text, scope }: { text: string; scope?: string }) {
+	const parentLoad = useContext(FileImageContext);
+	// PC files are mutable: scope the cache to this answer so a later answer re-reads an overwritten file.
+	const loadFile = useMemo(
+		() => parentLoad && ((path: string, thumbnail: boolean) => parentLoad(path, thumbnail, scope)),
+		[parentLoad, scope],
+	);
 	const blocks = useMemo(() => parseBlocks(text, !!loadFile), [text, loadFile]);
 	const gallery = useMemo(() => markdownImageGallery(markdownImages(blocks), loadFile), [blocks, loadFile]);
 	return (
-		<View style={styles.root}>
-			<Blocks blocks={blocks} gallery={gallery} />
-		</View>
+		<FileImageContext.Provider value={loadFile}>
+			<View style={styles.root}>
+				<Blocks blocks={blocks} gallery={gallery} />
+			</View>
+		</FileImageContext.Provider>
 	);
 }
 

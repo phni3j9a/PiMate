@@ -1320,8 +1320,14 @@ export class AppStore {
 		return this.displayImage(target, "entry_image", { entryId, index, thumbnail });
 	}
 
-	fileImage(target: OpTarget & { cwd: string | null }, path: string, thumbnail = false): Promise<ViewImage> {
-		return this.displayImage(target, "file_image", { path, thumbnail }, target.cwd);
+	/** `scope` (e.g. the answer row) separates cache entries: the same path may be overwritten between answers. */
+	fileImage(
+		target: OpTarget & { cwd: string | null },
+		path: string,
+		thumbnail = false,
+		scope?: string,
+	): Promise<ViewImage> {
+		return this.displayImage(target, "file_image", { path, thumbnail }, target.cwd, scope);
 	}
 
 	private async displayImage<M extends "entry_image" | "file_image">(
@@ -1329,6 +1335,7 @@ export class AppStore {
 		method: M,
 		params: ParamsOf<M>,
 		cwd?: string | null,
+		scope?: string,
 	): Promise<ViewImage> {
 		const current = () => {
 			const now = this.opTarget();
@@ -1343,7 +1350,7 @@ export class AppStore {
 			throw new Error("会話が変わりました。チャットを開き直してください。");
 		if (this.state.view[method === "entry_image" ? "entryImages" : "fileImages"] !== true)
 			throw new Error("PC の PiMate を更新してください。");
-		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, cwd, method, params]);
+		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, cwd, scope, method, params]);
 		const image = await this.displayImageCache.load(key, async () => {
 			if (!current()) throw new Error("会話が変わりました。");
 			const res = await this.guardedRc(method, params, { discardStale: true });

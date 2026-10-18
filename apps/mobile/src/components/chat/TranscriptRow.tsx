@@ -73,7 +73,7 @@ export const TranscriptRow = memo(function TranscriptRow({
 					onLongPress={() => copyMessage(row.text)}
 					accessibilityHint="長押しで回答をコピーします"
 				>
-					<RichText text={row.text} />
+					<RichText text={row.text} scope={row.key} />
 				</Pressable>
 			);
 		case "thinking":
