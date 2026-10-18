@@ -1,4 +1,6 @@
-/** One small image per prompt keeps requests below the Host's 1 MiB WebSocket limit. */
+export const MAX_PROMPT_IMAGES = 4;
+// 600 KiB * 4/3 base64 + 32 Ki UTF-16 units * 6 JSON escaping + envelope < 1 MiB.
+export const MAX_PROMPT_TOTAL_IMAGE_BYTES = 600 * 1024;
 export const MAX_PROMPT_IMAGE_BYTES = 512 * 1024;
 export const MAX_IMAGE_PROMPT_TEXT = 32 * 1024;
 
@@ -8,10 +10,19 @@ export interface PromptImage {
 	data: string;
 }
 
+/** On-demand display image; unlike prompt previews, GIF is supported too. */
+export interface ViewImage {
+	mimeType: PromptImage["mimeType"] | "image/gif";
+	data: string;
+	width?: number;
+	height?: number;
+}
+
 export function validPromptImages(value: unknown): value is PromptImage[] {
+	let total = 0;
 	return (
 		Array.isArray(value) &&
-		value.length <= 1 &&
+		value.length <= MAX_PROMPT_IMAGES &&
 		value.every((image) => {
 			if (
 				!image ||
@@ -30,7 +41,8 @@ export function validPromptImages(value: unknown): value is PromptImage[] {
 			)
 				return false;
 			const bytes = (data.length / 4) * 3 - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
-			return bytes <= MAX_PROMPT_IMAGE_BYTES;
+			total += bytes;
+			return bytes <= MAX_PROMPT_IMAGE_BYTES && total <= MAX_PROMPT_TOTAL_IMAGE_BYTES;
 		})
 	);
 }

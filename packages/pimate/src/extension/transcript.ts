@@ -1,6 +1,6 @@
-import { type TranscriptItem, validPromptImages } from "@pimate/protocol";
+import { type PromptImage, type TranscriptImages, type TranscriptItem, validPromptImages } from "@pimate/protocol";
 
-/** History-only budget; newest previews win, and omitted ones retain imageCount. */
+/** Shared user/tool preview budget; newest history entries win, also bounds one live item. */
 export const MAX_HISTORY_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export const MAX_TOOL_TEXT = 32 * 1024;
@@ -30,32 +30,38 @@ function text(content: unknown): string {
 					.join("")
 			: "";
 }
+function imagePreviews(content: unknown, budget: number): TranscriptImages {
+	const originals = Array.isArray(content) ? content.filter((c) => c?.type === "image") : [];
+	if (!originals.length) return {};
+	const images: PromptImage[] = [];
+	const imageIndices: number[] = [];
+	for (const [index, original] of originals.entries()) {
+		const image = { type: "image" as const, mimeType: original.mimeType, data: original.data };
+		if (!validPromptImages([image])) continue;
+		const bytes = Buffer.byteLength(image.data, "base64");
+		if (bytes > budget) continue;
+		budget -= bytes;
+		images.push(image);
+		imageIndices.push(index);
+	}
+	return { imageCount: originals.length, ...(images.length ? { images, imageIndices } : {}) };
+}
+
 /** Accept persisted entries and live messages through one normalization path. */
 /**
  * Pi 1.2 records an aborted turn as stopReason "error" with an abort error message. Only that message is
  * evidence of an abort: a turn-level "abort requested" flag could relabel a real error that finished first.
  */
-export function normalizeMessage(value: unknown, entryId: string): TranscriptItem | null {
+export function normalizeMessage(
+	value: unknown,
+	entryId: string,
+	imageBudget = MAX_HISTORY_IMAGE_BYTES,
+): TranscriptItem | null {
 	const m = record(value);
 	const body = text(m.content);
 	const base = { entryId, ...(typeof m.timestamp === "number" ? { timestamp: m.timestamp } : {}) };
 	if (m.role === "system" && !body.trim()) return null;
-	if (m.role === "user") {
-		const images = Array.isArray(m.content) ? m.content.filter((c) => c?.type === "image") : [];
-		// Display only a bounded first image; original content stays in Pi's session.
-		const first = images[0] ? [{ type: "image", mimeType: images[0].mimeType, data: images[0].data }] : [];
-		return {
-			...base,
-			kind: "user",
-			text: body,
-			...(images.length
-				? {
-						imageCount: images.length,
-						...(validPromptImages(first) && first.length ? { images: first } : {}),
-					}
-				: {}),
-		};
-	}
+	if (m.role === "user") return { ...base, kind: "user", text: body, ...imagePreviews(m.content, imageBudget) };
 	if (m.role === "assistant") {
 		const blocks = Array.isArray(m.content) ? m.content : [];
 		return {
@@ -101,14 +107,18 @@ export function normalizeMessage(value: unknown, entryId: string): TranscriptIte
 			...(body.length > MAX_TOOL_TEXT ? { truncated: true } : {}),
 			isError: !!m.isError,
 			...boundToolDetails(m.details),
+			...imagePreviews(m.content, imageBudget),
 		};
 	return { ...base, kind: "other", label: m.customType ?? m.role ?? "message", text: body };
 }
 export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
-	const items: TranscriptItem[] = entries.flatMap((value) => {
+	let remaining = MAX_HISTORY_IMAGE_BYTES;
+	const items: TranscriptItem[] = [...entries].reverse().flatMap((value) => {
 		const e = record(value);
 		if (e.type === "message") {
-			const m = normalizeMessage(e.message, e.id);
+			const m = normalizeMessage(e.message, e.id, remaining);
+			if (m?.kind === "user" || m?.kind === "tool_result")
+				for (const image of m.images ?? []) remaining -= Buffer.byteLength(image.data, "base64");
 			return m ? [m] : [];
 		}
 		if (["compaction", "branch_summary", "custom_message"].includes(e.type))
@@ -123,20 +133,7 @@ export function normalizeBranch(entries: readonly unknown[]): TranscriptItem[] {
 			];
 		return [];
 	});
-	let remaining = MAX_HISTORY_IMAGE_BYTES;
-	for (let i = items.length - 1; i >= 0; i--) {
-		const item = items[i];
-		if (item.kind !== "user" || !item.images?.length) continue;
-		const data = item.images[0].data;
-		const bytes = (data.length / 4) * 3 - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
-		if (bytes <= remaining) remaining -= bytes;
-		else {
-			const placeholder = { ...item };
-			delete placeholder.images;
-			items[i] = placeholder;
-		}
-	}
-	return items;
+	return items.reverse();
 }
 
 /** Finds the session entry Pi persisted for a live message_end, so live items and history share an entryId. */

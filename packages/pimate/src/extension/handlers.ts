@@ -12,6 +12,7 @@ import { createProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
 import type { Hub } from "./hub.ts";
+import { fileImage, MAX_FILE_IMAGE_BYTES, viewImage } from "./images.ts";
 import { rpc } from "./subagents/registry.ts";
 import { normalizeBranch } from "./transcript.ts";
 import { normalizeTree } from "./tree.ts";
@@ -54,6 +55,17 @@ export function createHandlers(h: Hub): Handlers {
 		auth_logout: (p) => auth().logout(p.provider),
 		hello: () => ({ snapshot: h.snapshot() }),
 		history: () => ({ session: h.session, items: normalizeBranch(ready().ctx.sessionManager.getBranch()) }),
+		entry_image: async (p) => {
+			const entry = ready().ctx.sessionManager.getEntry(p.entryId);
+			if (entry?.type !== "message" || (entry.message.role !== "user" && entry.message.role !== "toolResult"))
+				throw new RcError("not_found");
+			const content = entry.message.content;
+			const image = Array.isArray(content) ? content.filter((c) => c.type === "image")[p.index] : undefined;
+			if (image?.type !== "image") throw new RcError("not_found");
+			if (image.data.length > Math.ceil(MAX_FILE_IMAGE_BYTES / 3) * 4) throw new RcError("unsupported");
+			return { image: await viewImage(Buffer.from(image.data, "base64"), image.mimeType) };
+		},
+		file_image: async (p) => ({ image: await fileImage(p.path, ready().ctx.cwd) }),
 		session_tree: () => normalizeTree(ready().ctx.sessionManager),
 		set_label: (p) => {
 			const { pi, ctx } = ready();

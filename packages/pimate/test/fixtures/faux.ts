@@ -25,6 +25,7 @@ export default function fixture(pi: ExtensionAPI): void {
 					fauxAssistantMessage(
 						fauxToolCall("edit", { path: "diff.txt", edits: [{ oldText: "before edit", newText: "after edit" }] }),
 					),
+					fauxAssistantMessage(fauxToolCall("read", { path: "read-image.png" })),
 					fauxAssistantMessage("Files updated."),
 				]
 			: []),

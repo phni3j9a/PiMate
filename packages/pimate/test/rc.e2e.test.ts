@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,7 +59,7 @@ it.skipIf(!pi || !abduco)(
 					"--thinking",
 					"off",
 					"--tools",
-					"write,edit",
+					"write,edit,read",
 				],
 			});
 			instanceId = launched.instanceId;
@@ -87,13 +87,20 @@ it.skipIf(!pi || !abduco)(
 					}),
 				);
 			expect(cli("list")).toEqual(expect.arrayContaining([expect.objectContaining({ instanceId, reachable: true })]));
-			expect((await client.request("hello", {})).snapshot.promptImages).toBe(true);
+			expect((await client.request("hello", {})).snapshot).toMatchObject({
+				promptImages: true,
+				promptImageLimit: 4,
+				entryImages: true,
+				fileImages: true,
+			});
 			const image = {
 				type: "image" as const,
 				mimeType: "image/png" as const,
 				data: readFileSync(join(root, "packages/pimate/test/fixtures/prompt-image.png")).toString("base64"),
 			};
-			expect(await client.request("prompt", { text: "say hello", images: [image] })).toEqual({ deliveredAs: "prompt" });
+			expect(await client.request("prompt", { text: "say hello", images: [image, image] })).toEqual({
+				deliveredAs: "prompt",
+			});
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),
@@ -116,13 +123,37 @@ it.skipIf(!pi || !abduco)(
 			const userImage = history.items.find((item) => item.kind === "user");
 			expect(userImage).toMatchObject({
 				kind: "user",
-				imageCount: 1,
-				images: [expect.objectContaining({ type: "image" })],
+				imageCount: 2,
+				images: [expect.objectContaining({ type: "image" }), expect.objectContaining({ type: "image" })],
+				imageIndices: [0, 1],
 			});
 			if (userImage?.kind !== "user") throw new Error("Missing image user entry");
 			expect(userImage.text).toContain("say hello");
 			expect(userImage.text).toContain("1024");
 			expect(userImage.images?.[0]?.data).not.toBe(image.data);
+			for (const index of [0, 1])
+				expect(await client.request("entry_image", { entryId: userImage.entryId, index })).toEqual({
+					image: { mimeType: userImage.images![index].mimeType, data: userImage.images![index].data },
+				});
+			await expect(client.request("entry_image", { entryId: userImage.entryId, index: 2 })).rejects.toMatchObject({
+				code: "not_found",
+			});
+			await expect(client.request("entry_image", { entryId: "missing", index: 0 })).rejects.toMatchObject({
+				code: "not_found",
+			});
+			writeFileSync(join(dir, "read-image.png"), Buffer.from(image.data, "base64"));
+			expect(await client.request("file_image", { path: "read-image.png" })).toEqual({
+				image: { mimeType: "image/png", data: image.data },
+			});
+			await expect(client.request("file_image", { path: "missing.png" })).rejects.toMatchObject({ code: "not_found" });
+			writeFileSync(
+				join(dir, "large-image.txt"),
+				Buffer.concat([Buffer.from(image.data, "base64"), Buffer.alloc(2 * 1024 * 1024)]),
+			);
+			const large = await client.request("file_image", { path: "large-image.txt" });
+			expect(Buffer.byteLength(large.image.data, "base64")).toBeLessThanOrEqual(2 * 1024 * 1024);
+			expect(large.image.width).toBeLessThanOrEqual(2048);
+			expect(large.image.height).toBeLessThanOrEqual(2048);
 			for (const e of events) {
 				if (e.event.type === "message_end") expect(history.items).toContainEqual(e.event.item);
 			}
@@ -143,6 +174,16 @@ it.skipIf(!pi || !abduco)(
 			});
 			expect(edit).toMatchObject({ isError: false, details: { patch: expect.stringContaining("+after edit") } });
 			expect(readFileSync(join(dir, "diff.txt"), "utf8")).toBe("after edit\n");
+			const read = diffHistory.items.find((item) => item.kind === "tool_result" && item.toolName === "read");
+			expect(read).toMatchObject({
+				imageCount: 1,
+				imageIndices: [0],
+				images: [expect.objectContaining({ type: "image" })],
+			});
+			if (read?.kind !== "tool_result") throw new Error("Missing image tool result");
+			expect(await client.request("entry_image", { entryId: read.entryId, index: 0 })).toEqual({
+				image: { mimeType: read.images![0].mimeType, data: read.images![0].data },
+			});
 			for (const item of [write, edit]) {
 				expect(events.some((e) => e.event.type === "message_end" && e.event.item.entryId === item?.entryId)).toBe(true);
 			}
