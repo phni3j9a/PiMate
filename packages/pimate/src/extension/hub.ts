@@ -15,7 +15,7 @@ import type {
 	SessionRef,
 	SubscriptionQuota,
 } from "@pimate/protocol";
-import { countSubagents, encodeLine, LineDecoder, PROTOCOL_VERSION } from "@pimate/protocol";
+import { countSubagents, encodeLine, LineDecoder, MAX_PROMPT_IMAGES, PROTOCOL_VERSION } from "@pimate/protocol";
 import { PACKAGE_VERSION } from "../package.ts";
 import { privateRunDir, resolveRunDir, validInstanceId } from "../runtime.ts";
 import type { ProviderAuth } from "./auth.ts";
@@ -130,6 +130,9 @@ export class Hub {
 			status: this.status,
 			agentActive: this.agentActive,
 			promptImages: true,
+			promptImageLimit: MAX_PROMPT_IMAGES,
+			entryImages: true,
+			fileImages: true,
 			sessionTree: true,
 			slashCommands: true,
 			providerAuth: true,

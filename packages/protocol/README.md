@@ -11,12 +11,22 @@
 ## 親プロンプトの画像
 
 - `InstanceSnapshot.promptImages?: boolean`: **厳密に `true` の場合だけ**画像を送信できます。未指定/false の古い RC は未知の `images` を捨てるため、画像の送信要求自体を抑止します。テキストのみは影響を受けません。
+- `InstanceSnapshot.promptImageLimit?: number`: 最大枚数。`promptImages: true` で limit 未指定なら旧仕様の1枚、新 RC は4枚です。
 - `prompt.params`: 必須の `text: string` に任意の `images: PromptImage[]`。本文が空でも画像があれば有効。idle / steer / followUp とも同じ配列です。スマホは常に `deliverAs: "steer"` を指定し、RC は idle なら `deliveredAs: "prompt"`、busy なら `"steer"` を返します。省略時の busy followUp と明示 followUp は旧クライアント互換のため残します。
-- `PromptImage`: `{ type: "image", mimeType: "image/jpeg" | "image/png" | "image/webp", data: string }`。`data` は data URI でない、パディングつき base64。最大1枚、decoded `MAX_PROMPT_IMAGE_BYTES = 512 * 1024` bytes。`validPromptImages` は配列数・形式・base64・decoded 上限を検査します（画像デコーダではありません）。
+- `PromptImage`: `{ type: "image", mimeType: "image/jpeg" | "image/png" | "image/webp", data: string }`。`data` は data URI でない、パディングつき base64。最大 `MAX_PROMPT_IMAGES = 4` 枚、decoded 1枚 `MAX_PROMPT_IMAGE_BYTES = 512 * 1024` bytes・合計 `MAX_PROMPT_TOTAL_IMAGE_BYTES = 600 * 1024` bytes。`validPromptImages` は配列数・形式・base64・decoded 上限を検査します（画像デコーダではありません）。
 - 画像つき本文は `MAX_IMAGE_PROMPT_TEXT = 32 * 1024` UTF-16 code units まで。テキストのみの既存の制限は変更しません。この組み合わせで画像要求を Host の受信 WebSocket 上限 1 MiB 内に収めます。
 - RC は画像非対応の現在モデルを `unsupported` で拒否し、Pi の標準 text/image content API に渡します。画像だけを無視してテキスト送信へフォールバックしません。
 
-ユーザーの `TranscriptItem` には任意の `images` と `imageCount` が追加されます。`imageCount` は元の画像の総枚数、`images` は表示用の最初の対応画像（512 KiB 以下）。表示不能・複数画像の残りは件数を使った placeholder にします。RC の history は最新側を優先した decoded 合計 2 MiB の preview budget を持ち、省略時も本文と件数を保持します。Pi の元の履歴と live 画像は変更しません。
+`user` / `tool_result` の `TranscriptItem` は共通の `TranscriptImages` フィールドを持ちます。`imageCount?: number` は元画像の総枚数、`images?: PromptImage[]` は各512 KiB以下の対応 preview 全て（送信時の合計600 KiB・4枚制限とは独立）、`imageIndices?: number[]` は `images` と同じ長さで各 preview の元画像の0始まり index です。旧 RC の indices 未指定時は配列位置を使います。GIF・サイズ超過などの省略画像は `imageCount` を使った placeholder にします。history は user / tool_result 共通で最新側から decoded 合計2 MiB、単一 live `message_end` も2 MiBまで。Pi の原本は変更しません。
+
+### 表示用画像の取得
+
+- `InstanceSnapshot.entryImages === true`: `entry_image { entryId: string, index: number, thumbnail?: boolean }`。index は0以上の整数、元画像の index（preview の位置ではない）。現在セッション内の user / toolResult のみ。別の枝も取得可能。存在しない entry / index は `not_found`。
+- `InstanceSnapshot.fileImages === true`: `file_image { path: string }`。セッション cwd 相対、絶対、`~/`、`file://` URL を許可。symlink の先も含む通常ファイルを最大20 MiB読み、magic bytes で JPEG / PNG / WebP / GIF を判定。存在しないパスは `not_found`、読み取り不可・非通常ファイル・未対応形式・サイズ超過は `unsupported`。ユーザーが明示要求する PC ファイルに sandbox 制限はありません。
+- 両メソッドの結果は `{ image: ViewImage }`。`ViewImage = { mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: string, width?: number, height?: number }`。`data` は data URI ではない base64。2 MiB decoded 以下は原本、それを超えると Pi の `resizeImage` で最大2048px・2 MiB以下へ縮小し寸法を付けます。GIF の縮小は静止画になる場合があります。
+- `entry_image` の `thumbnail: true` は小さい原本でも Pi の resize を必ず呼び、最大320px・decoded 64 KiB以下を目標にします（JPEG品質60、PiがPNGを選ぶ場合もあります）。resizeが使えない場合の原本fallbackは512 KiBまで、それ以上は `unsupported`。省略 / false は従来の全画面用画像です。
+- 全画面用の resize API / codec が使えなければ5 MiB以下の原本へ fallback、それ以上は `unsupported`。5 MiB decoded は base64化後も Host の8 MiB送信制限に収まります。入力の絶対上限は20 MiB。
+- 取得時も `expectInstanceId` / `expectSessionId` を使い、セッション変更後の別画像取得を防ぎます。子エージェント画像は対象外です。
 
 画像要求の ACK は RC の受付を示し、履歴への反映を保証しません。モバイルは受付後に仮の画像 outbox 表示を除去し、Pi の実履歴だけを表示します。Pi が画像を再変換し、本文に寸法注記を追加する場合があるためです。
 

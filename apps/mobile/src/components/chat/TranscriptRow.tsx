@@ -14,8 +14,8 @@ import type { SpacedRow } from "@/lib/transcriptRows";
 import { colors, fontFamily, radii, sizes, typography } from "@/theme/tokens";
 
 import { DialogCard, PcPromptCard } from "./DialogCard";
-import { PromptImageView } from "./PromptImageView";
 import { RichText } from "./RichText";
+import { TranscriptImages } from "./TranscriptImages";
 
 const SESSION_REASON: Record<string, string> = {
 	new: "/new",
@@ -55,13 +55,7 @@ export const TranscriptRow = memo(function TranscriptRow({
 				<View style={margin}>
 					<View style={styles.userWrap}>
 						<View style={styles.bubble}>
-							{row.images?.[0] ? <PromptImageView image={row.images[0]} /> : null}
-							{(row.imageCount ?? 0) > (row.images?.length ?? 0) ? (
-								<Text style={styles.meta}>
-									画像 {row.imageCount} 枚
-									{row.images?.length ? "（残りは表示対象外）" : "（プレビューの制限で表示なし）"}
-								</Text>
-							) : null}
+							<TranscriptImages {...row} entryId={row.key.startsWith("outbox:") ? undefined : row.key} />
 							{row.text ? (
 								<Text style={styles.bubbleText} selectable>
 									{row.text}
@@ -87,12 +81,17 @@ export const TranscriptRow = memo(function TranscriptRow({
 		case "tool":
 			if (subagent && onOpenSubagent)
 				return (
-					<SubagentToolRow
-						run={subagent}
-						callRunning={row.state === "running"}
-						margin={row.marginTop}
-						onPress={() => onOpenSubagent(subagent)}
-					/>
+					<View style={margin}>
+						<SubagentToolRow
+							run={subagent}
+							callRunning={row.state === "running"}
+							margin={0}
+							onPress={() => onOpenSubagent(subagent)}
+						/>
+						<View style={styles.toolImages}>
+							<TranscriptImages {...row} />
+						</View>
+					</View>
 				);
 			return <ToolRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
 		case "turnSummary":
@@ -234,6 +233,9 @@ function ToolRow({
 					<View style={{ width: 14 }} />
 				)}
 			</Pressable>
+			<View style={styles.toolImages}>
+				<TranscriptImages {...row} />
+			</View>
 			{expanded && change ? (
 				<View style={styles.diff}>
 					<ChangeDiff piece={change} variant="compact" />
@@ -387,6 +389,7 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.surface,
 	},
 	outputText: { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 18, color: colors.textCode },
+	toolImages: { marginLeft: 22 },
 	diff: { marginTop: 4, marginLeft: 22, marginBottom: 4 },
 	counts: { fontFamily: fontFamily.mono, lineHeight: 16 },
 	summary: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 4 },

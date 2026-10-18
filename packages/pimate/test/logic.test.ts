@@ -222,20 +222,32 @@ describe("image prompt boundary", () => {
 		for (const params of [
 			{ text: " " },
 			{ text: "", images: [] },
-			{ text: "hi", images: [image, image] },
+			{ text: "hi", images: Array(5).fill(image) },
 			{ text: "hi", images: [{ ...image, data: "invalid" }] },
 		])
 			expect(() => validateRequest(request(params))).toThrow();
 	});
-	it("preserves text, counts every original image, and only exposes a bounded supported first image", () => {
+	it("preserves text, counts every original image, and exposes supported previews with their original indices", () => {
 		const normalize = (images: unknown[]) =>
 			normalizeMessage({ role: "user", content: [{ type: "text", text: "keep text" }, ...images] }, "u");
-		expect(normalize([image, image])).toMatchObject({ text: "keep text", imageCount: 2, images: [image] });
+		expect(normalize([image, image])).toMatchObject({
+			text: "keep text",
+			imageCount: 2,
+			images: [image, image],
+			imageIndices: [0, 1],
+		});
 		for (const first of [
 			{ ...image, mimeType: "image/gif" },
 			{ ...image, data: Buffer.alloc(512 * 1024 + 1).toString("base64") },
 		]) {
-			expect(normalize([first, image])).toEqual({ kind: "user", entryId: "u", text: "keep text", imageCount: 2 });
+			expect(normalize([first, image])).toEqual({
+				kind: "user",
+				entryId: "u",
+				text: "keep text",
+				imageCount: 2,
+				images: [image],
+				imageIndices: [1],
+			});
 		}
 		expect(normalizeMessage({ role: "user", content: [image] }, "u")).toMatchObject({
 			text: "",
@@ -255,14 +267,81 @@ it("bounds aggregate history previews, prefers the newest, and preserves origina
 	const before = JSON.stringify(entries);
 	const normalized = normalizeBranch(entries);
 	expect(JSON.stringify(entries)).toBe(before);
-	expect(normalized.map((item) => (item.kind === "user" && item.images?.length) || 0)).toEqual([0, 0, 1, 1, 1, 1]);
+	expect(normalized.map((item) => (item.kind === "user" && item.images?.length) || 0)).toEqual([0, 0, 0, 0, 2, 2]);
 	for (let i = 0; i < normalized.length; i++)
 		expect(normalized[i]).toMatchObject({ kind: "user", text: `text ${i}`, imageCount: 2 });
 	expect(
 		normalized
 			.filter((item) => item.kind === "user")
-			.reduce((sum, item) => sum + (item.images ? Buffer.from(item.images[0].data, "base64").length : 0), 0),
+			.reduce(
+				(sum, item) =>
+					sum + (item.images ?? []).reduce((bytes, image) => bytes + Buffer.byteLength(image.data, "base64"), 0),
+				0,
+			),
 	).toBe(2 * 1024 * 1024);
-	// Live normalization is not subject to the aggregate history budget.
-	expect(normalizeMessage(entries[0].message, "u0")).toMatchObject({ images: [image], imageCount: 2 });
+	// Live normalization uses the same per-item cap, independently of older history.
+	expect(normalizeMessage(entries[0].message, "u0")).toMatchObject({ images: [image, image], imageCount: 2 });
+});
+
+it.each(["user", "toolResult"])("bounds live %s images and retains sparse original indices", (role) => {
+	const image = { type: "image", mimeType: "image/png", data: Buffer.alloc(512 * 1024).toString("base64") };
+	const message = {
+		role,
+		content: [
+			{ ...image, mimeType: "image/gif" },
+			{ ...image, data: Buffer.alloc(512 * 1024 + 1).toString("base64") },
+			...Array(6).fill(image),
+		],
+	};
+	expect(normalizeMessage(message, "entry")).toMatchObject({
+		imageCount: 8,
+		images: Array(4).fill(image),
+		imageIndices: [2, 3, 4, 5],
+	});
+});
+
+it("shares the newest-first history budget across user and tool images, skips oversized images", () => {
+	const image = { type: "image", mimeType: "image/png", data: Buffer.alloc(512 * 1024).toString("base64") };
+	const entries = ["user", "toolResult", "user", "toolResult", "user"].map((role, i) => ({
+		type: "message",
+		id: `${i}`,
+		message: { role, content: [image] },
+	}));
+	const items = normalizeBranch(entries);
+	expect(
+		items.map((item) => (item.kind === "user" || item.kind === "tool_result" ? (item.images?.length ?? 0) : 0)),
+	).toEqual([0, 1, 1, 1, 1]);
+	// A too-large preview must not consume bytes needed by older, smaller images.
+	entries.push({
+		type: "message",
+		id: "large",
+		message: { role: "toolResult", content: [{ ...image, data: Buffer.alloc(512 * 1024 + 1).toString("base64") }] },
+	});
+	expect(normalizeBranch(entries).slice(0, -1)).toEqual(items);
+});
+
+it("validates entry_image indices and file_image paths", () => {
+	for (const thumbnail of [undefined, false, true])
+		expect(() =>
+			validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index: 0, thumbnail } }),
+		).not.toThrow();
+	for (const thumbnail of [0, 1, "true", null, []])
+		expect(() =>
+			validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index: 0, thumbnail } }),
+		).toThrow("Invalid params");
+	for (const index of [0, 2])
+		expect(validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index } }).method).toBe(
+			"entry_image",
+		);
+	for (const params of [
+		{},
+		{ entryId: "", index: 0 },
+		{ entryId: "entry" },
+		...[-1, 0.1, NaN, Infinity, "0", Number.MAX_SAFE_INTEGER + 1].map((index) => ({ entryId: "entry", index })),
+	])
+		expect(() => validateRequest({ id: "image", method: "entry_image", params })).toThrow("Invalid params");
+	for (const path of ["image.png", "/absolute", "~/image", "file:///tmp/image"])
+		expect(validateRequest({ id: "image", method: "file_image", params: { path } }).method).toBe("file_image");
+	for (const path of [undefined, "", 42, "bad\0path"])
+		expect(() => validateRequest({ id: "image", method: "file_image", params: { path } })).toThrow("Invalid params");
 });

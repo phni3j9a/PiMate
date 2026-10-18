@@ -20,6 +20,8 @@ export type Handlers = { [M in RcMethod]: (params: ParamsOf<M>) => ResultOf<M> |
 const methods = [
 	"hello",
 	"history",
+	"entry_image",
+	"file_image",
 	"prompt",
 	"abort",
 	"ui_respond",
@@ -87,6 +89,12 @@ export function validateRequest(value: unknown): Request {
 				typeof p.value === "string" &&
 				p.value.length > 0 &&
 				p.value.length <= AUTH_MAX_INPUT_LENGTH;
+			break;
+		case "entry_image":
+			ok = str("entryId", true) && Number.isSafeInteger(p.index) && (p.index as number) >= 0 && bool("thumbnail");
+			break;
+		case "file_image":
+			ok = str("path", true) && !(p.path as string).includes("\0");
 			break;
 		case "sessions":
 			ok = p.limit === undefined || (Number.isSafeInteger(p.limit) && (p.limit as number) > 0);

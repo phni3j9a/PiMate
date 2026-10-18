@@ -21,6 +21,7 @@ import type {
 	UIRequest,
 } from "@pimate/protocol";
 import { type PromptImage, samePromptImages } from "@pimate/protocol";
+import { imageSlots } from "./entryImages";
 import { contentText } from "./format";
 import { clearFinishedWatch, normalizeState, upsertRun, watchRuns } from "./subagents";
 
@@ -58,6 +59,8 @@ export interface InstanceView {
 	instanceId: string;
 	phase: ViewPhase;
 	promptImages?: boolean;
+	promptImageLimit?: number;
+	entryImages?: boolean;
 	sessionTree?: boolean;
 	slashCommands?: boolean;
 	error?: { code: string; message?: string };
@@ -220,6 +223,8 @@ function applySubscribed(
 		session,
 		status: snapshot.status,
 		promptImages: snapshot.promptImages === true,
+		promptImageLimit: snapshot.promptImageLimit,
+		entryImages: snapshot.entryImages === true,
 		sessionTree: snapshot.sessionTree === true,
 		slashCommands: snapshot.slashCommands === true,
 		model: snapshot.model,
@@ -489,12 +494,16 @@ export function findDeliveredUserItem(
 	images: readonly PromptImage[] = [],
 ): boolean {
 	const target = text.trim();
-	return view.items.some(
-		(i) =>
-			i.kind === "user" &&
-			!known.includes(i.entryId) &&
-			i.text.trim() === target &&
-			(i.imageCount ?? i.images?.length ?? 0) === images.length &&
-			samePromptImages(i.images, images),
-	);
+	return view.items.some((item) => {
+		if (
+			item.kind !== "user" ||
+			known.includes(item.entryId) ||
+			item.text.trim() !== target ||
+			(item.imageCount ?? item.images?.length ?? 0) !== images.length
+		)
+			return false;
+		const previews = imageSlots(item);
+		// A partial preview cannot prove that omitted originals match an unconfirmed send.
+		return previews.every((image) => image !== undefined) && samePromptImages(previews as PromptImage[], images);
+	});
 }

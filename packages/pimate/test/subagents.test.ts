@@ -535,3 +535,16 @@ it("replays pre-RC async launches without appending entries or moving the sessio
 		}
 	}
 });
+
+it("keeps subagent text and image counts without inlining parent-only image previews", () => {
+	const image = { type: "image", mimeType: "image/png", data: Buffer.alloc(512 * 1024).toString("base64") };
+	const reply = exampleTranscript(
+		["user", "toolResult"].map((role) => ({ role, content: [{ type: "text", text: "keep text" }, image] })),
+		undefined,
+	);
+	expect(reply.items).toHaveLength(2);
+	for (const item of reply.items) {
+		expect(item).toMatchObject({ text: "keep text", imageCount: 1 });
+		expect(item).not.toHaveProperty("images");
+	}
+});

@@ -319,3 +319,27 @@ describe("instance view reducer", () => {
 		expect(findDeliveredUserItem(v, "same", ["u1"])).toBe(true);
 	});
 });
+
+it("matches multi-image sends by original indices, but never confirms from partial previews", () => {
+	const a = { type: "image", mimeType: "image/png", data: "YQ==" } as const;
+	const b = { ...a, data: "Yg==" };
+	const view = {
+		...createView("i"),
+		items: [
+			{ kind: "user" as const, entryId: "new", text: "same", imageCount: 2, images: [b, a], imageIndices: [1, 0] },
+		],
+	};
+	expect(findDeliveredUserItem(view, "same", [], [a, b])).toBe(true);
+	expect(findDeliveredUserItem(view, "same", ["new"], [a, b])).toBe(false);
+	expect(
+		findDeliveredUserItem(
+			{ ...view, items: [{ ...view.items[0]!, images: [b], imageIndices: [1] }] },
+			"same",
+			[],
+			[a, b],
+		),
+	).toBe(false);
+	expect(
+		findDeliveredUserItem({ ...view, items: [{ ...view.items[0]!, imageIndices: [0, 1] }] }, "same", [], [a, b]),
+	).toBe(false);
+});

@@ -13,7 +13,7 @@
  */
 
 import type { AuthMethods } from "./auth.ts";
-import type { PromptImage } from "./images.ts";
+import type { PromptImage, ViewImage } from "./images.ts";
 import type { SubagentAction, SubagentCounts, SubagentRun, SubagentsState, SubagentTranscript } from "./subagents.ts";
 
 export * from "./auth.ts";
@@ -69,9 +69,19 @@ export interface PimateWriteDetails {
 	};
 }
 
+/** Display-only previews. Omitted/unsupported images remain counted for on-demand retrieval. */
+export interface TranscriptImages {
+	/** JPEG/PNG/WebP previews, each <= 512 KiB decoded; not subject to the prompt total/count limit. */
+	images?: PromptImage[];
+	/** Original zero-based image index for each preview; absent on old RCs means array position. */
+	imageIndices?: number[];
+	/** Total original images, including omitted previews and GIFs. */
+	imageCount?: number;
+}
+
 /** One entry of the current session branch, normalized for display. */
 export type TranscriptItem =
-	| { kind: "user"; entryId: string; text: string; images?: PromptImage[]; imageCount?: number; timestamp?: number }
+	| ({ kind: "user"; entryId: string; text: string; timestamp?: number } & TranscriptImages)
 	| {
 			kind: "assistant";
 			entryId: string;
@@ -85,7 +95,7 @@ export type TranscriptItem =
 			errorMessage?: string;
 			timestamp?: number;
 	  }
-	| {
+	| ({
 			kind: "tool_result";
 			entryId: string;
 			toolCallId: string;
@@ -98,7 +108,7 @@ export type TranscriptItem =
 			/** RC omitted details because their serialized JSON exceeds 256 KiB or cannot be serialized. */
 			detailsOmitted?: boolean;
 			timestamp?: number;
-	  }
+	  } & TranscriptImages)
 	/** Compaction summaries, branch summaries, custom messages etc. shown as a single line. */
 	| { kind: "other"; entryId: string; label: string; text?: string; timestamp?: number };
 
@@ -214,6 +224,12 @@ export interface InstanceSnapshot {
 	agentActive?: boolean;
 	/** Explicit capability: older RCs ignore unknown prompt fields. Never send images without this. */
 	promptImages?: boolean;
+	/** Maximum prompt image count; missing means 1 when promptImages is true. Shared byte budgets still apply. */
+	promptImageLimit?: number;
+	/** On-demand current-session user/toolResult image retrieval via entry_image. */
+	entryImages?: boolean;
+	/** Local file_image retrieval; relative paths use session cwd, absolute paths are allowed. */
+	fileImages?: boolean;
 	/** Session tree read, navigation and labels. Absent on older RCs. */
 	sessionTree?: boolean;
 	/** RC command discovery, expansion and explicit command acknowledgements. */
@@ -311,6 +327,14 @@ export function slashCommandName(text: string): string | null {
 export interface RcMethods extends AuthMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
+	/** Original zero-based image index (not preview position); use session/instance guards. */
+	entry_image: {
+		/** thumbnail: fit within 320px / 64 KiB; resize-unavailable originals capped at 512 KiB. */
+		params: { entryId: string; index: number; thumbnail?: boolean };
+		result: { image: ViewImage };
+	};
+	/** Local regular PNG/JPEG/WebP/GIF file; relative to session cwd, also accepts absolute, ~/ and file://. */
+	file_image: { params: { path: string }; result: { image: ViewImage } };
 	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. Expanded extension commands run immediately and return "command" (no user transcript entry). */
 	prompt: {
 		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };

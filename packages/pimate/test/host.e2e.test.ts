@@ -101,7 +101,9 @@ it.skipIf(!pi || !abduco)(
 						expectSessionId: subscribed.snapshot.session?.id,
 					},
 				});
-			rc("prompt", "prompt", { text: "hello from phone" });
+			const imagePath = join(root, "packages/pimate/test/fixtures/prompt-image.png");
+			const image = { type: "image", mimeType: "image/png", data: readFileSync(imagePath).toString("base64") };
+			rc("prompt", "prompt", { text: "hello from phone", images: [image, image] });
 			expect(await wait((m) => m.type === "rc_result" && m.response.id === "prompt")).toMatchObject({
 				response: { ok: true },
 			});
@@ -121,6 +123,16 @@ it.skipIf(!pi || !abduco)(
 				throw new Error("Missing history");
 			for (const event of events)
 				if (event.event.type === "message_end") expect(history.response.result.items).toContainEqual(event.event.item);
+			const user = history.response.result.items.find((item) => item.kind === "user");
+			expect(user).toMatchObject({ imageCount: 2, imageIndices: [0, 1] });
+			rc("entry-image", "entry_image", { entryId: user!.entryId, index: 1 });
+			expect(await wait((m) => m.type === "rc_result" && m.response.id === "entry-image")).toMatchObject({
+				response: { ok: true, result: { image: { mimeType: "image/png", data: expect.any(String) } } },
+			});
+			rc("file-image", "file_image", { path: imagePath });
+			expect(await wait((m) => m.type === "rc_result" && m.response.id === "file-image")).toMatchObject({
+				response: { ok: true, result: { image: { mimeType: "image/png", data: image.data } } },
+			});
 			messages.length = 0;
 			rc("slow", "prompt", { text: "slow reply" });
 			await wait((m) => m.type === "event" && m.event.type === "text_delta");

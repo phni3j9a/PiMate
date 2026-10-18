@@ -2,7 +2,7 @@
  * Full-screen image viewer (Issue #66): horizontal paging, pinch / double-tap zoom, pan while zoomed, swipe down at 1x
  * to close. Always black like a photo viewer, in light and dark mode. Images never enter the disk cache.
  */
-import type { PromptImage } from "@pimate/protocol";
+import type { ViewImage } from "@pimate/protocol";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
@@ -245,8 +245,8 @@ function ViewerPage({
 }
 
 /** The image of a page; a `load()` item is fetched when its page is first rendered (pages near the visible one). */
-function useLoadedImage(image: ViewerImage): PromptImage | "loading" | "failed" {
-	const [result, setResult] = useState<PromptImage | "loading" | "failed">("loading");
+function useLoadedImage(image: ViewerImage): ViewImage | "loading" | "failed" {
+	const [result, setResult] = useState<ViewImage | "loading" | "failed">("loading");
 	useEffect(() => {
 		if (!("load" in image)) return;
 		let live = true;

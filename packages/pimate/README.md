@@ -73,11 +73,17 @@ Host の `auth_ok.host.providerAuth` と RC の `snapshot.providerAuth` の両�
 
 ## 親 Pi への画像プロンプト
 
-RC は `hello` snapshot の `promptImages: true` で画像対応を通知します。古い RC は未知の `images` を無視するため、クライアントはこの明示的な capability がない限り画像を送ってはいけません。PC パッケージの更新後は、対象の **Pi も再起動**してください。画像非対応モデルには `unsupported` を返し、本文だけを黙って送ることはありません。
+RC は `hello` snapshot の `promptImages: true` と `promptImageLimit: 4` で画像対応を通知します（limit 未指定の旧 RC は1枚）。古い RC は未知の `images` を無視するため、クライアントはこの明示的な capability がない限り画像を送ってはいけません。PC パッケージの更新後は、対象の **Pi も再起動**してください。画像非対応モデルには `unsupported` を返し、本文だけを黙って送ることはありません。
 
-`prompt.params.images` は JPEG / PNG / WebP の base64 画像1枚、decoded 最大 512 KiB。画像つき本文は最大 32,768 文字で、`text: ""` の画像のみ送信も可能です。Pi の標準 `sendUserMessage` に text/image content 配列を渡します。スマホは待機中も `deliverAs: "steer"` を送り、RC は idle なら prompt、busy なら steer として受け付けます。旧アプリ・CLI 向けの `followUp` と省略時の busy followUp は維持します。instance/session guards、失敗時の非再送はテキストと同じです。既存 CLI はテキスト送信のまま、撮影やファイルアップロードの追加 API はありません。
+`prompt.params.images` は JPEG / PNG / WebP の base64 画像を最大4枚、decoded 1枚 512 KiB・合計 600 KiB まで。画像つき本文は最大 32,768 文字で、`text: ""` の画像のみ送信も可能です。Pi の標準 `sendUserMessage` に text/image content 配列を渡します。スマホは待機中も `deliverAs: "steer"` を送り、RC は idle なら prompt、busy なら steer として受け付けます。旧アプリ・CLI 向けの `followUp` と省略時の busy followUp は維持します。instance/session guards、失敗時の非再送はテキストと同じです。既存 CLI はテキスト送信のまま、撮影やファイルアップロードの追加 API はありません。
 
-履歴と live のユーザー項目は `imageCount`（元の総枚数）、`images`（最初の対応画像、サイズ上限内のみ）を含みます。履歴の画像 preview は decoded 合計 2 MiB を最新側から優先し、収まらない項目は件数と本文だけを返します。live 配信や Pi の原本は削りません。モバイル側は表示できない画像を placeholder にし、テキストを落としません。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
+履歴と live の `user` / `tool_result` は `imageCount`（元の総枚数）、`images`（対応する全 preview、各 decoded 512 KiB 以下）、`imageIndices`（各 preview の元画像の0始まり index）を含みます。`imageIndices` がない旧 RC では配列位置が index です。履歴は両 role 共通の decoded 合計 2 MiB を最新の項目から優先し、単一 live `message_end` にも 2 MiB 上限を適用します。収まらない画像・GIF は件数に残し placeholder にできます。Pi の原本は変更しません。子エージェント記録の画像取得は対象外です。
+
+`snapshot.entryImages: true` の RC は `entry_image { entryId, index, thumbnail? }` で現在セッション内の user / toolResult の元画像を返します（現在の枝以外も含む）。`index` は preview の位置ではなく元画像の index。`snapshot.fileImages: true` なら `file_image { path }` も利用できます。相対パスはセッション cwd 基準、絶対パス・`~/`・`file://` URL・symlink も許可します。認証済みスマホから明示的に要求された通常ファイルのみを読み、20 MiB まで、拡張子でなく magic bytes で JPEG / PNG / WebP / GIF を判定します。パスの sandbox 制限はありません。
+
+`entry_image` の `thumbnail: true` はインライン表示用で、原本の大きさによらず Pi のresizeを呼び、最大320px・decoded 64 KiB以下へ縮小します（JPEG品質60、PNGになる場合もあります）。縮小不可時の原本fallbackは512 KiBまで、それ以上は `unsupported`。省略 / false は全画面用です。
+
+両 RPC の全画面用取得は `{ image: ViewImage }`（`mimeType`, base64 `data`, 任意の `width` / `height`）を返します。decoded 2 MiB 以下は原本、それ以上は Pi の `resizeImage` で最大2048px・2 MiB 以下へ縮小します。縮小 API / codec が使えない場合は原本が5 MiB以下なら返し、それを超える場合は `unsupported`。5 MiB は base64 化後も Host の8 MiB送信制限に余裕を残すためです。GIF は縮小時に静止画になる場合があります。存在しない entry / index / ファイルは `not_found`、形式・サイズ・読み取り不可は `unsupported`。`expectInstanceId` / `expectSessionId` で取得先を固定してください。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
 ## コマンド一覧と実行（#37）
 
@@ -155,7 +161,7 @@ npx biome check packages
 
 E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
-`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit呼び出しを追加し、historyの両patchとwrite差分のセッション保存も検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
+`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
 手動でも上記CLIのspawnに以下を渡すと同じfixtureを使用できます（最初の応答後、2回目を送りabortする）。終了時はattachしてPiを終了し、abducoセッションも閉じてください。
 

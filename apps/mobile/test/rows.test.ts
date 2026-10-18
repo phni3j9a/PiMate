@@ -212,3 +212,40 @@ it("keeps image-only rows and accurate placeholders through folding and spacing"
 	expect(rows.find((r) => r.key === "image")).toMatchObject({ kind: "user", text: "", images, imageCount: 1 });
 	expect(rows.find((r) => r.key === "unsupported")).toMatchObject({ kind: "user", text: "keep me", imageCount: 2 });
 });
+
+it("keeps image tool rows visible outside turn folds and carries result entry IDs and sparse previews", () => {
+	const image = { type: "image", mimeType: "image/png", data: "YQ==" } as const;
+	const rows = buildRows(
+		viewWith([
+			{ kind: "user", entryId: "u", text: "read image", images: [image], imageIndices: [1], imageCount: 2 },
+			{
+				kind: "assistant",
+				entryId: "a",
+				text: "",
+				toolCalls: [
+					{ id: "read", name: "read", args: { path: "image.png" } },
+					{ id: "other", name: "bash", args: {} },
+				],
+			},
+			{
+				kind: "tool_result",
+				entryId: "r",
+				toolCallId: "read",
+				toolName: "read",
+				text: "image",
+				isError: false,
+				images: [image],
+				imageIndices: [2],
+				imageCount: 3,
+			},
+			{ kind: "tool_result", entryId: "other-r", toolCallId: "other", toolName: "bash", text: "done", isError: false },
+		]),
+	);
+	expect(visibleRows(rows, () => false)).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ kind: "user", imageIndices: [1] }),
+			expect.objectContaining({ kind: "tool", entryId: "r", imageCount: 3, imageIndices: [2], images: [image] }),
+		]),
+	);
+	expect(rows.find((row) => row.kind === "tool" && row.entryId === "r")).not.toHaveProperty("fold");
+});

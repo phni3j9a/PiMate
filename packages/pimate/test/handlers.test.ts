@@ -2,6 +2,7 @@ import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent
 import { afterEach, expect, it, vi } from "vitest";
 import { createHandlers } from "../src/extension/handlers.ts";
 import type { Hub } from "../src/extension/hub.ts";
+import * as images from "../src/extension/images.ts";
 
 function setup(idle = true) {
 	const ctx = {
@@ -229,10 +230,10 @@ it.each(["prompt", "steer", "followUp"] as const)("delivers image content arrays
 	const { handlers, pi } = setup(mode === "prompt");
 	const image = { type: "image", mimeType: "image/jpeg", data: "YQ==" } as const;
 	for (const text of ["describe", ""]) {
-		expect(await handlers.prompt({ text, images: [image], ...(mode === "prompt" ? {} : { deliverAs: mode }) })).toEqual(
-			{ deliveredAs: mode },
-		);
-		expect(pi.sendUserMessage).toHaveBeenLastCalledWith([...(text ? [{ type: "text", text }] : []), image], {
+		expect(
+			await handlers.prompt({ text, images: [image, image], ...(mode === "prompt" ? {} : { deliverAs: mode }) }),
+		).toEqual({ deliveredAs: mode });
+		expect(pi.sendUserMessage).toHaveBeenLastCalledWith([...(text ? [{ type: "text", text }] : []), image, image], {
 			...(mode === "prompt" ? {} : { deliverAs: mode }),
 			expandPromptTemplates: false,
 		});
@@ -311,4 +312,51 @@ it("rejects image attachments on extension commands instead of silently discardi
 		}),
 	).toThrow("画像を添付できません");
 	expect(pi.sendUserMessage).not.toHaveBeenCalled();
+});
+
+it("retrieves all original image indices from current-session user/tool entries, including off-branch", async () => {
+	const image = { type: "image", mimeType: "image/gif", data: "YQ==" };
+	const entries = {
+		user: {
+			type: "message",
+			message: { role: "user", content: [{ type: "text", text: "hi" }, image, { ...image, data: "Yg==" }] },
+		},
+		tool: { type: "message", message: { role: "toolResult", content: [image] } },
+		assistant: { type: "message", message: { role: "assistant", content: [image] } },
+		other: { type: "custom_message", content: [image] },
+	};
+	const { handlers, ctx } = setup();
+	Object.assign(ctx, { sessionManager: { getEntry: (id: keyof typeof entries) => entries[id] } });
+	expect(await handlers.entry_image({ entryId: "user", index: 1 })).toEqual({
+		image: { mimeType: "image/gif", data: "Yg==" },
+	});
+	expect(await handlers.entry_image({ entryId: "tool", index: 0 })).toEqual({
+		image: { mimeType: "image/gif", data: "YQ==" },
+	});
+	for (const [entryId, index] of [
+		["missing", 0],
+		["assistant", 0],
+		["other", 0],
+		["user", 2],
+	] as const)
+		await expect(handlers.entry_image({ entryId, index })).rejects.toMatchObject({ code: "not_found" });
+});
+
+it("forwards thumbnail mode to the shared entry image resizer", async () => {
+	const { handlers, ctx } = setup();
+	Object.assign(ctx, {
+		sessionManager: {
+			getEntry: () => ({
+				type: "message",
+				message: { role: "user", content: [{ type: "image", mimeType: "image/png", data: "YQ==" }] },
+			}),
+		},
+	});
+	const resize = vi
+		.spyOn(images, "viewImage")
+		.mockResolvedValue({ mimeType: "image/jpeg", data: "Yg==", width: 320, height: 160 });
+	expect(await handlers.entry_image({ entryId: "entry", index: 0, thumbnail: true })).toMatchObject({
+		image: { width: 320, height: 160 },
+	});
+	expect(resize).toHaveBeenCalledWith(Buffer.from("YQ==", "base64"), "image/png", true);
 });

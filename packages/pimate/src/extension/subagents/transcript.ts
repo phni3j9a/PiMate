@@ -22,7 +22,8 @@ function item(message: unknown, id: string, task?: string): TranscriptItem | nul
 		(m.role === "user" && (content(m) === task || content(m) === `Task: ${task}`))
 	)
 		return null;
-	return normalizeMessage(m, id);
+	// Child images have no entry_image endpoint and must not crowd out the bounded transcript text.
+	return normalizeMessage(m, id, 0);
 }
 export function exampleTranscript(messages: unknown[], task: string | undefined, cursor?: string): SubagentTranscript {
 	let offset = 0;
