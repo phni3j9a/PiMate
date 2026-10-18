@@ -28,6 +28,7 @@
  *   offline?s=20          cut connections and refuse new ones for s seconds
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
  *   auth?complete=1       finish fake Codex auth; also expire, fail=1|0, saving=ms, refresh=1|0, old=1|0, oldHost=1|0, badurl=1|0
+ *   images?old=1&hold=1    synthetic image history; old hides image capabilities, hold queues prompts (defaults: 0)
  *   pair                  print a fresh pairing link
  *   quota?source=claude|codex&p=85[&reset=60]  a newer PC-wide quota reaches every Pi (5h window, reset in s)
  *
@@ -49,6 +50,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { crc32, deflateSync } from "node:zlib";
 
 // ------------------------------------------------------------------ options & persisted state
 
@@ -544,7 +546,19 @@ class Peer {
 			if (request.method === "prompt") {
 				const text = String(request.params?.text ?? "");
 				const images = request.params?.images ?? [];
-				if (inst.turn) {
+				log(
+					"prompt metadata",
+					JSON.stringify({
+						textLength: text.length,
+						imageCount: images.length,
+						images: images.map((image) => ({
+							mimeType: image.mimeType,
+							bytes: Buffer.from(image.data, "base64").length,
+						})),
+						deliverAs: request.params?.deliverAs,
+					}),
+				);
+				if (inst.turn || inst.imageHold) {
 					inst.followUps.push({ text, images });
 					const deliveredAs = request.params?.deliverAs === "steer" ? "steer" : "followUp";
 					reply({ type: "response", id: request.id, ok: true, result: { deliveredAs } });
@@ -778,6 +792,20 @@ function switchSession(id, reason, session, items) {
 /** Each returns { result } or { error, message }. */
 const RC = {
 	...AUTH_RC,
+	entry_image(id, { entryId, index, thumbnail = false }) {
+		const inst = instances.get(id);
+		const item = inst.items.find((item) => item.entryId === entryId);
+		if (!item || !Number.isInteger(index) || index < 0 || index >= (item.imageCount ?? 0))
+			return { error: "not_found" };
+		log("entry_image", JSON.stringify({ entryId, index, thumbnail }));
+		const image = entryId.startsWith("qa-") ? syntheticImage(index, thumbnail) : item.images?.[index];
+		return image ? { result: { image } } : { error: "not_found" };
+	},
+	file_image(_id, { path, thumbnail = false }) {
+		log("file_image", JSON.stringify({ path, thumbnail }));
+		if (path !== "/home/dev/qa-image.png") return { error: "not_found" };
+		return { result: { image: syntheticImage(2, thumbnail) } };
+	},
 	models(id) {
 		return { result: { models: MODELS, current: instances.get(id).model, scoped } };
 	},
@@ -929,6 +957,7 @@ function snapshot(id) {
 	return {
 		protocol: 1,
 		promptImages: true,
+		...(inst.oldImages ? {} : { promptImageLimit: 4, entryImages: true, fileImages: true }),
 		providerAuth: !authOptions.old,
 		instanceId: id,
 		pid: 4242,
@@ -1982,6 +2011,86 @@ function devSubagents(kind, id) {
 	}
 }
 
+// ------------------------------------------------------------------ synthetic image QA (no files or private photos)
+
+/** Numbered-by-colour checkerboards: large originals make zoom/pan observable. */
+function syntheticImage(index, thumbnail = false) {
+	const width = thumbnail ? 240 : 1200;
+	const height = thumbnail ? 160 : 800;
+	const rgb = [
+		[225, 75, 65],
+		[45, 155, 90],
+		[40, 100, 220],
+		[220, 155, 30],
+		[155, 65, 190],
+		[20, 170, 180],
+	][index % 6];
+	const rows = Buffer.alloc((width * 3 + 1) * height);
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			const dim = (Math.floor(x / (width / 8)) + Math.floor(y / (height / 8))) % 2 ? 0.55 : 1;
+			for (let c = 0; c < 3; c++) rows[y * (width * 3 + 1) + 1 + x * 3 + c] = rgb[c] * dim;
+		}
+	}
+	const chunk = (type, data) => {
+		const body = Buffer.concat([Buffer.from(type), data]);
+		const result = Buffer.alloc(body.length + 8);
+		result.writeUInt32BE(data.length);
+		body.copy(result, 4);
+		result.writeUInt32BE(crc32(body), body.length + 4);
+		return result;
+	};
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(width);
+	header.writeUInt32BE(height, 4);
+	header[8] = 8;
+	header[9] = 2;
+	const png = Buffer.concat([
+		Buffer.from("89504e470d0a1a0a", "hex"),
+		chunk("IHDR", header),
+		chunk("IDAT", deflateSync(rows)),
+		chunk("IEND", Buffer.alloc(0)),
+	]);
+	return { mimeType: "image/png", data: png.toString("base64") };
+}
+
+function imageHistory() {
+	return [
+		{
+			kind: "user",
+			entryId: "qa-user",
+			text: "QA: user 6 images (red, green, blue, gold, purple, cyan)",
+			images: [syntheticImage(0, true), syntheticImage(2, true)],
+			imageIndices: [0, 2],
+			imageCount: 6,
+		},
+		{
+			kind: "assistant",
+			entryId: "qa-call",
+			text: "",
+			toolCalls: [{ id: "qa-tool", name: "read", args: { path: "qa-images" } }],
+		},
+		{
+			kind: "tool_result",
+			entryId: "qa-result",
+			toolCallId: "qa-tool",
+			toolName: "read",
+			text: "QA: six synthetic tool images",
+			isError: false,
+			images: [syntheticImage(1, true), syntheticImage(3, true)],
+			imageIndices: [1, 3],
+			imageCount: 6,
+		},
+		{
+			kind: "assistant",
+			entryId: "qa-markdown",
+			toolCalls: [],
+			stopReason: "stop",
+			text: `QA Markdown images\n\nHTTPS:\n\n![HTTPS synthetic placeholder](https://placehold.co/600x400/png)\n\nData URI:\n\n![Data checkerboard](data:image/png;base64,${syntheticImage(1, true).data})\n\nPC path:\n\n![PC checkerboard](/home/dev/qa-image.png)\n\nEnd of image QA.`,
+		},
+	];
+}
+
 // ------------------------------------------------------------------ HTTP
 
 const server = createServer((req, res) => {
@@ -2020,6 +2129,16 @@ const server = createServer((req, res) => {
 		const id = url.searchParams.get("i") ?? [...instances.keys()][0];
 		const inst = instances.get(id);
 		switch (cmd) {
+			case "images": {
+				if (!inst) return reply(404, {});
+				abortTurn(id);
+				inst.oldImages = url.searchParams.get("old") === "1";
+				inst.imageHold = url.searchParams.get("hold") === "1";
+				inst.followUps = [];
+				switchSession(id, "resume", { id: `sess-images-${Date.now()}`, name: "Images QA" }, imageHistory());
+				setStatus(id, inst.imageHold ? "running" : "idle");
+				return reply(200, { ok: true, old: inst.oldImages, hold: inst.imageHold });
+			}
 			case "quota": {
 				// Issue #59: the RC shares the newest PC-wide snapshot, so every instance gets the same event.
 				const source = url.searchParams.get("source") === "codex" ? "codex" : "claude";
