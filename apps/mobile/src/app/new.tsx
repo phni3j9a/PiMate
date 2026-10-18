@@ -1,5 +1,5 @@
 /** Start a new Pi on a paired machine (docs/design/html/New-Pi.html). */
-import type { FolderInfo, ModelInfo, ModelRef, ThinkingLevel } from "@pimate/protocol";
+import type { FolderInfo, ModelDefault, ModelInfo, ModelRef, ThinkingLevel } from "@pimate/protocol";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
@@ -26,7 +26,15 @@ import type { HostRuntime } from "@/lib/store";
 import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
 
 type Folders = { home: string; folders: FolderInfo[] } | { error: string } | null;
-type Models = { models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] } | null | "loading";
+type Models =
+	| {
+			models: ModelInfo[];
+			current: ModelRef | null;
+			scoped?: ModelRef[];
+			default?: ModelDefault;
+	  }
+	| null
+	| "loading";
 
 const close = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
@@ -99,7 +107,13 @@ export default function NewPiScreen() {
 	};
 
 	const modelList = models && models !== "loading" ? models.models : null;
-	const label = model ? (modelLabel(model, thinking, modelList) ?? model.id) : "Pi の既定";
+	const saved = models && models !== "loading" ? models.default : undefined;
+	const savedLabel = saved?.model ? modelLabel(saved.model, saved.thinking, modelList) : null;
+	const label = model
+		? (modelLabel(model, thinking, modelList) ?? model.id)
+		: savedLabel
+			? `Pi の既定（${savedLabel}）`
+			: "Pi の既定";
 	const cwd = path.trim();
 	const canStart = connected && !!cwd && !busy;
 
@@ -331,6 +345,7 @@ function ModelPicker({
 }) {
 	const list = models && models !== "loading" ? models.models : null;
 	const scoped = models && models !== "loading" ? models.scoped : undefined;
+	const saved = models && models !== "loading" ? models.default : undefined;
 	const [query, setQuery] = useState("");
 	// Favorites (Pi's scoped models) first, as in the model sheet; starring is done there.
 	const [choice, setScope] = useState<ModelScope | null>(null);
@@ -387,7 +402,11 @@ function ModelPicker({
 			{query.trim() ? null : (
 				<PickRow
 					title="Pi の既定"
-					sub="PC の Pi の設定に従います"
+					sub={
+						saved?.model
+							? (modelLabel(saved.model, saved.thinking, list) ?? saved.model.id)
+							: "PC の Pi の設定に従います"
+					}
 					selected={!model}
 					onPress={() => onPick(null, null)}
 				/>
@@ -443,7 +462,9 @@ function ModelPicker({
 							);
 						})}
 					</View>
-					<Text style={[styles.muted, { marginTop: 6 }]}>選ばない場合は Pi の既定のレベルになります</Text>
+					<Text style={[styles.muted, { marginTop: 6 }]}>
+						選ばない場合は Pi の既定のレベル{saved?.thinking ? `（${saved.thinking}）` : ""}になります
+					</Text>
 				</>
 			) : null}
 		</ScrollView>

@@ -7,7 +7,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { type ModelRef, slashCommandName } from "@pimate/protocol";
+import { type ModelDefault, type ModelRef, slashCommandName } from "@pimate/protocol";
 import { createProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
@@ -34,6 +34,15 @@ async function scopedModels(pi: ExtensionAPI, ctx: ExtensionContext): Promise<Mo
 	const runtime = { getAvailable: async () => ctx.modelRegistry.getAvailable() };
 	const { scopedModels } = await resolveModelScopeWithDiagnostics(disk, runtime as never);
 	return scopedModels.map((s) => ref(s.model));
+}
+
+/** Global settings only: that is what Pi's /model "set as default" writes and what new Pis elsewhere start with. */
+function modelDefault(settings: SettingsManager): ModelDefault {
+	const g = settings.getGlobalSettings();
+	return {
+		model: g.defaultProvider && g.defaultModel ? { provider: g.defaultProvider, id: g.defaultModel } : null,
+		thinking: g.defaultThinkingLevel ?? null,
+	};
 }
 
 export function createHandlers(h: Hub): Handlers {
@@ -168,7 +177,19 @@ export function createHandlers(h: Hub): Handlers {
 					thinkingLevels: getSupportedThinkingLevels(model),
 				})),
 				current: ctx.model ? { provider: ctx.model.provider, id: ctx.model.id } : null,
+				default: modelDefault(SettingsManager.create(ctx.cwd, getAgentDir())),
 			};
+		},
+		set_default_model: async (p) => {
+			const { ctx } = ready();
+			const { provider, id } = p.model;
+			if (!ctx.modelRegistry.getAvailable().some((m) => m.provider === provider && m.id === id))
+				throw new RcError("not_found", "Model not found");
+			const settings = SettingsManager.create(ctx.cwd, getAgentDir());
+			settings.setDefaultModelAndProvider(provider, id);
+			if (p.thinking) settings.setDefaultThinkingLevel(p.thinking);
+			await settings.flush();
+			return { default: modelDefault(settings) };
 		},
 		set_scoped_models: async (p) => {
 			const { pi, ctx } = ready();

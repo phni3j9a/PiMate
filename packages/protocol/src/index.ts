@@ -39,6 +39,12 @@ export interface ModelRef {
 	id: string;
 }
 
+/** Pi's global default for new Pis (`defaultProvider`/`defaultModel`/`defaultThinkingLevel`, as Pi's /model "set as default"). */
+export interface ModelDefault {
+	model: ModelRef | null;
+	thinking: ThinkingLevel | null;
+}
+
 export interface Usage {
 	input: number;
 	output: number;
@@ -358,8 +364,10 @@ export interface RcMethods extends AuthMethods {
 	/** `scoped`: Pi's scoped models (`enabledModels` / `/scoped-models`, the PiMate "favorites"); empty = no filter. */
 	models: {
 		params: Record<string, never>;
-		result: { models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] };
+		result: { models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[]; default: ModelDefault };
 	};
+	/** Saves Pi's global default for new Pis; `thinking` omitted keeps the saved default level. */
+	set_default_model: { params: { model: ModelRef; thinking?: ThinkingLevel }; result: { default: ModelDefault } };
 	/** Saves the scoped models to Pi's global settings (`enabledModels`); empty = all models. */
 	set_scoped_models: { params: { models: ModelRef[] }; result: { scoped: ModelRef[] } };
 	/** Saved sessions of the instance's cwd, newest first. */
