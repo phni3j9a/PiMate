@@ -55,6 +55,14 @@ export default function RootLayout() {
 				<Stack.Screen name="tree" />
 				<Stack.Screen name="subagent" />
 				<Stack.Screen name="notification" />
+				<Stack.Screen
+					name="image-viewer"
+					options={{
+						presentation: "transparentModal",
+						animation: "fade",
+						contentStyle: { backgroundColor: "transparent" },
+					}}
+				/>
 			</Stack>
 		</GestureHandlerRootView>
 	);
