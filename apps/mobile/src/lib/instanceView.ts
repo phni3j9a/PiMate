@@ -61,6 +61,7 @@ export interface InstanceView {
 	promptImages?: boolean;
 	promptImageLimit?: number;
 	entryImages?: boolean;
+	fileImages?: boolean;
 	sessionTree?: boolean;
 	slashCommands?: boolean;
 	error?: { code: string; message?: string };
@@ -225,6 +226,7 @@ function applySubscribed(
 		promptImages: snapshot.promptImages === true,
 		promptImageLimit: snapshot.promptImageLimit,
 		entryImages: snapshot.entryImages === true,
+		fileImages: snapshot.fileImages === true,
 		sessionTree: snapshot.sessionTree === true,
 		slashCommands: snapshot.slashCommands === true,
 		model: snapshot.model,

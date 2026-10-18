@@ -340,6 +340,14 @@ it("validates entry_image indices and file_image paths", () => {
 		...[-1, 0.1, NaN, Infinity, "0", Number.MAX_SAFE_INTEGER + 1].map((index) => ({ entryId: "entry", index })),
 	])
 		expect(() => validateRequest({ id: "image", method: "entry_image", params })).toThrow("Invalid params");
+	for (const thumbnail of [undefined, false, true])
+		expect(() =>
+			validateRequest({ id: "image", method: "file_image", params: { path: "image.png", thumbnail } }),
+		).not.toThrow();
+	for (const thumbnail of [0, 1, "true", null, []])
+		expect(() =>
+			validateRequest({ id: "image", method: "file_image", params: { path: "image.png", thumbnail } }),
+		).toThrow("Invalid params");
 	for (const path of ["image.png", "/absolute", "~/image", "file:///tmp/image"])
 		expect(validateRequest({ id: "image", method: "file_image", params: { path } }).method).toBe("file_image");
 	for (const path of [undefined, "", 42, "bad\0path"])

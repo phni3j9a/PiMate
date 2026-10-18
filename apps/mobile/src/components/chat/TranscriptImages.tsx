@@ -2,7 +2,7 @@ import type { TranscriptImages as Images, ViewImage } from "@pimate/protocol";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { entryImageSources, imageTiles } from "@/lib/entryImages";
-import { openImageViewer, type ViewerImage } from "@/lib/imageViewer";
+import { type LazyViewImage, openImageViewer } from "@/lib/imageViewer";
 import { colors, radii } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
 
@@ -55,7 +55,7 @@ function ImageTile({
 	compact,
 	onPress,
 }: {
-	image: ViewerImage;
+	image: LazyViewImage;
 	index: number;
 	more?: number;
 	compact: boolean;

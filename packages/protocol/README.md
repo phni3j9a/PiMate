@@ -22,9 +22,9 @@
 ### 表示用画像の取得
 
 - `InstanceSnapshot.entryImages === true`: `entry_image { entryId: string, index: number, thumbnail?: boolean }`。index は0以上の整数、元画像の index（preview の位置ではない）。現在セッション内の user / toolResult のみ。別の枝も取得可能。存在しない entry / index は `not_found`。
-- `InstanceSnapshot.fileImages === true`: `file_image { path: string }`。セッション cwd 相対、絶対、`~/`、`file://` URL を許可。symlink の先も含む通常ファイルを最大20 MiB読み、magic bytes で JPEG / PNG / WebP / GIF を判定。存在しないパスは `not_found`、読み取り不可・非通常ファイル・未対応形式・サイズ超過は `unsupported`。ユーザーが明示要求する PC ファイルに sandbox 制限はありません。
+- `InstanceSnapshot.fileImages === true`: `file_image { path: string, thumbnail?: boolean }`。セッション cwd 相対、絶対、`~/`、`file://` URL を許可。symlink の先も含む通常ファイルを最大20 MiB読み、magic bytes で JPEG / PNG / WebP / GIF を判定。存在しないパスは `not_found`、読み取り不可・非通常ファイル・未対応形式・サイズ超過は `unsupported`。認証済みスマホが要求するPCファイルにsandbox制限はありません。対応モバイルではassistantのMarkdownに含まれるパスも自動取得します。
 - 両メソッドの結果は `{ image: ViewImage }`。`ViewImage = { mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: string, width?: number, height?: number }`。`data` は data URI ではない base64。2 MiB decoded 以下は原本、それを超えると Pi の `resizeImage` で最大2048px・2 MiB以下へ縮小し寸法を付けます。GIF の縮小は静止画になる場合があります。
-- `entry_image` の `thumbnail: true` は小さい原本でも Pi の resize を必ず呼び、最大320px・decoded 64 KiB以下を目標にします（JPEG品質60、PiがPNGを選ぶ場合もあります）。resizeが使えない場合の原本fallbackは512 KiBまで、それ以上は `unsupported`。省略 / false は従来の全画面用画像です。
+- `entry_image` / `file_image` の `thumbnail: true` は小さい原本でも Pi の resize を必ず呼び、最大320px・decoded 64 KiB以下を目標にします（JPEG品質60、PiがPNGを選ぶ場合もあります）。resizeが使えない場合の原本fallbackは512 KiBまで、それ以上は `unsupported`。省略 / false は従来の全画面用画像です。
 - 全画面用の resize API / codec が使えなければ5 MiB以下の原本へ fallback、それ以上は `unsupported`。5 MiB decoded は base64化後も Host の8 MiB送信制限に収まります。入力の絶対上限は20 MiB。
 - 取得時も `expectInstanceId` / `expectSessionId` を使い、セッション変更後の別画像取得を防ぎます。子エージェント画像は対象外です。
 

@@ -7,7 +7,9 @@ import { router } from "expo-router";
 import { Keyboard } from "react-native";
 
 /** A loaded image, or one fetched when its page is first shown (spinner, then 「画像を読み込めません」 on rejection). */
-export type ViewerImage = ViewImage | { load: () => Promise<ViewImage> };
+export type UriImage = { uri: string };
+export type LazyViewImage = ViewImage | { load: () => Promise<ViewImage> };
+export type ViewerImage = LazyViewImage | UriImage;
 
 export interface ViewerRequest {
 	images: readonly ViewerImage[];

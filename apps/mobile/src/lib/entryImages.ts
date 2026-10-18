@@ -1,5 +1,5 @@
 import type { PromptImage, TranscriptImages, ViewImage } from "@pimate/protocol";
-import type { ViewerImage } from "./imageViewer";
+import type { LazyViewImage } from "./imageViewer";
 
 export const MAX_IMAGE_CACHE_BYTES = 24 * 1024 * 1024;
 const MAX_VIEW_BYTES = 5 * 1024 * 1024;
@@ -91,7 +91,7 @@ export function imageTiles(count: number): { index: number; more?: number }[] {
 export function entryImageSources(
 	item: TranscriptImages,
 	load?: (index: number, thumbnail: boolean) => Promise<ViewImage>,
-): { gallery: ViewerImage[]; thumbnails: ViewerImage[] } {
+): { gallery: LazyViewImage[]; thumbnails: LazyViewImage[] } {
 	const slots = imageSlots(item);
 	if (!load) {
 		const inline = slots.filter((image) => image !== undefined);

@@ -65,7 +65,7 @@ export function createHandlers(h: Hub): Handlers {
 			if (image.data.length > Math.ceil(MAX_FILE_IMAGE_BYTES / 3) * 4) throw new RcError("unsupported");
 			return { image: await viewImage(Buffer.from(image.data, "base64"), image.mimeType, p.thumbnail) };
 		},
-		file_image: async (p) => ({ image: await fileImage(p.path, ready().ctx.cwd) }),
+		file_image: async (p) => ({ image: await fileImage(p.path, ready().ctx.cwd, p.thumbnail) }),
 		session_tree: () => normalizeTree(ready().ctx.sessionManager),
 		set_label: (p) => {
 			const { pi, ctx } = ready();

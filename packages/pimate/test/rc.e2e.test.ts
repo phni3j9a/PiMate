@@ -150,6 +150,10 @@ it.skipIf(!pi || !abduco)(
 			expect(await client.request("file_image", { path: "read-image.png" })).toEqual({
 				image: { mimeType: "image/png", data: image.data },
 			});
+			const fileThumbnail = await client.request("file_image", { path: "read-image.png", thumbnail: true });
+			expect(fileThumbnail.image.width).toBeLessThanOrEqual(320);
+			expect(fileThumbnail.image.height).toBeLessThanOrEqual(320);
+			expect(Buffer.byteLength(fileThumbnail.image.data, "base64")).toBeLessThanOrEqual(64 * 1024);
 			await expect(client.request("file_image", { path: "missing.png" })).rejects.toMatchObject({ code: "not_found" });
 			writeFileSync(
 				join(dir, "large-image.txt"),

@@ -94,7 +94,7 @@ export function validateRequest(value: unknown): Request {
 			ok = str("entryId", true) && Number.isSafeInteger(p.index) && (p.index as number) >= 0 && bool("thumbnail");
 			break;
 		case "file_image":
-			ok = str("path", true) && !(p.path as string).includes("\0");
+			ok = str("path", true) && !(p.path as string).includes("\0") && bool("thumbnail");
 			break;
 		case "sessions":
 			ok = p.limit === undefined || (Number.isSafeInteger(p.limit) && (p.limit as number) > 0);

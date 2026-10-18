@@ -18,7 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
-import type { ViewerImage } from "@/lib/imageViewer";
+import type { UriImage, ViewerImage } from "@/lib/imageViewer";
 import { clamp, DOUBLE_TAP_SCALE, fittedSize, MAX_SCALE, maxOffset, type Size, zoomAround } from "@/lib/zoom";
 import { sizes } from "@/theme/tokens";
 import { CloseIcon } from "../icons";
@@ -110,8 +110,16 @@ function ViewerPage({
 	onDismiss: () => void;
 }) {
 	const loaded = useLoadedImage(image);
-	const [failed, setFailed] = useState(false);
-	const uri = typeof loaded === "object" ? `data:${loaded.mimeType};base64,${loaded.data}` : null;
+	const [failed, setFailed] = useState<string | null>(null);
+	const [displayed, setDisplayed] = useState<string | null>(null);
+	const uri =
+		typeof loaded === "object"
+			? "uri" in loaded
+				? loaded.uri
+				: `data:${loaded.mimeType};base64,${loaded.data}`
+			: null;
+
+	const source = useMemo(() => ({ uri: uri ?? undefined }), [uri]);
 
 	const content = useSharedValue<Size>(box);
 	const scale = useSharedValue(1);
@@ -216,19 +224,25 @@ function ViewerPage({
 
 	return (
 		<View style={{ width: box.width, height: box.height }}>
-			{uri && !failed ? (
+			{uri && failed !== uri ? (
 				<GestureDetector gesture={gesture}>
 					<Animated.View style={[styles.fill, imageStyle]}>
 						<Image
-							source={{ uri }}
-							style={styles.fill}
+							source={source}
+							style={[styles.fill, displayed !== uri && { opacity: 0 }]}
 							contentFit="contain"
 							cachePolicy="none"
 							recyclingKey={uri}
 							accessibilityLabel={label}
-							onLoad={(e) => content.set(fittedSize(box, e.source))}
-							onError={() => setFailed(true)}
+							onLoad={(e) => {
+								content.set(fittedSize(box, e.source));
+								setDisplayed(uri);
+							}}
+							onError={() => setFailed(uri)}
 						/>
+						{displayed !== uri ? (
+							<ActivityIndicator style={StyleSheet.absoluteFill} color={FOREGROUND} accessibilityLabel="読み込み中" />
+						) : null}
 					</Animated.View>
 				</GestureDetector>
 			) : (
@@ -245,7 +259,7 @@ function ViewerPage({
 }
 
 /** The image of a page; a `load()` item is fetched when its page is first rendered (pages near the visible one). */
-function useLoadedImage(image: ViewerImage): ViewImage | "loading" | "failed" {
+function useLoadedImage(image: ViewerImage): ViewImage | UriImage | "loading" | "failed" {
 	const [result, setResult] = useState<ViewImage | "loading" | "failed">("loading");
 	useEffect(() => {
 		if (!("load" in image)) return;
