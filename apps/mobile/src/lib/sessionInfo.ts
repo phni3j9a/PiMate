@@ -149,7 +149,7 @@ export interface QuotaGroup {
 	name: string;
 	/** null: this source has not been seen on this PC yet. */
 	observed: string | null;
-	/** The ring: the most-used window still in effect; null when nothing current is known (never shown as 0%). */
+	/** The ring: the shortest window (5h; 7d when there is no 5h, e.g. ChatGPT Pro); null once it has reset or nothing is known (never shown as 0%). */
 	gauge: number | null;
 	/** `percent` is null once the reset time has passed: the old figure no longer applies. */
 	windows: { key: string; label: string; percent: number | null; reset: string }[];
@@ -173,12 +173,12 @@ export function quotaGroups(quotas: readonly SubscriptionQuota[] | null, now: nu
 							: `${clockTime(w.resetsAt, now)} にリセット（${timeLeft(w.resetsAt, now)}）`,
 			};
 		});
-		const current = windows.flatMap((w) => (w.percent === null ? [] : [w.percent]));
 		return {
 			source,
 			name: QUOTA_NAMES[source],
 			observed: q ? `${clockTime(q.observedAt, now)} 取得` : null,
-			gauge: current.length ? Math.max(...current) : null,
+			// Windows arrive sorted shortest first.
+			gauge: windows[0]?.percent ?? null,
 			windows,
 		};
 	});

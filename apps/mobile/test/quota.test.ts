@@ -81,7 +81,13 @@ describe("subscription quota view", () => {
 			now,
 		);
 		expect(groups.map((g) => g.name)).toEqual(["Claude", "Codex"]);
-		expect(groups.map((g) => g.gauge)).toEqual([65, 100]);
+		// The ring follows the 5h window, even when 7d is higher or 5h has just reset.
+		expect(groups.map((g) => g.gauge)).toEqual([null, 12]);
+		// Without a 5h window (ChatGPT Pro), the weekly one.
+		expect(
+			quotaGroups([{ source: "codex", observedAt: now, windows: [{ minutes: 10080, usedPercent: 40 }] }], now)[1]
+				?.gauge,
+		).toBe(40);
 		expect(groups[0]).toMatchObject({
 			observed: "7:52 取得",
 			windows: [
