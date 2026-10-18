@@ -4,7 +4,7 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.6 / PCパッケージ0.1.8 です。利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.7 / PCパッケージ0.1.9 です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
@@ -88,7 +88,7 @@ M5c（アプリ / Host 0.1.1）:
 - 入力欄の「＋」で OS の写真ピッカーを開き、RC の `promptImageLimit` まで追加できます（新 RC は最大4枚、limit 未指定の旧 RC は1枚）。選択上限は残り枚数。各サムネイルの × で個別に削除できます。古い Android では OS が画像に絞ったファイル選択画面を開く場合もあります。カメラ撮影・一般ファイルの添付・子への画像送信はありません。
 - 選択後は長辺最大1600pxの JPEG に変換し、1枚512 KiB・合計600 KiB以内に収めます。既存の添付は変更せず、残り容量を新しい画像に均等配分し、収まるまで寸法・品質を段階的に下げます（最小320px・品質0.3）。それでも超える場合は説明を出し、選択前の添付を保持します。画像だけでも本文つきでも送信でき、画像つきの本文は 32,768 文字以内。準備中は送信できません。
 - 作業中も常に「割り込む」です。画像は受付通知と反映までの「割り込み待ち」を表示し、本文には Pi の実履歴が届いた画像を表示します。Pi が画像や寸法注記を変換することがあるため、仮の送信済み表示は残しません。送信先のセッションが変わった画像だけの下書きにも確認が必要です。写真選択中に送信先が変わった場合は、遅れて返った写真を添付しません。
-- 複数画像送信・履歴画像取得には次のアプリ / PC パッケージリリースが必要です。従来の1枚添付は Android 0.1.3 / PC パッケージ0.1.4以降。PC 側 RC の `snapshot.promptImages === true` が必須。未対応の RC では画像を送らず、PC パッケージ更新と Pi 再起動を案内します（Host の再起動だけでは既存 Pi の RC は更新されません）。テキストのみの送信は従来どおり。選択中のモデルも画像対応である必要があります。
+- 複数画像送信・履歴画像取得には Android 0.1.7 / PC パッケージ0.1.9以上が必要です。従来の1枚添付は Android 0.1.3 / PC パッケージ0.1.4以降。PC 側 RC の `snapshot.promptImages === true` が必須。未対応の RC では画像を送らず、PC パッケージ更新と Pi 再起動を案内します（Host の再起動だけでは既存 Pi の RC は更新されません）。テキストのみの送信は従来どおり。選択中のモデルも画像対応である必要があります。
 - 失敗・届いたか不明な場合は本文と画像を保持し、自動再送しません。成功確認前に履歴へ挿入しません。返信待ちに下書きを編集した場合、送信済みの本文・画像と両方一致しない限り消しません。
 - 通信切断で結果が未確認の画像は、Pi が再変換すると自動照合できない場合があります。履歴のpreviewが部分的な場合も同様です。その場合は下書きを保持し、手動の履歴確認を案内します。全画像を元index順に並べて厳密一致できた場合だけ照合し、画像や本文の類似だけで配信済みと推測しません。
 - 履歴は user / tool_result の全画像を対象に、最大2×2のサムネイルgrid（5枚以上なら最後が「+N」）を表示します。tool画像は出力の展開ボタンの直下に置き、出力もターン全体も展開せず見られます。`imageIndices` で preview を元の画像位置へ配置し、欠けた画像はplaceholderにします。
@@ -135,7 +135,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.6.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.7.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -155,14 +155,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.6.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.7.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.6 apps/mobile/dist/pimate-0.1.6.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.6' --notes-file <リリースノート>
+gh release create app-v0.1.7 apps/mobile/dist/pimate-0.1.7.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.7' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
