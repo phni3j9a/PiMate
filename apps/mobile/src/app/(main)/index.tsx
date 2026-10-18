@@ -1,5 +1,5 @@
 /** Chat with the selected Pi instance (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
-import type { SubagentRun } from "@pimate/protocol";
+import type { SubagentRun, ViewImage } from "@pimate/protocol";
 import { router, useIsFocused, useNavigation } from "expo-router";
 import { useDrawerStatus } from "expo-router/drawer";
 import { DrawerActions } from "expo-router/react-navigation";
@@ -19,6 +19,7 @@ import { CommandPalette } from "@/components/chat/CommandPalette";
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
+import { EntryImageContext } from "@/components/chat/TranscriptImages";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { UsageGauges } from "@/components/chat/UsageGauges";
 import { ArrowDownIcon, MenuIcon, MoreIcon } from "@/components/icons";
@@ -30,8 +31,9 @@ import { UsageSheet } from "@/components/sheets/UsageSheet";
 import { IconButton, TextButton } from "@/components/ui";
 import { useAppState, useKeyboardVisible, useNow } from "@/lib/hooks";
 import { notificationVisibility } from "@/lib/notificationRuntime";
-import { pickImage } from "@/lib/pickImage";
+import { pickImages } from "@/lib/pickImage";
 import { chatStatus, chatTitle } from "@/lib/presentation";
+import { promptImageLimit } from "@/lib/promptImages";
 import { appStore } from "@/lib/runtime";
 import { modelLabel } from "@/lib/sessionInfo";
 import { draftKey } from "@/lib/store";
@@ -111,7 +113,8 @@ export default function ChatScreen() {
 
 	const key = selection ? draftKey(selection) : null;
 	const draft = key ? (drafts[key] ?? "") : "";
-	const image = key ? attachments[key]?.[0] : undefined;
+	const images = key ? (attachments[key] ?? []) : [];
+	const imageLimit = promptImageLimit(view);
 	const attachImage = async () => {
 		const target = appStore.opTarget();
 		if (!target || pickingRef.current) return;
@@ -119,9 +122,9 @@ export default function ChatScreen() {
 		setPicking(true);
 		setImageError(null);
 		try {
-			const picked = await pickImage();
-			if (picked && !appStore.setImages([picked], target))
-				setImageError("送信先が変わったため画像を添付しませんでした。もう一度選んでください。");
+			const picked = await pickImages(images, imageLimit);
+			if (picked && !appStore.setImages(picked, target))
+				setImageError("送信先か添付上限が変わったため画像を添付しませんでした。もう一度選んでください。");
 		} catch (error) {
 			setImageError(error instanceof Error ? error.message : "画像を読み込めませんでした。もう一度選んでください。");
 		} finally {
@@ -129,6 +132,12 @@ export default function ChatScreen() {
 			setPicking(false);
 		}
 	};
+	const loadEntryImage = useMemo(() => {
+		if (!selection || !view?.entryImages || view.phase !== "ready") return null;
+		const target = { ...selection, sessionId: view.session?.id ?? null };
+		return (entryId: string, index: number): Promise<ViewImage> => appStore.entryImage(target, entryId, index);
+	}, [selection, view?.entryImages, view?.phase, view?.session?.id]);
+
 	const sending = outbox.some((e) => e.state === "sending");
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
 	const blocker = useAppState(() => appStore.sendBlocker());
@@ -210,6 +219,14 @@ export default function ChatScreen() {
 			title: "この Pi は画像添付に未対応です",
 			text: "PC 側の PiMate を更新し Pi を再起動してください。テキストは送信できます。",
 		});
+	if (blocker === "image_count_limit")
+		banners.push({
+			key: "image-count-limit",
+			tone: "waiting",
+			icon: "error",
+			title: `この Pi に送れる画像は${imageLimit}枚までです`,
+			text: "余分な画像を削除するか、PC の PiMate を更新してください。下書きは残っています。",
+		});
 	if (blocker === "image_text_limit")
 		banners.push({
 			key: "image-text-limit",
@@ -268,9 +285,11 @@ export default function ChatScreen() {
 			<KeyboardAvoidingView style={styles.flex} behavior="padding">
 				<View style={styles.flex}>
 					{selection && view && (view.phase === "ready" || view.phase === "gone" || rows.length > 0) ? (
-						<DialogContext.Provider value={dialog}>
-							<Transcript key={key} rows={rows} runs={runs} onOpenRun={openRun} />
-						</DialogContext.Provider>
+						<EntryImageContext.Provider value={loadEntryImage}>
+							<DialogContext.Provider value={dialog}>
+								<Transcript key={key} rows={rows} runs={runs} onOpenRun={openRun} />
+							</DialogContext.Provider>
+						</EntryImageContext.Provider>
 					) : (
 						<EmptyState onOpenDrawer={openDrawer} />
 					)}
@@ -309,13 +328,18 @@ export default function ChatScreen() {
 								});
 							}}
 							attachment={{
-								image,
+								images,
+								limit: imageLimit,
 								picking,
 								disabled: !connected || view?.phase !== "ready" || view.promptImages !== true || sending,
 								onPick: () => void attachImage(),
-								onRemove: () => {
+								onRemove: (index) => {
 									const target = appStore.opTarget();
-									if (target) appStore.setImages([], target);
+									if (target)
+										appStore.setImages(
+											images.filter((_, i) => i !== index),
+											target,
+										);
 								},
 							}}
 							sendLabel={working ? "割り込む" : "送信"}
@@ -337,7 +361,7 @@ export default function ChatScreen() {
 							{subagents ? <SubagentSummaryLine summary={subagents} onPress={() => setSheet("subagents")} /> : null}
 							<QueuedRows
 								entries={queued}
-								canRestore={view?.phase === "ready" && !draft && !image}
+								canRestore={view?.phase === "ready" && !draft && !images.length && !picking}
 								sessionId={view?.session?.id}
 								onRestore={(id) => appStore.restoreOutboxDraft(id)}
 							/>

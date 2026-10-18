@@ -24,9 +24,11 @@ import type {
 	SubagentAction,
 	SubagentTranscript,
 	ThinkingLevel,
+	ViewImage,
 } from "@pimate/protocol";
 import { MAX_IMAGE_PROMPT_TEXT, type PromptImage, samePromptImages, validPromptImages } from "@pimate/protocol";
 import { type BuiltinCommand, commandIntent } from "./commands";
+import { EntryImageCache, validViewImage } from "./entryImages";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
 import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
 import {
@@ -38,6 +40,7 @@ import {
 	userEntryIds,
 } from "./instanceView";
 import { pairWithHost } from "./pairing";
+import { promptImageLimit } from "./promptImages";
 import { clearFinishedWatch } from "./subagents";
 
 export interface HostRuntime {
@@ -160,7 +163,8 @@ export type SendBlocker =
 	| "pc_prompt"
 	| "empty"
 	| "images_unsupported"
-	| "image_text_limit";
+	| "image_text_limit"
+	| "image_count_limit";
 
 export interface StoreDeps {
 	onAlert?: (hostId: string, alert: PiAlert) => void;
@@ -769,9 +773,12 @@ export class AppStore {
 	/** Reject a picker result if its original destination is no longer open. */
 	setImages(images: PromptImage[], target: OpTarget): boolean {
 		const current = this.opTarget();
+		const previousCount = current ? (this.state.attachments[draftKey(current)]?.length ?? 0) : 0;
 		if (
 			!current ||
 			!validPromptImages(images) ||
+			// An older RC may lower the limit after reconnect; still allow individual removals from that draft.
+			(images.length > (promptImageLimit(this.state.view) || 1) && images.length >= previousCount) ||
 			current.hostId !== target.hostId ||
 			current.instanceId !== target.instanceId ||
 			current.sessionId !== target.sessionId ||
@@ -805,6 +812,7 @@ export class AppStore {
 		if (view.uiPrompt) return "pc_prompt";
 		const images = this.state.attachments[draftKey(selection)] ?? [];
 		if (images.length && view.promptImages !== true) return "images_unsupported";
+		if (images.length > promptImageLimit(view)) return "image_count_limit";
 		if (images.length && (drafts[draftKey(selection)]?.length ?? 0) > MAX_IMAGE_PROMPT_TEXT) return "image_text_limit";
 		if (!drafts[draftKey(selection)]?.trim() && !images.length) return "empty";
 		return null;
@@ -1297,6 +1305,41 @@ export class AppStore {
 		const res = await this.guardedRc("sessions", { limit: 50 }, { session: false });
 		if (!res.ok) return res;
 		return { ok: true, value: (res.value.result as { sessions?: SessionListItem[] }).sessions ?? [] };
+	}
+
+	private readonly entryImageCache = new EntryImageCache();
+
+	/** Display-only images: target-bound, shared in-flight and retained only in a bounded memory LRU. */
+	async entryImage(target: OpTarget, entryId: string, index: number): Promise<ViewImage> {
+		const current = () => {
+			const now = this.opTarget();
+			return (
+				now?.hostId === target.hostId && now.instanceId === target.instanceId && now.sessionId === target.sessionId
+			);
+		};
+		if (!current() || this.state.view?.phase !== "ready")
+			throw new Error("会話が変わりました。チャットを開き直してください。");
+		if (this.state.view.entryImages !== true) throw new Error("PC の PiMate を更新してください。");
+		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, entryId, index]);
+		const image = await this.entryImageCache.load(key, async () => {
+			if (!current()) throw new Error("会話が変わりました。");
+			const res = await this.guardedRc("entry_image", { entryId, index }, { discardStale: true });
+			if (!res.ok) throw new Error(res.text);
+			const value = (res.value.result as { image?: unknown }).image;
+			if (!validViewImage(value)) throw new Error("画像を読み込めませんでした。");
+			return {
+				mimeType: value.mimeType,
+				data: value.data,
+				...(typeof value.width === "number" && Number.isFinite(value.width) && value.width > 0
+					? { width: value.width }
+					: {}),
+				...(typeof value.height === "number" && Number.isFinite(value.height) && value.height > 0
+					? { height: value.height }
+					: {}),
+			};
+		});
+		if (!current()) throw new Error("会話が変わりました。");
+		return image;
 	}
 
 	// ------------------------------------------------------------ subagents (M4)

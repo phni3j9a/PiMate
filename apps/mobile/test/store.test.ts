@@ -1806,3 +1806,126 @@ describe("slash command sending and catalogs", () => {
 		expect(store.getState().notice?.text).toContain("自動で再送しません");
 	});
 });
+
+describe("entry image retrieval", () => {
+	const image = { mimeType: "image/gif", data: "YQ==" };
+	it("uses instance/session guards and shares the image cache across thumbnail and viewer loads", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		socket.receive(subscribedMsg([], "s1", "idle", { entryImages: true }));
+		const target = store.opTarget()!;
+		const first = store.entryImage(target, "entry", 2);
+		const duplicate = store.entryImage(target, "entry", 2);
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		expect(request).toMatchObject({
+			method: "entry_image",
+			params: { entryId: "entry", index: 2 },
+			expectInstanceId: "i1",
+			expectSessionId: "s1",
+		});
+		expect(opRcs(socket).filter((r) => r.request.method === "entry_image")).toHaveLength(1);
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { image } },
+		});
+		expect(await first).toEqual(image);
+		expect(await duplicate).toEqual(image);
+		expect(await store.entryImage(target, "entry", 2)).toEqual(image);
+		expect(opRcs(socket)).toHaveLength(1);
+		store.dispose();
+	});
+	it("discards stale replies, separates sessions and does not request unsupported RCs", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		await expect(store.entryImage(store.opTarget()!, "entry", 0)).rejects.toThrow("更新");
+		expect(opRcs(socket)).toHaveLength(0);
+		socket.receive(subscribedMsg([], "s1", "idle", { entryImages: true }));
+		const oldTarget = store.opTarget()!;
+		const first = store.entryImage(oldTarget, "entry", 0);
+		const failed = expect(first).rejects.toThrow();
+		await flush();
+		const oldRequest = opRcs(socket).at(-1).request;
+		socket.receive(subscribedMsg([], "s2", "idle", { entryImages: true }));
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: oldRequest.id, ok: true, result: { image } },
+		});
+		await failed;
+		await expect(store.entryImage(oldTarget, "entry", 0)).rejects.toThrow("会話が変わりました");
+		const second = store.entryImage(store.opTarget()!, "entry", 0);
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		expect(request.expectSessionId).toBe("s2");
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { image } },
+		});
+		expect(await second).toEqual(image);
+		store.dispose();
+	});
+	it("rejects malformed view images without caching them", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		socket.receive(subscribedMsg([], "s1", "idle", { entryImages: true }));
+		const load = store.entryImage(store.opTarget()!, "entry", 0);
+		const failed = expect(load).rejects.toThrow("画像を読み込めません");
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { image: { ...image, data: "invalid" } } },
+		});
+		await failed;
+		store.dispose();
+	});
+});
+
+it("sends and restores every attachment, gates older RCs, and preserves drafts when their limit shrinks", async () => {
+	const images: PromptImage[] = ["YQ==", "Yg==", "Yw==", "ZA=="].map((data) => ({
+		type: "image",
+		mimeType: "image/png",
+		data,
+	}));
+	const { store } = await setup();
+	const socket = connect();
+	socket.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
+	expect(store.setImages(images, store.opTarget()!)).toBe(false);
+	socket.receive(subscribedMsg([], "s1", "running", { promptImages: true, promptImageLimit: 4 }));
+	expect(store.setImages(images, store.opTarget()!)).toBe(true);
+	socket.receive(subscribedMsg([], "s1", "running", { promptImages: true }));
+	expect(store.sendBlocker()).toBe("image_count_limit");
+	expect(store.getState().attachments["h1/i1"]).toEqual(images);
+	expect(store.setImages(images.slice(1), store.opTarget()!)).toBe(true);
+	expect(store.sendBlocker()).toBe("image_count_limit");
+	socket.receive(subscribedMsg([], "s1", "running", { promptImages: true, promptImageLimit: 4 }));
+	expect(store.setImages(images, store.opTarget()!)).toBe(true);
+	store.setDraft("all images");
+	const sending = store.send();
+	const request = opRcs(socket).at(-1).request;
+	expect(request.params).toMatchObject({ text: "all images", images, deliverAs: "steer" });
+	socket.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: { type: "response", id: request.id, ok: true, result: { deliveredAs: "steer" } },
+	});
+	await sending;
+	// An abort before delivery keeps the complete unit for manual restoration.
+	socket.receive({
+		type: "event",
+		instanceId: "i1",
+		sessionId: "s1",
+		seq: 6,
+		event: { type: "agent_settled", aborted: true },
+	});
+	const queued = store.getState().outbox[0]!;
+	expect(queued).toMatchObject({ state: "unconfirmed", images });
+	expect(store.restoreOutboxDraft(queued.id)).toBe(true);
+	expect(store.getState().attachments["h1/i1"]).toEqual(images);
+	expect(store.getState().drafts["h1/i1"]).toBe("all images");
+	store.dispose();
+});

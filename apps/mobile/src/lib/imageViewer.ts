@@ -2,12 +2,12 @@
  * Opens the full-screen image viewer route (src/app/image-viewer.tsx). Images are handed over in memory, never as
  * route params (base64 is too large for a URL) and never written to disk.
  */
-import type { PromptImage } from "@pimate/protocol";
+import type { ViewImage } from "@pimate/protocol";
 import { router } from "expo-router";
 import { Keyboard } from "react-native";
 
 /** A loaded image, or one fetched when its page is first shown (spinner, then 「画像を読み込めません」 on rejection). */
-export type ViewerImage = PromptImage | { load: () => Promise<PromptImage> };
+export type ViewerImage = ViewImage | { load: () => Promise<ViewImage> };
 
 export interface ViewerRequest {
 	images: readonly ViewerImage[];

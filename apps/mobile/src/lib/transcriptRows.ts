@@ -6,7 +6,7 @@
  * `fold` and are hidden behind one "18秒 作業 · ツール 4 回" summary row until the user opens it. The final answer,
  * its usage line, errors and notes stay visible. The turn in progress is never folded.
  */
-import type { PromptImage, TranscriptItem, UIRequest } from "@pimate/protocol";
+import type { TranscriptImages, TranscriptItem, UIRequest } from "@pimate/protocol";
 import { type ChangePiece, changeOf, changeSummary, toolResults } from "./changes";
 import { lineCount, seconds, toolSubject, usageLine } from "./format";
 import type { InstanceView, SessionNotice, ToolState } from "./instanceView";
@@ -19,11 +19,11 @@ export const turnKey = (userEntryId: string) => `turn:${userEntryId}`;
 type BaseRow =
 	| ({ kind: "sessionNotice"; key: string } & SessionNotice)
 	/** `caption`: small line under the bubble (subagent work record: who sent it and how). */
-	| { kind: "user"; key: string; text: string; images?: PromptImage[]; imageCount?: number; caption?: string }
+	| ({ kind: "user"; key: string; text: string; caption?: string } & TranscriptImages)
 	/** `durationMs`: measured live only (see InstanceView.thinkingMs). */
 	| { kind: "thinking"; key: string; text: string; live: boolean; durationMs?: number }
 	| { kind: "text"; key: string; text: string; live: boolean }
-	| {
+	| ({
 			kind: "tool";
 			key: string;
 			toolCallId: string;
@@ -40,7 +40,8 @@ type BaseRow =
 			change: ChangePiece | null;
 			/** The turn (user entryId) the call belongs to, for opening the Review screen. */
 			turnId: string | null;
-	  }
+			entryId?: string;
+	  } & TranscriptImages)
 	/** A completed turn folded into one line; `+add −del` opens the Review screen for it. */
 	| {
 			kind: "turnSummary";
@@ -116,6 +117,14 @@ function toolRow(
 		startedAt: state === "running" ? (live?.startedAt ?? null) : null,
 		change,
 		turnId,
+		...(result
+			? {
+					entryId: result.entryId,
+					images: result.images,
+					imageIndices: result.imageIndices,
+					imageCount: result.imageCount,
+				}
+			: {}),
 	};
 }
 
@@ -136,7 +145,8 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 	const inProgress = view.agentActive && view.phase === "ready";
 	// A `subagent` call the RC reports on stays visible: it is the way into the subagents (Chat-Subagents.html).
 	const runCalls = new Set(view.subagents.runs.map((r) => r.toolCallId).filter(Boolean));
-	const pinned = (r: Row) => r.kind === "tool" && runCalls.has(r.toolCallId);
+	const pinned = (r: Row) =>
+		r.kind === "tool" && (runCalls.has(r.toolCallId) || (r.imageCount ?? r.images?.length ?? 0) > 0);
 	const out: Row[] = [];
 	let next = 0;
 	turns.forEach((turn, index) => {
@@ -227,6 +237,7 @@ export function buildRows(view: InstanceView, opts: { fold?: boolean } = {}): Ro
 					key: item.entryId,
 					text: item.text,
 					...(item.images ? { images: item.images } : {}),
+					...(item.imageIndices ? { imageIndices: item.imageIndices } : {}),
 					...(item.imageCount ? { imageCount: item.imageCount } : {}),
 				});
 				break;

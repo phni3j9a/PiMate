@@ -17,6 +17,7 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton, TextButton } from "@/components/ui";
+import { openImageViewer } from "@/lib/imageViewer";
 import type { OutboxEntry } from "@/lib/store";
 import { colors, radii, sizes, typography } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
@@ -97,7 +98,12 @@ export function QueuedRows({
 					<View key={e.id} style={styles.unconfirmed}>
 						<Text style={styles.bannerTitle}>届いていない可能性があります</Text>
 						<Text style={styles.bannerText}>PC の入力欄に戻っている場合があります。履歴を確認してください。</Text>
-						{e.images?.[0] ? <PromptImageView image={e.images[0]} compact /> : null}
+						{e.images?.length ? (
+							<>
+								<Text style={styles.bannerText}>画像{e.images.length}枚</Text>
+								<AttachmentThumbnails images={e.images} />
+							</>
+						) : null}
 						{e.text ? (
 							<Text style={styles.queuedText} numberOfLines={3} selectable>
 								{e.text}
@@ -111,18 +117,24 @@ export function QueuedRows({
 						{!canRestore ? <Text style={styles.bannerText}>入力欄の本文と添付を空にすると戻せます。</Text> : null}
 					</View>
 				) : (
-					<View
-						key={e.id}
-						style={styles.queuedRow}
-						accessible
-						accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.images?.length ? "画像1枚 " : ""}${e.text}`}
-					>
-						<QueuedIcon color={colors.textSecondary} />
-						<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
-						<Text style={styles.queuedText} numberOfLines={1}>
-							{e.images?.length ? `画像1枚${e.text ? " · " : ""}` : ""}
-							{e.text}
-						</Text>
+					<View key={e.id}>
+						<View
+							style={styles.queuedRow}
+							accessible
+							accessibilityLabel={`${e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}: ${e.images?.length ? `画像${e.images.length}枚 ` : ""}${e.text}`}
+						>
+							<QueuedIcon color={colors.textSecondary} />
+							<Text style={styles.queuedLabel}>{e.deliveredAs === "steer" ? "割り込み待ち" : "完了後に送信"}</Text>
+							<Text style={styles.queuedText} numberOfLines={1}>
+								{e.images?.length ? `画像${e.images.length}枚${e.text ? " · " : ""}` : ""}
+								{e.text}
+							</Text>
+						</View>
+						{e.images?.length ? (
+							<View style={styles.queuedImages}>
+								<AttachmentThumbnails images={e.images} />
+							</View>
+						) : null}
 					</View>
 				),
 			)}
@@ -172,7 +184,14 @@ export function Composer({
 	inputLabel?: string;
 	stopLabel?: string;
 	/** Parent only; omitted by the child composer. */
-	attachment?: { image?: PromptImage; picking: boolean; disabled: boolean; onPick: () => void; onRemove: () => void };
+	attachment?: {
+		images: PromptImage[];
+		limit: number;
+		picking: boolean;
+		disabled: boolean;
+		onPick: () => void;
+		onRemove: (index: number) => void;
+	};
 }) {
 	return (
 		<View>
@@ -181,13 +200,27 @@ export function Composer({
 				{banners.map((b) => (
 					<BannerView key={b.key} banner={b} />
 				))}
-				{attachment?.image ? (
-					<View style={styles.attachment}>
-						<PromptImageView image={attachment.image} compact />
-						<IconButton label="添付画像を削除" onPress={attachment.onRemove} disabled={attachment.picking}>
-							<CloseIcon size={18} color={colors.textSecondary} />
-						</IconButton>
-					</View>
+				{attachment?.images.length ? (
+					<ScrollView
+						horizontal
+						style={styles.attachment}
+						contentContainerStyle={styles.attachmentContent}
+						keyboardShouldPersistTaps="handled"
+					>
+						{attachment.images.map((image, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: failure state is keyed by URI, not slot position.
+							<View key={index} style={styles.attachedImage}>
+								<PromptImageView image={image} compact onPress={() => openImageViewer(attachment.images, index)} />
+								<IconButton
+									label={`添付画像${index + 1}を削除`}
+									onPress={() => attachment.onRemove(index)}
+									disabled={attachment.picking}
+								>
+									<CloseIcon size={18} color={colors.textSecondary} />
+								</IconButton>
+							</View>
+						))}
+					</ScrollView>
 				) : null}
 				<TextInput
 					style={styles.input}
@@ -202,9 +235,11 @@ export function Composer({
 				<View style={styles.actions}>
 					{attachment ? (
 						<IconButton
-							label={attachment.picking ? "画像を準備中" : attachment.image ? "添付画像を変更" : "画像を添付"}
+							label={
+								attachment.picking ? "画像を準備中" : `画像を添付（${attachment.images.length}/${attachment.limit}枚）`
+							}
 							onPress={attachment.onPick}
-							disabled={attachment.disabled || attachment.picking}
+							disabled={attachment.disabled || attachment.picking || attachment.images.length >= attachment.limit}
 						>
 							{attachment.picking ? (
 								<Spinner />
@@ -252,6 +287,17 @@ export function Composer({
 	);
 }
 
+function AttachmentThumbnails({ images }: { images: PromptImage[] }) {
+	return (
+		<ScrollView horizontal contentContainerStyle={styles.attachmentContent} keyboardShouldPersistTaps="handled">
+			{images.map((image, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: failure state is keyed by URI, not slot position.
+				<PromptImageView key={index} image={image} compact onPress={() => openImageViewer(images, index)} />
+			))}
+		</ScrollView>
+	);
+}
+
 const styles = StyleSheet.create({
 	pressed: { opacity: 0.6 },
 	card: {
@@ -262,7 +308,10 @@ const styles = StyleSheet.create({
 		borderRadius: radii.input,
 		backgroundColor: colors.surface,
 	},
-	attachment: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 8 },
+	attachment: { marginBottom: 8 },
+	attachmentContent: { flexDirection: "row", alignItems: "center", gap: 8 },
+	attachedImage: { alignItems: "center" },
+	queuedImages: { paddingHorizontal: 12, paddingBottom: 8 },
 	input: {
 		...typography.composer,
 		color: colors.text,
