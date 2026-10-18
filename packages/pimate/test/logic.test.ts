@@ -209,6 +209,15 @@ it("validates M2 methods and bounded positive session limits", () => {
 	expect(validateRequest({ id: "s", method: "set_scoped_models", params: { models } }).params).toEqual({ models });
 	for (const params of [{}, { models: "faux/a" }, { models: [{ provider: "faux" }] }])
 		expect(() => validateRequest({ id: "s", method: "set_scoped_models", params })).toThrow("Invalid params");
+	for (const params of [{ model: models[0] }, { model: models[0], thinking: "max" }])
+		expect(validateRequest({ id: "d", method: "set_default_model", params }).params).toEqual(params);
+	for (const params of [
+		{},
+		{ model: "faux/a" },
+		{ model: { provider: "faux", id: "" } },
+		{ model: models[0], thinking: "huge" },
+	])
+		expect(() => validateRequest({ id: "d", method: "set_default_model", params })).toThrow("Invalid params");
 });
 
 describe("image prompt boundary", () => {

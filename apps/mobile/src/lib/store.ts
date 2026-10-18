@@ -9,6 +9,7 @@ import type {
 	CommandInfo,
 	FolderInfo,
 	InstanceSummary,
+	ModelDefault,
 	ModelInfo,
 	ModelRef,
 	PairingLink,
@@ -120,6 +121,8 @@ export interface ModelsState {
 	list: ModelInfo[] | null;
 	/** Pi's scoped models ("favorites"); undefined when the RC is too old to report them. */
 	scoped?: ModelRef[];
+	/** Pi's saved default for new Pis. */
+	default?: ModelDefault;
 	error?: string;
 }
 
@@ -1167,12 +1170,12 @@ export class AppStore {
 		if (!sel) return;
 		const key = draftKey(sel);
 		const prev = this.state.models?.key === key ? this.state.models : null;
-		this.set({ models: { key, list: prev?.list ?? null, scoped: prev?.scoped } });
+		this.set({ models: { key, list: prev?.list ?? null, scoped: prev?.scoped, default: prev?.default } });
 		const res = await this.guardedRc("models", {}, { session: false });
 		if (!this.isCurrent(key)) return;
 		if (res.ok) {
-			const r = res.value.result as { models?: ModelInfo[]; scoped?: ModelRef[] };
-			this.set({ models: { key, list: r.models ?? [], scoped: r.scoped } });
+			const r = res.value.result as { models?: ModelInfo[]; scoped?: ModelRef[]; default?: ModelDefault };
+			this.set({ models: { key, list: r.models ?? [], scoped: r.scoped, default: r.default } });
 		} else this.set({ models: { ...(this.state.models ?? { key, list: null }), key, error: res.text } });
 	}
 
@@ -1208,10 +1211,24 @@ export class AppStore {
 		return { ok: true, value: null };
 	}
 
+	/** Saves `model` (and `thinking`, if given) as Pi's global default for new Pis. */
+	async setDefaultModel(model: ModelRef, thinking?: ThinkingLevel): Promise<Result<null>> {
+		const key = this.state.selection ? draftKey(this.state.selection) : null;
+		const res = await this.guardedRc(
+			"set_default_model",
+			{ model, ...(thinking ? { thinking } : {}) },
+			{ session: false },
+		);
+		if (!res.ok) return res;
+		const saved = (res.value.result as { default: ModelDefault }).default;
+		if (key && this.state.models?.key === key) this.set({ models: { ...this.state.models, default: saved } });
+		return { ok: true, value: null };
+	}
+
 	/** Models offered on a host (asked from any of its Pi instances; null when none answers). */
 	async hostModels(
 		hostId: string,
-	): Promise<{ models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[] } | null> {
+	): Promise<{ models: ModelInfo[]; current: ModelRef | null; scoped?: ModelRef[]; default?: ModelDefault } | null> {
 		const conn = this.connections.get(hostId);
 		if (conn?.state !== "connected") return null;
 		const instances = [...conn.instances].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1224,8 +1241,13 @@ export class AppStore {
 					expectInstanceId: instance.instanceId,
 				});
 				if (res.ok) {
-					const r = res.result as { models?: ModelInfo[]; current?: ModelRef | null; scoped?: ModelRef[] };
-					return { models: r.models ?? [], current: r.current ?? null, scoped: r.scoped };
+					const r = res.result as {
+						models?: ModelInfo[];
+						current?: ModelRef | null;
+						scoped?: ModelRef[];
+						default?: ModelDefault;
+					};
+					return { models: r.models ?? [], current: r.current ?? null, scoped: r.scoped, default: r.default };
 				}
 			} catch {
 				return null;

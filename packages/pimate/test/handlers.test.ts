@@ -96,7 +96,10 @@ it("subagents RPC reply removes listener and timer", async () => {
 });
 
 it("lists authenticated models with Pi-compatible reasoning levels and current model", async () => {
-	vi.spyOn(SettingsManager, "create").mockReturnValue({ getEnabledModels: () => undefined } as never);
+	vi.spyOn(SettingsManager, "create").mockReturnValue({
+		getEnabledModels: () => undefined,
+		getGlobalSettings: () => ({}),
+	} as never);
 	const h = {
 		ctx: {
 			hasUI: true,
@@ -178,11 +181,18 @@ it.each(["/pimate", "/pimate setup", "  /pimate pair", "/PIMATE\tdevices", "/pim
 );
 
 function scopedSetup(memory: string[] | undefined, disk: string[] | undefined) {
-	const store = { enabled: disk };
+	const store: { enabled?: string[]; global: Record<string, string> } = { enabled: disk, global: {} };
 	const settings = {
 		getEnabledModels: () => store.enabled,
 		setEnabledModels: vi.fn((v: string[] | undefined) => {
 			store.enabled = v;
+		}),
+		getGlobalSettings: () => ({ ...store.global }),
+		setDefaultModelAndProvider: vi.fn((defaultProvider: string, defaultModel: string) => {
+			Object.assign(store.global, { defaultProvider, defaultModel });
+		}),
+		setDefaultThinkingLevel: vi.fn((defaultThinkingLevel: string) => {
+			store.global.defaultThinkingLevel = defaultThinkingLevel;
 		}),
 		flush: vi.fn(async () => {}),
 	};
@@ -222,6 +232,24 @@ it("saves scoped models like /scoped-models (all = no filter) and rejects unknow
 	await handlers.set_scoped_models({ models: [] });
 	expect(settings.setEnabledModels).toHaveBeenLastCalledWith(undefined);
 	await expect(handlers.set_scoped_models({ models: [{ provider: "faux", id: "zz" }] })).rejects.toMatchObject({
+		code: "not_found",
+	});
+});
+
+it("reports and saves Pi's global default model and thinking", async () => {
+	const { settings, handlers } = scopedSetup(undefined, undefined);
+	expect((await handlers.models({})).default).toEqual({ model: null, thinking: null });
+	expect(await handlers.set_default_model({ model: { provider: "faux", id: "b" }, thinking: "high" })).toEqual({
+		default: { model: { provider: "faux", id: "b" }, thinking: "high" },
+	});
+	expect(settings.flush).toHaveBeenCalled();
+	// Without thinking, the saved level is kept.
+	expect(await handlers.set_default_model({ model: { provider: "faux", id: "c" } })).toEqual({
+		default: { model: { provider: "faux", id: "c" }, thinking: "high" },
+	});
+	expect(settings.setDefaultThinkingLevel).toHaveBeenCalledTimes(1);
+	expect((await handlers.models({})).default.model).toEqual({ provider: "faux", id: "c" });
+	await expect(handlers.set_default_model({ model: { provider: "faux", id: "zz" } })).rejects.toMatchObject({
 		code: "not_found",
 	});
 });

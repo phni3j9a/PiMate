@@ -16,6 +16,7 @@ import {
 	groupModels,
 	isFavorite,
 	type ModelScope,
+	modelLabel,
 	providerName,
 	scopeModels,
 	thinkingShort,
@@ -56,6 +57,22 @@ function ModelSheetBody() {
 	};
 	const groups = list ? groupModels(scopeModels(list, scoped, scope), query) : [];
 	const levels: ThinkingLevel[] = current?.thinkingLevels ?? [];
+	// Pi's saved default for new Pis; the current thinking is saved with it only when the model has levels.
+	const saved = models?.default;
+	const savedLabel = saved?.model ? modelLabel(saved.model, saved.thinking, list) : null;
+	const thinkingToSave = levels.length > 1 ? (view?.thinking ?? undefined) : undefined;
+	const isDefault =
+		!!current &&
+		saved?.model?.provider === current.provider &&
+		saved.model.id === current.id &&
+		(!thinkingToSave || saved.thinking === thinkingToSave);
+	const [def, setDef] = useState<{ saving: boolean; error?: string; saved?: boolean }>({ saving: false });
+	const saveDefault = async () => {
+		if (!current) return;
+		setDef({ saving: true });
+		const res = await appStore.setDefaultModel({ provider: current.provider, id: current.id }, thinkingToSave);
+		setDef(res.ok ? { saving: false, saved: true } : { saving: false, error: res.text });
+	};
 
 	return (
 		<ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -183,6 +200,29 @@ function ModelSheetBody() {
 				</Text>
 			)}
 			{op?.kind === "thinking" ? <Text style={styles.pending}>変更しています…</Text> : null}
+
+			{saved !== undefined ? (
+				<>
+					<View style={[styles.sectionRow, { marginTop: 28 }]}>
+						<Text style={styles.section}>新しい Pi の既定</Text>
+						<Text style={styles.sectionNote}>PC の /model の既定と共通です</Text>
+					</View>
+					<Text style={styles.defaultValue} numberOfLines={1}>
+						{savedLabel ?? "未設定（Pi が自動で選びます）"}
+					</Text>
+					<TextButton
+						label={isDefault ? "現在のモデルと Thinking は既定です" : "現在のモデルと Thinking を既定にする"}
+						onPress={() => void saveDefault()}
+						disabled={!ready || busy || !current || isDefault || def.saving}
+						style={{ alignSelf: "flex-start", marginTop: 4 }}
+					/>
+					{def.error || def.saved ? (
+						<Text style={[styles.pending, def.error ? { color: colors.statusFailedText } : null]}>
+							{def.error ?? "保存しました。以後 PC とアプリで起動する新しい Pi に使われます"}
+						</Text>
+					) : null}
+				</>
+			) : null}
 		</ScrollView>
 	);
 }
@@ -283,4 +323,5 @@ const styles = StyleSheet.create({
 	segText: { fontSize: 13, color: colors.textSecondary },
 	segTextOn: { color: colors.text, fontWeight: "700" },
 	pending: { ...typography.caption, color: colors.textSecondary, marginTop: 6 },
+	defaultValue: { fontSize: 15, lineHeight: 21, color: colors.text },
 });

@@ -34,6 +34,7 @@ const methods = [
 	"commands",
 	"models",
 	"set_scoped_models",
+	"set_default_model",
 	"sessions",
 	"shutdown",
 	"subagents_rpc",
@@ -46,6 +47,7 @@ const methods = [
 	"auth_cancel",
 	"auth_logout",
 ];
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 function object(v: unknown): v is Record<string, unknown> {
 	return !!v && typeof v === "object" && !Array.isArray(v);
 }
@@ -113,7 +115,16 @@ export function validateRequest(value: unknown): Request {
 			ok = str("requestId", true) && str("value") && bool("confirmed") && bool("cancelled");
 			break;
 		case "set_thinking":
-			ok = typeof p.level === "string" && ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(p.level);
+			ok = typeof p.level === "string" && THINKING_LEVELS.includes(p.level);
+			break;
+		case "set_default_model":
+			ok =
+				object(p.model) &&
+				typeof p.model.provider === "string" &&
+				!!p.model.provider &&
+				typeof p.model.id === "string" &&
+				!!p.model.id &&
+				(p.thinking === undefined || (typeof p.thinking === "string" && THINKING_LEVELS.includes(p.thinking)));
 			break;
 		case "set_model":
 			ok = str("provider", true) && str("id", true);
