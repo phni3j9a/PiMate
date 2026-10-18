@@ -135,7 +135,8 @@ export default function ChatScreen() {
 	const loadEntryImage = useMemo(() => {
 		if (!selection || !view?.entryImages || view.phase !== "ready") return null;
 		const target = { ...selection, sessionId: view.session?.id ?? null };
-		return (entryId: string, index: number): Promise<ViewImage> => appStore.entryImage(target, entryId, index);
+		return (entryId: string, index: number, thumbnail: boolean): Promise<ViewImage> =>
+			appStore.entryImage(target, entryId, index, thumbnail);
 	}, [selection, view?.entryImages, view?.phase, view?.session?.id]);
 
 	const sending = outbox.some((e) => e.state === "sending");

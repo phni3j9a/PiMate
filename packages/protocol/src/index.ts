@@ -328,7 +328,11 @@ export interface RcMethods extends AuthMethods {
 	hello: { params: Record<string, never>; result: { snapshot: InstanceSnapshot } };
 	history: { params: Record<string, never>; result: { session: SessionRef | null; items: TranscriptItem[] } };
 	/** Original zero-based image index (not preview position); use session/instance guards. */
-	entry_image: { params: { entryId: string; index: number }; result: { image: ViewImage } };
+	entry_image: {
+		/** thumbnail: fit within 320px / 64 KiB; resize-unavailable originals capped at 512 KiB. */
+		params: { entryId: string; index: number; thumbnail?: boolean };
+		result: { image: ViewImage };
+	};
 	/** Local regular PNG/JPEG/WebP/GIF file; relative to session cwd, also accepts absolute, ~/ and file://. */
 	file_image: { params: { path: string }; result: { image: ViewImage } };
 	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. Expanded extension commands run immediately and return "command" (no user transcript entry). */

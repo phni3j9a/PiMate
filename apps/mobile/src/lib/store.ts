@@ -26,7 +26,13 @@ import type {
 	ThinkingLevel,
 	ViewImage,
 } from "@pimate/protocol";
-import { MAX_IMAGE_PROMPT_TEXT, type PromptImage, samePromptImages, validPromptImages } from "@pimate/protocol";
+import {
+	MAX_IMAGE_PROMPT_TEXT,
+	MAX_PROMPT_IMAGE_BYTES,
+	type PromptImage,
+	samePromptImages,
+	validPromptImages,
+} from "@pimate/protocol";
 import { type BuiltinCommand, commandIntent } from "./commands";
 import { EntryImageCache, validViewImage } from "./entryImages";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
@@ -1310,7 +1316,7 @@ export class AppStore {
 	private readonly entryImageCache = new EntryImageCache();
 
 	/** Display-only images: target-bound, shared in-flight and retained only in a bounded memory LRU. */
-	async entryImage(target: OpTarget, entryId: string, index: number): Promise<ViewImage> {
+	async entryImage(target: OpTarget, entryId: string, index: number, thumbnail = false): Promise<ViewImage> {
 		const current = () => {
 			const now = this.opTarget();
 			return (
@@ -1320,13 +1326,15 @@ export class AppStore {
 		if (!current() || this.state.view?.phase !== "ready")
 			throw new Error("会話が変わりました。チャットを開き直してください。");
 		if (this.state.view.entryImages !== true) throw new Error("PC の PiMate を更新してください。");
-		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, entryId, index]);
+		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, entryId, index, thumbnail]);
 		const image = await this.entryImageCache.load(key, async () => {
 			if (!current()) throw new Error("会話が変わりました。");
-			const res = await this.guardedRc("entry_image", { entryId, index }, { discardStale: true });
+			const res = await this.guardedRc("entry_image", { entryId, index, thumbnail }, { discardStale: true });
 			if (!res.ok) throw new Error(res.text);
 			const value = (res.value.result as { image?: unknown }).image;
-			if (!validViewImage(value)) throw new Error("画像を読み込めませんでした。");
+			// Older RCs may ignore thumbnail: never retain their large originals in mounted tiles.
+			if (!validViewImage(value, thumbnail ? MAX_PROMPT_IMAGE_BYTES : undefined))
+				throw new Error("画像を読み込めませんでした。");
 			return {
 				mimeType: value.mimeType,
 				data: value.data,

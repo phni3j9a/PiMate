@@ -91,7 +91,7 @@ export function validateRequest(value: unknown): Request {
 				p.value.length <= AUTH_MAX_INPUT_LENGTH;
 			break;
 		case "entry_image":
-			ok = str("entryId", true) && Number.isSafeInteger(p.index) && (p.index as number) >= 0;
+			ok = str("entryId", true) && Number.isSafeInteger(p.index) && (p.index as number) >= 0 && bool("thumbnail");
 			break;
 		case "file_image":
 			ok = str("path", true) && !(p.path as string).includes("\0");

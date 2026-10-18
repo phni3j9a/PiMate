@@ -321,6 +321,14 @@ it("shares the newest-first history budget across user and tool images, skips ov
 });
 
 it("validates entry_image indices and file_image paths", () => {
+	for (const thumbnail of [undefined, false, true])
+		expect(() =>
+			validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index: 0, thumbnail } }),
+		).not.toThrow();
+	for (const thumbnail of [0, 1, "true", null, []])
+		expect(() =>
+			validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index: 0, thumbnail } }),
+		).toThrow("Invalid params");
 	for (const index of [0, 2])
 		expect(validateRequest({ id: "image", method: "entry_image", params: { entryId: "entry", index } }).method).toBe(
 			"entry_image",

@@ -1,24 +1,28 @@
 import type { TranscriptImages as Images, ViewImage } from "@pimate/protocol";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { imageSlots, imageTiles } from "@/lib/entryImages";
+import { entryImageSources, imageTiles } from "@/lib/entryImages";
 import { openImageViewer, type ViewerImage } from "@/lib/imageViewer";
 import { colors, radii } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
 
 /** Provided only by the parent chat, captured with its host/instance/session target. */
-export const EntryImageContext = createContext<((entryId: string, index: number) => Promise<ViewImage>) | null>(null);
+export const EntryImageContext = createContext<
+	((entryId: string, index: number, thumbnail: boolean) => Promise<ViewImage>) | null
+>(null);
 
 export function TranscriptImages({ entryId, ...item }: Images & { entryId?: string }) {
 	const fetch = useContext(EntryImageContext);
 	const { images, imageIndices, imageCount } = item;
 	const canLoad = !!fetch && !!entryId;
-	const gallery = useMemo<ViewerImage[]>(() => {
-		const slots = imageSlots({ images, imageIndices, imageCount });
-		return canLoad
-			? slots.map((image, index) => image ?? { load: () => fetch!(entryId!, index) })
-			: slots.filter((image) => image !== undefined);
-	}, [images, imageIndices, imageCount, canLoad, fetch, entryId]);
+	const { gallery, thumbnails } = useMemo(
+		() =>
+			entryImageSources(
+				{ images, imageIndices, imageCount },
+				canLoad ? (index, thumbnail) => fetch!(entryId!, index, thumbnail) : undefined,
+			),
+		[images, imageIndices, imageCount, canLoad, fetch, entryId],
+	);
 	const missing = (imageCount ?? images?.length ?? 0) - gallery.length;
 	if (!gallery.length && !missing) return null;
 	return (
@@ -27,7 +31,7 @@ export function TranscriptImages({ entryId, ...item }: Images & { entryId?: stri
 				{imageTiles(gallery.length).map(({ index, more }) => (
 					<ImageTile
 						key={index}
-						image={gallery[index]!}
+						image={thumbnails[index]!}
 						index={index}
 						more={more}
 						compact={gallery.length > 1}
@@ -57,6 +61,7 @@ function ImageTile({
 	compact: boolean;
 	onPress: () => void;
 }) {
+	// Mounted rows retain this state, so its lazy source must only request thumbnails.
 	const [loaded, setLoaded] = useState<ViewImage | "loading" | "failed">("loading");
 	useEffect(() => {
 		if (!("load" in image) || more) return;
@@ -80,13 +85,13 @@ function ImageTile({
 			accessibilityLabel={
 				more
 					? `残り${more}枚の画像を表示`
-					: `画像${index + 1}、${value === "failed" ? "読み込み失敗。タップして再試行" : "読み込み中"}`
+					: `画像${index + 1}、${value === "failed" ? "タップして全画面で開く" : "読み込み中"}`
 			}
 		>
 			{more ? (
 				<Text style={styles.more}>+{more}</Text>
 			) : value === "failed" ? (
-				<Text style={styles.error}>読み込めません</Text>
+				<Text style={styles.error}>タップして開く</Text>
 			) : (
 				<ActivityIndicator size="small" color={colors.textSecondary} />
 			)}

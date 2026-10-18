@@ -3,9 +3,10 @@ import { type FileHandle, open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ViewImage } from "@pimate/protocol";
+import { MAX_PROMPT_IMAGE_BYTES, type ViewImage } from "@pimate/protocol";
 import { RcError } from "./dispatch.ts";
 
+export const MAX_THUMBNAIL_IMAGE_BYTES = 64 * 1024;
 export const MAX_VIEW_IMAGE_BYTES = 2 * 1024 * 1024;
 // 5 MiB decoded leaves room below the Host's 8 MiB outbound slow-consumer cutoff after base64.
 export const MAX_VIEW_IMAGE_FALLBACK_BYTES = 5 * 1024 * 1024;
@@ -30,20 +31,22 @@ export function resolveImagePath(path: string, cwd: string): string {
 	}
 }
 
-export async function viewImage(bytes: Buffer, mimeType: string): Promise<ViewImage> {
+export async function viewImage(bytes: Buffer, mimeType: string, thumbnail = false): Promise<ViewImage> {
 	if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(mimeType))
 		throw new RcError("unsupported", "Unsupported image format");
 	if (bytes.length > MAX_FILE_IMAGE_BYTES) throw new RcError("unsupported", "Image exceeds read limit");
-	if (bytes.length > MAX_VIEW_IMAGE_BYTES) {
+	const maxBytes = thumbnail ? MAX_THUMBNAIL_IMAGE_BYTES : MAX_VIEW_IMAGE_BYTES;
+	if (thumbnail || bytes.length > maxBytes) {
 		try {
 			const pi = await import("@earendil-works/pi-coding-agent");
 			const resized = await pi.resizeImage?.(bytes, mimeType, {
-				maxWidth: 2048,
-				maxHeight: 2048,
+				maxWidth: thumbnail ? 320 : 2048,
+				maxHeight: thumbnail ? 320 : 2048,
 				// Pi's maxBytes measures base64, not decoded bytes.
-				maxBytes: Math.floor(MAX_VIEW_IMAGE_BYTES / 3) * 4,
+				maxBytes: Math.floor(maxBytes / 3) * 4,
+				...(thumbnail ? { jpegQuality: 60 } : {}),
 			});
-			if (resized && Buffer.byteLength(resized.data, "base64") <= MAX_VIEW_IMAGE_BYTES)
+			if (resized && Buffer.byteLength(resized.data, "base64") <= maxBytes)
 				return {
 					mimeType: resized.mimeType as ViewImage["mimeType"],
 					data: resized.data,
@@ -53,7 +56,8 @@ export async function viewImage(bytes: Buffer, mimeType: string): Promise<ViewIm
 		} catch {
 			// Older Pi runtimes or unavailable codecs still allow bounded originals.
 		}
-		if (bytes.length > MAX_VIEW_IMAGE_FALLBACK_BYTES) throw new RcError("unsupported", "Image could not be resized");
+		if (bytes.length > (thumbnail ? MAX_PROMPT_IMAGE_BYTES : MAX_VIEW_IMAGE_FALLBACK_BYTES))
+			throw new RcError("unsupported", "Image could not be resized");
 	}
 	return { mimeType: mimeType as ViewImage["mimeType"], data: bytes.toString("base64") };
 }

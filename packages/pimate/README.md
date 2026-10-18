@@ -79,9 +79,11 @@ RC は `hello` snapshot の `promptImages: true` と `promptImageLimit: 4` で�
 
 履歴と live の `user` / `tool_result` は `imageCount`（元の総枚数）、`images`（対応する全 preview、各 decoded 512 KiB 以下）、`imageIndices`（各 preview の元画像の0始まり index）を含みます。`imageIndices` がない旧 RC では配列位置が index です。履歴は両 role 共通の decoded 合計 2 MiB を最新の項目から優先し、単一 live `message_end` にも 2 MiB 上限を適用します。収まらない画像・GIF は件数に残し placeholder にできます。Pi の原本は変更しません。子エージェント記録の画像取得は対象外です。
 
-`snapshot.entryImages: true` の RC は `entry_image { entryId, index }` で現在セッション内の user / toolResult の元画像を返します（現在の枝以外も含む）。`index` は preview の位置ではなく元画像の index。`snapshot.fileImages: true` なら `file_image { path }` も利用できます。相対パスはセッション cwd 基準、絶対パス・`~/`・`file://` URL・symlink も許可します。認証済みスマホから明示的に要求された通常ファイルのみを読み、20 MiB まで、拡張子でなく magic bytes で JPEG / PNG / WebP / GIF を判定します。パスの sandbox 制限はありません。
+`snapshot.entryImages: true` の RC は `entry_image { entryId, index, thumbnail? }` で現在セッション内の user / toolResult の元画像を返します（現在の枝以外も含む）。`index` は preview の位置ではなく元画像の index。`snapshot.fileImages: true` なら `file_image { path }` も利用できます。相対パスはセッション cwd 基準、絶対パス・`~/`・`file://` URL・symlink も許可します。認証済みスマホから明示的に要求された通常ファイルのみを読み、20 MiB まで、拡張子でなく magic bytes で JPEG / PNG / WebP / GIF を判定します。パスの sandbox 制限はありません。
 
-両 RPC は `{ image: ViewImage }`（`mimeType`, base64 `data`, 任意の `width` / `height`）を返します。decoded 2 MiB 以下は原本、それ以上は Pi の `resizeImage` で最大2048px・2 MiB 以下へ縮小します。縮小 API / codec が使えない場合は原本が5 MiB以下なら返し、それを超える場合は `unsupported`。5 MiB は base64 化後も Host の8 MiB送信制限に余裕を残すためです。GIF は縮小時に静止画になる場合があります。存在しない entry / index / ファイルは `not_found`、形式・サイズ・読み取り不可は `unsupported`。`expectInstanceId` / `expectSessionId` で取得先を固定してください。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
+`entry_image` の `thumbnail: true` はインライン表示用で、原本の大きさによらず Pi のresizeを呼び、最大320px・decoded 64 KiB以下へ縮小します（JPEG品質60、PNGになる場合もあります）。縮小不可時の原本fallbackは512 KiBまで、それ以上は `unsupported`。省略 / false は全画面用です。
+
+両 RPC の全画面用取得は `{ image: ViewImage }`（`mimeType`, base64 `data`, 任意の `width` / `height`）を返します。decoded 2 MiB 以下は原本、それ以上は Pi の `resizeImage` で最大2048px・2 MiB 以下へ縮小します。縮小 API / codec が使えない場合は原本が5 MiB以下なら返し、それを超える場合は `unsupported`。5 MiB は base64 化後も Host の8 MiB送信制限に余裕を残すためです。GIF は縮小時に静止画になる場合があります。存在しない entry / index / ファイルは `not_found`、形式・サイズ・読み取り不可は `unsupported`。`expectInstanceId` / `expectSessionId` で取得先を固定してください。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
 ## コマンド一覧と実行（#37）
 

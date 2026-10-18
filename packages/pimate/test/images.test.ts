@@ -8,6 +8,7 @@ import {
 	fileImage,
 	imageMimeType,
 	MAX_FILE_IMAGE_BYTES,
+	MAX_THUMBNAIL_IMAGE_BYTES,
 	MAX_VIEW_IMAGE_BYTES,
 	MAX_VIEW_IMAGE_FALLBACK_BYTES,
 	resolveImagePath,
@@ -113,4 +114,42 @@ describe("view images", () => {
 			});
 		},
 	);
+});
+
+describe("entry thumbnails", () => {
+	it.each([1024, 3 * 1024 * 1024])("always invokes Pi resize for a %i-byte source", async (size) => {
+		vi.mocked(resizeImage).mockResolvedValue({
+			data: "YQ==",
+			mimeType: "image/jpeg",
+			width: 320,
+			height: 160,
+			originalWidth: 2048,
+			originalHeight: 1024,
+			wasResized: true,
+		});
+		expect(await viewImage(Buffer.alloc(size), "image/png", true)).toEqual({
+			mimeType: "image/jpeg",
+			data: "YQ==",
+			width: 320,
+			height: 160,
+		});
+		expect(vi.mocked(resizeImage).mock.calls[0]?.slice(1)).toEqual([
+			"image/png",
+			{ maxWidth: 320, maxHeight: 320, jpegQuality: 60, maxBytes: Math.floor(MAX_THUMBNAIL_IMAGE_BYTES / 3) * 4 },
+		]);
+	});
+	it.each(["throws", "null", "oversized"])("caps thumbnail fallback at 512 KiB when resize %s", async (mode) => {
+		if (mode === "throws") vi.mocked(resizeImage).mockRejectedValue(new Error("unavailable"));
+		if (mode === "null") vi.mocked(resizeImage).mockResolvedValue(null);
+		if (mode === "oversized")
+			vi.mocked(resizeImage).mockResolvedValue({
+				data: Buffer.alloc(MAX_THUMBNAIL_IMAGE_BYTES + 1).toString("base64"),
+				mimeType: "image/png",
+			} as never);
+		const bytes = Buffer.alloc(512 * 1024);
+		expect((await viewImage(bytes, "image/png", true)).data).toBe(bytes.toString("base64"));
+		await expect(viewImage(Buffer.alloc(512 * 1024 + 1), "image/png", true)).rejects.toMatchObject({
+			code: "unsupported",
+		});
+	});
 });

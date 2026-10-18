@@ -1809,7 +1809,7 @@ describe("slash command sending and catalogs", () => {
 
 describe("entry image retrieval", () => {
 	const image = { mimeType: "image/gif", data: "YQ==" };
-	it("uses instance/session guards and shares the image cache across thumbnail and viewer loads", async () => {
+	it("uses instance/session guards and shares requests within the same image variant", async () => {
 		const { store } = await setup();
 		const socket = connect();
 		socket.receive(subscribedMsg([], "s1", "idle", { entryImages: true }));
@@ -1927,5 +1927,50 @@ it("sends and restores every attachment, gates older RCs, and preserves drafts w
 	expect(store.restoreOutboxDraft(queued.id)).toBe(true);
 	expect(store.getState().attachments["h1/i1"]).toEqual(images);
 	expect(store.getState().drafts["h1/i1"]).toBe("all images");
+	store.dispose();
+});
+
+it("separates thumbnail and full caches and rejects large originals from RCs ignoring thumbnail", async () => {
+	const { store } = await setup();
+	const socket = connect();
+	socket.receive(subscribedMsg([], "s1", "idle", { entryImages: true }));
+	const target = store.opTarget()!;
+	const fullImage = { mimeType: "image/png", data: Buffer.alloc(512 * 1024 + 1).toString("base64") };
+	const thumbnail = { mimeType: "image/jpeg", data: "YQ==", width: 320, height: 160 };
+	const full = store.entryImage(target, "entry", 0);
+	await flush();
+	const fullRequest = opRcs(socket).at(-1).request;
+	expect(fullRequest.params).toMatchObject({ thumbnail: false });
+	socket.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: { type: "response", id: fullRequest.id, ok: true, result: { image: fullImage } },
+	});
+	expect((await full).data.length).toBe(fullImage.data.length);
+	const unsupported = store.entryImage(target, "entry", 0, true);
+	const failed = expect(unsupported).rejects.toThrow("画像を読み込めません");
+	await flush();
+	const oldRcRequest = opRcs(socket).at(-1).request;
+	expect(oldRcRequest.params).toMatchObject({ thumbnail: true });
+	socket.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: { type: "response", id: oldRcRequest.id, ok: true, result: { image: fullImage } },
+	});
+	await failed;
+	const thumb = store.entryImage(target, "entry", 0, true);
+	const duplicate = store.entryImage(target, "entry", 0, true);
+	await flush();
+	const request = opRcs(socket).at(-1).request;
+	socket.receive({
+		type: "rc_result",
+		instanceId: "i1",
+		response: { type: "response", id: request.id, ok: true, result: { image: thumbnail } },
+	});
+	expect(await thumb).toEqual(thumbnail);
+	expect(await duplicate).toEqual(thumbnail);
+	expect(await store.entryImage(target, "entry", 0, true)).toEqual(thumbnail);
+	expect((await store.entryImage(target, "entry", 0)).data.length).toBe(fullImage.data.length);
+	expect(opRcs(socket)).toHaveLength(3);
 	store.dispose();
 });

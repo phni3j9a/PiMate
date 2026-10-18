@@ -1,6 +1,6 @@
 import type { PromptImage, ViewImage } from "@pimate/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { EntryImageCache, imageSlots, imageTiles, validViewImage } from "../src/lib/entryImages";
+import { EntryImageCache, entryImageSources, imageSlots, imageTiles, validViewImage } from "../src/lib/entryImages";
 
 const image: PromptImage = { type: "image", mimeType: "image/png", data: "YQ==" };
 const other: ViewImage = { mimeType: "image/gif", data: "Yg==" };
@@ -85,4 +85,21 @@ describe("image preview slots and tiles", () => {
 		])
 			expect(validViewImage(value)).toBe(false);
 	});
+});
+
+it("uses thumbnail-only tile loaders while the viewer independently loads full images", async () => {
+	const load = vi.fn(async () => other);
+	const { gallery, thumbnails } = entryImageSources({ imageCount: 2, images: [image], imageIndices: [1] }, load);
+	expect(load).not.toHaveBeenCalled();
+	if (!("load" in thumbnails[0]!) || !("load" in gallery[0]!)) throw new Error("Missing loaders");
+	await thumbnails[0].load();
+	expect(load.mock.calls).toEqual([[0, true]]);
+	await gallery[0].load();
+	expect(load.mock.calls).toEqual([
+		[0, true],
+		[0, false],
+	]);
+	expect(thumbnails[1]).toBe(image);
+	expect(gallery[1]).toBe(image);
+	expect(entryImageSources({ images: [image], imageCount: 2 })).toEqual({ gallery: [image], thumbnails: [image] });
 });

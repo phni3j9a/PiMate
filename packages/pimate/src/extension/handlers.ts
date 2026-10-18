@@ -63,7 +63,7 @@ export function createHandlers(h: Hub): Handlers {
 			const image = Array.isArray(content) ? content.filter((c) => c.type === "image")[p.index] : undefined;
 			if (image?.type !== "image") throw new RcError("not_found");
 			if (image.data.length > Math.ceil(MAX_FILE_IMAGE_BYTES / 3) * 4) throw new RcError("unsupported");
-			return { image: await viewImage(Buffer.from(image.data, "base64"), image.mimeType) };
+			return { image: await viewImage(Buffer.from(image.data, "base64"), image.mimeType, p.thumbnail) };
 		},
 		file_image: async (p) => ({ image: await fileImage(p.path, ready().ctx.cwd) }),
 		session_tree: () => normalizeTree(ready().ctx.sessionManager),

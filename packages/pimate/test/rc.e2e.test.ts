@@ -135,6 +135,11 @@ it.skipIf(!pi || !abduco)(
 				expect(await client.request("entry_image", { entryId: userImage.entryId, index })).toEqual({
 					image: { mimeType: userImage.images![index].mimeType, data: userImage.images![index].data },
 				});
+			const thumbnail = await client.request("entry_image", { entryId: userImage.entryId, index: 0, thumbnail: true });
+			expect(thumbnail.image.width).toBeLessThanOrEqual(320);
+			expect(thumbnail.image.height).toBeLessThanOrEqual(320);
+			expect(Buffer.byteLength(thumbnail.image.data, "base64")).toBeLessThanOrEqual(64 * 1024);
+			expect(thumbnail.image.data).not.toBe(userImage.images![0].data);
 			await expect(client.request("entry_image", { entryId: userImage.entryId, index: 2 })).rejects.toMatchObject({
 				code: "not_found",
 			});

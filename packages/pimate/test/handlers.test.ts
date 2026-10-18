@@ -2,6 +2,7 @@ import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent
 import { afterEach, expect, it, vi } from "vitest";
 import { createHandlers } from "../src/extension/handlers.ts";
 import type { Hub } from "../src/extension/hub.ts";
+import * as images from "../src/extension/images.ts";
 
 function setup(idle = true) {
 	const ctx = {
@@ -339,4 +340,23 @@ it("retrieves all original image indices from current-session user/tool entries,
 		["user", 2],
 	] as const)
 		await expect(handlers.entry_image({ entryId, index })).rejects.toMatchObject({ code: "not_found" });
+});
+
+it("forwards thumbnail mode to the shared entry image resizer", async () => {
+	const { handlers, ctx } = setup();
+	Object.assign(ctx, {
+		sessionManager: {
+			getEntry: () => ({
+				type: "message",
+				message: { role: "user", content: [{ type: "image", mimeType: "image/png", data: "YQ==" }] },
+			}),
+		},
+	});
+	const resize = vi
+		.spyOn(images, "viewImage")
+		.mockResolvedValue({ mimeType: "image/jpeg", data: "Yg==", width: 320, height: 160 });
+	expect(await handlers.entry_image({ entryId: "entry", index: 0, thumbnail: true })).toMatchObject({
+		image: { width: 320, height: 160 },
+	});
+	expect(resize).toHaveBeenCalledWith(Buffer.from("YQ==", "base64"), "image/png", true);
 });

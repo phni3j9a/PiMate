@@ -1,4 +1,5 @@
 import type { PromptImage, TranscriptImages, ViewImage } from "@pimate/protocol";
+import type { ViewerImage } from "./imageViewer";
 
 export const MAX_IMAGE_CACHE_BYTES = 24 * 1024 * 1024;
 const MAX_VIEW_BYTES = 5 * 1024 * 1024;
@@ -48,17 +49,17 @@ export class EntryImageCache {
 	}
 }
 
-export function validViewImage(value: unknown): value is ViewImage {
+export function validViewImage(value: unknown, maxBytes = MAX_VIEW_BYTES): value is ViewImage {
 	if (!value || typeof value !== "object") return false;
 	const image = value as ViewImage;
 	return (
 		["image/jpeg", "image/png", "image/webp", "image/gif"].includes(image.mimeType) &&
 		typeof image.data === "string" &&
 		image.data.length > 0 &&
-		image.data.length <= Math.ceil(MAX_VIEW_BYTES / 3) * 4 &&
+		image.data.length <= Math.ceil(maxBytes / 3) * 4 &&
 		image.data.length % 4 === 0 &&
 		/^[A-Za-z0-9+/]*={0,2}$/.test(image.data) &&
-		base64Bytes(image.data) <= MAX_VIEW_BYTES
+		base64Bytes(image.data) <= maxBytes
 	);
 }
 
@@ -84,4 +85,20 @@ export function imageTiles(count: number): { index: number; more?: number }[] {
 		index,
 		...(index === 3 && count > 4 ? { more: count - 3 } : {}),
 	}));
+}
+
+/** Tiles and viewer must not share a lazy full-image source: mounted rows retain tile results. */
+export function entryImageSources(
+	item: TranscriptImages,
+	load?: (index: number, thumbnail: boolean) => Promise<ViewImage>,
+): { gallery: ViewerImage[]; thumbnails: ViewerImage[] } {
+	const slots = imageSlots(item);
+	if (!load) {
+		const inline = slots.filter((image) => image !== undefined);
+		return { gallery: inline, thumbnails: inline };
+	}
+	return {
+		gallery: slots.map((image, index) => image ?? { load: () => load(index, false) }),
+		thumbnails: slots.map((image, index) => image ?? { load: () => load(index, true) }),
+	};
 }
