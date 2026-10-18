@@ -78,6 +78,7 @@ PiMateは、**PC上で実行する通常のPi Coding Agentを、スマホに最�
 
 - 親への画像送信はcapabilityに従い最大4枚、1枚512 KiB・合計600 KiB（decoded）。`promptImageLimit` 未指定の画像対応RCは1枚まで。本文は画像付きの場合32 Ki文字まで。OSの複数写真選択と個別削除を使い、容量超過時に既存の下書きを落とさない。
 - user / tool_result の画像を最大2×2のgridで表示し、5枚以上は「+N」から全画面ビューアへ。tool画像は折り畳んだ出力の外に常時表示する。省略されたpreviewは `imageIndices` / `imageCount` で位置を保ち、`entryImages` 対応RCから自動取得する。未対応RCは画像件数と表示制限を示す。
+- assistantのMarkdown画像は周囲のテキストを分割して順番どおりtile表示し、回答内の全画像を全画面ビューアで閲覧できる。http(s)はスマホから自動取得（disk cacheなし）、PNG/JPEG/WebP/GIFのbase64 data URIはdecoded 512 KiBまで。PCパスは `fileImages` 対応RCの `file_image { path, thumbnail: true }` で自動取得（cwd相対・絶対・`~/`・`file://`、sandboxなし）。tile用320px/64 KiB目標・fallback512 KiB、全画面は別取得。LRUはhost/instance/session/cwd/path/variant別・24 MiB上限・in-flight共有。未対応RCのPCパス、SVGパス/data、その他schemeは文字表示を保つ。Web画像の接続先にIP等が伝わり、拡張子なし/redirect先のWeb画像の形式・サイズは配信元・native decoderに依存し、SVGが表示される場合もある。
 - 自動取得tileは `thumbnail:true` の小さな画像（最大320px・64 KiB、縮小不可時のみ原本512 KiBまで）だけを保持する。全画面用画像はviewerが `thumbnail:false` で取得する。取得画像はhost/instance/session/entry/index/thumbnail有無で分離した24 MiB上限のメモリLRUに保持し、ディスクへ保存しない。viewerのページ取得も同じcacheを使う。画像付き送信の確認は全画像の厳密一致のみとし、部分previewだけでは配信済みと判断しない。
 
 ### サブエージェント

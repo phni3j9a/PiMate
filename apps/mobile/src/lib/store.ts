@@ -1313,27 +1313,44 @@ export class AppStore {
 		return { ok: true, value: (res.value.result as { sessions?: SessionListItem[] }).sessions ?? [] };
 	}
 
-	private readonly entryImageCache = new EntryImageCache();
+	private readonly displayImageCache = new EntryImageCache();
 
 	/** Display-only images: target-bound, shared in-flight and retained only in a bounded memory LRU. */
-	async entryImage(target: OpTarget, entryId: string, index: number, thumbnail = false): Promise<ViewImage> {
+	entryImage(target: OpTarget, entryId: string, index: number, thumbnail = false): Promise<ViewImage> {
+		return this.displayImage(target, "entry_image", { entryId, index, thumbnail });
+	}
+
+	fileImage(target: OpTarget & { cwd: string | null }, path: string, thumbnail = false): Promise<ViewImage> {
+		return this.displayImage(target, "file_image", { path, thumbnail }, target.cwd);
+	}
+
+	private async displayImage<M extends "entry_image" | "file_image">(
+		target: OpTarget,
+		method: M,
+		params: ParamsOf<M>,
+		cwd?: string | null,
+	): Promise<ViewImage> {
 		const current = () => {
 			const now = this.opTarget();
 			return (
-				now?.hostId === target.hostId && now.instanceId === target.instanceId && now.sessionId === target.sessionId
+				now?.hostId === target.hostId &&
+				now.instanceId === target.instanceId &&
+				now.sessionId === target.sessionId &&
+				(method !== "file_image" || this.state.view?.cwd === cwd)
 			);
 		};
 		if (!current() || this.state.view?.phase !== "ready")
 			throw new Error("会話が変わりました。チャットを開き直してください。");
-		if (this.state.view.entryImages !== true) throw new Error("PC の PiMate を更新してください。");
-		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, entryId, index, thumbnail]);
-		const image = await this.entryImageCache.load(key, async () => {
+		if (this.state.view[method === "entry_image" ? "entryImages" : "fileImages"] !== true)
+			throw new Error("PC の PiMate を更新してください。");
+		const key = JSON.stringify([target.hostId, target.instanceId, target.sessionId, cwd, method, params]);
+		const image = await this.displayImageCache.load(key, async () => {
 			if (!current()) throw new Error("会話が変わりました。");
-			const res = await this.guardedRc("entry_image", { entryId, index, thumbnail }, { discardStale: true });
+			const res = await this.guardedRc(method, params, { discardStale: true });
 			if (!res.ok) throw new Error(res.text);
 			const value = (res.value.result as { image?: unknown }).image;
 			// Older RCs may ignore thumbnail: never retain their large originals in mounted tiles.
-			if (!validViewImage(value, thumbnail ? MAX_PROMPT_IMAGE_BYTES : undefined))
+			if (!validViewImage(value, params.thumbnail ? MAX_PROMPT_IMAGE_BYTES : undefined))
 				throw new Error("画像を読み込めませんでした。");
 			return {
 				mimeType: value.mimeType,

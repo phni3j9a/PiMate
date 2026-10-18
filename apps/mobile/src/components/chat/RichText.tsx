@@ -1,13 +1,24 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui";
-import { type Align, type Block, cellWidth, parseBlocks, type Span } from "@/lib/richText";
+import { openImageViewer, type ViewerImage } from "@/lib/imageViewer";
+import { markdownImageGallery } from "@/lib/markdownImages";
+import {
+	type Align,
+	type Block,
+	cellWidth,
+	markdownImages,
+	parseBlocks,
+	type Span,
+	splitImageSpans,
+} from "@/lib/richText";
 import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+import { FileImageContext, MarkdownImageTile } from "./MarkdownImage";
 
 function spanStyle(span: Span): TextStyle[] {
 	const s: TextStyle[] = [];
@@ -78,7 +89,17 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 
 const ALIGN: Record<string, TextStyle["textAlign"]> = { left: "left", center: "center", right: "right" };
 
-function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows: Span[][][] }) {
+function Table({
+	align,
+	header,
+	rows,
+	gallery,
+}: {
+	align: Align[];
+	header: Span[][];
+	rows: Span[][][];
+	gallery: ViewerImage[];
+}) {
 	const scrollGesture = useMemo(
 		// Recognize horizontal drags before the drawer's 5dp pan, not long presses or vertical drags.
 		() =>
@@ -95,13 +116,19 @@ function Table({ align, header, rows }: { align: Align[]; header: Span[][]; rows
 	const row = (cells: Span[][], head: boolean, key: string) => (
 		<View key={key} style={[styles.tableRow, !head && styles.tableBodyRow]}>
 			{widths.map((w, c) => (
-				<Text
+				<View
 					// biome-ignore lint/suspicious/noArrayIndexKey: columns have no identity beyond their position
 					key={c}
-					style={[styles.cell, head && styles.bold, { width: w, textAlign: ALIGN[align[c] ?? ""] ?? "left" }]}
+					style={{ width: w, paddingVertical: 8, paddingHorizontal: 12 }}
 				>
-					<Spans spans={cells[c] ?? []} />
-				</Text>
+					{cells[c]?.some((span) => span.image) ? (
+						<Blocks blocks={splitImageSpans({ type: "paragraph", spans: cells[c] })} gallery={gallery} />
+					) : (
+						<Text style={[styles.cell, head && styles.bold, { textAlign: ALIGN[align[c] ?? ""] ?? "left" }]}>
+							<Spans spans={cells[c] ?? []} />
+						</Text>
+					)}
+				</View>
 			))}
 		</View>
 	);
@@ -125,10 +152,18 @@ const HEADING: TextStyle[] = [4, 2, 1].map((up) => ({
 /** Centers a marker of `size` on the first line of body text. */
 const firstLine = (size: number) => (typography.body.lineHeight - size) / 2;
 
-function Blocks({ blocks }: { blocks: Block[] }) {
+function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }) {
 	return blocks.map((block, i) => {
-		const key = i; // blocks have no identity beyond their position
+		const key = block.type === "image" ? `image:${block.image.index}:${block.image.src}` : i;
 		switch (block.type) {
+			case "image":
+				return (
+					<MarkdownImageTile
+						key={key}
+						image={block.image}
+						onPress={() => openImageViewer(gallery, block.image.index)}
+					/>
+				);
 			case "code":
 				return <CodeBlock key={key} text={block.text} lang={block.lang} />;
 			case "item":
@@ -165,11 +200,11 @@ function Blocks({ blocks }: { blocks: Block[] }) {
 			case "quote":
 				return (
 					<View key={key} style={styles.quote}>
-						<Blocks blocks={block.blocks} />
+						<Blocks blocks={block.blocks} gallery={gallery} />
 					</View>
 				);
 			case "table":
-				return <Table key={key} align={block.align} header={block.header} rows={block.rows} />;
+				return <Table key={key} align={block.align} header={block.header} rows={block.rows} gallery={gallery} />;
 			case "rule":
 				return <View key={key} style={styles.rule} />;
 			default:
@@ -184,10 +219,12 @@ function Blocks({ blocks }: { blocks: Block[] }) {
 
 /** Assistant Markdown (Main.html <p>/<code>): headings, lists, code, quotes, tables, links. */
 export function RichText({ text }: { text: string }) {
-	const blocks = useMemo(() => parseBlocks(text), [text]);
+	const loadFile = useContext(FileImageContext);
+	const blocks = useMemo(() => parseBlocks(text, !!loadFile), [text, loadFile]);
+	const gallery = useMemo(() => markdownImageGallery(markdownImages(blocks), loadFile), [blocks, loadFile]);
 	return (
 		<View style={styles.root}>
-			<Blocks blocks={blocks} />
+			<Blocks blocks={blocks} gallery={gallery} />
 		</View>
 	);
 }
@@ -241,8 +278,6 @@ const styles = StyleSheet.create({
 		fontSize: 13,
 		lineHeight: 19,
 		color: colors.text,
-		paddingVertical: 8,
-		paddingHorizontal: 12,
 	},
 	rule: { height: 1, marginVertical: 4, backgroundColor: colors.surfaceStrong },
 });

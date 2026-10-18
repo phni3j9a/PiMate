@@ -50,6 +50,22 @@ describe("image files", () => {
 			const expected = { mimeType: "image/png", data: png.toString("base64") };
 			for (const path of ["an image.txt", file, pathToFileURL(file).href])
 				expect(await fileImage(path, dir)).toEqual(expected);
+			vi.mocked(resizeImage).mockResolvedValue({
+				data: "YQ==",
+				mimeType: "image/jpeg",
+				width: 320,
+				height: 160,
+			} as never);
+			expect(await fileImage(file, dir, true)).toEqual({
+				data: "YQ==",
+				mimeType: "image/jpeg",
+				width: 320,
+				height: 160,
+			});
+			expect(vi.mocked(resizeImage).mock.calls[0]?.slice(1)).toEqual([
+				"image/png",
+				{ maxWidth: 320, maxHeight: 320, jpegQuality: 60, maxBytes: Math.floor(MAX_THUMBNAIL_IMAGE_BYTES / 3) * 4 },
+			]);
 			await expect(fileImage("missing.png", dir)).rejects.toMatchObject({ code: "not_found" });
 			await expect(fileImage(dir, dir)).rejects.toMatchObject({ code: "unsupported" });
 			await writeFile(file, "not an image");

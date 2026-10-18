@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { CommandPalette } from "@/components/chat/CommandPalette";
 import { type Banner, Composer, QueuedRows } from "@/components/chat/Composer";
 import { DialogContext, type DialogContextValue } from "@/components/chat/DialogCard";
+import { FileImageContext } from "@/components/chat/MarkdownImage";
 import { SubagentSummaryLine } from "@/components/chat/SubagentSummary";
 import { EntryImageContext } from "@/components/chat/TranscriptImages";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
@@ -138,6 +139,12 @@ export default function ChatScreen() {
 		return (entryId: string, index: number, thumbnail: boolean): Promise<ViewImage> =>
 			appStore.entryImage(target, entryId, index, thumbnail);
 	}, [selection, view?.entryImages, view?.phase, view?.session?.id]);
+
+	const loadFileImage = useMemo(() => {
+		if (!selection || !view?.fileImages || view.phase !== "ready") return null;
+		const target = { ...selection, sessionId: view.session?.id ?? null, cwd: view.cwd };
+		return (path: string, thumbnail: boolean): Promise<ViewImage> => appStore.fileImage(target, path, thumbnail);
+	}, [selection, view?.fileImages, view?.phase, view?.session?.id, view?.cwd]);
 
 	const sending = outbox.some((e) => e.state === "sending");
 	// Read through the store subscription: a bare call in render is memoized once by the React Compiler.
@@ -287,9 +294,11 @@ export default function ChatScreen() {
 				<View style={styles.flex}>
 					{selection && view && (view.phase === "ready" || view.phase === "gone" || rows.length > 0) ? (
 						<EntryImageContext.Provider value={loadEntryImage}>
-							<DialogContext.Provider value={dialog}>
-								<Transcript key={key} rows={rows} runs={runs} onOpenRun={openRun} />
-							</DialogContext.Provider>
+							<FileImageContext.Provider value={loadFileImage}>
+								<DialogContext.Provider value={dialog}>
+									<Transcript key={key} rows={rows} runs={runs} onOpenRun={openRun} />
+								</DialogContext.Provider>
+							</FileImageContext.Provider>
 						</EntryImageContext.Provider>
 					) : (
 						<EmptyState onOpenDrawer={openDrawer} />

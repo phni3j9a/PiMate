@@ -360,3 +360,13 @@ it("forwards thumbnail mode to the shared entry image resizer", async () => {
 	});
 	expect(resize).toHaveBeenCalledWith(Buffer.from("YQ==", "base64"), "image/png", true);
 });
+
+it("forwards file thumbnail mode and session cwd to the file image handler", async () => {
+	const { handlers, ctx } = setup();
+	Object.assign(ctx, { cwd: "/session" });
+	const read = vi
+		.spyOn(images, "fileImage")
+		.mockResolvedValue({ mimeType: "image/jpeg", data: "YQ==", width: 320, height: 160 });
+	expect(await handlers.file_image({ path: "./x.png", thumbnail: true })).toMatchObject({ image: { width: 320 } });
+	expect(read).toHaveBeenCalledWith("./x.png", "/session", true);
+});

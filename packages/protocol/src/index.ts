@@ -334,7 +334,7 @@ export interface RcMethods extends AuthMethods {
 		result: { image: ViewImage };
 	};
 	/** Local regular PNG/JPEG/WebP/GIF file; relative to session cwd, also accepts absolute, ~/ and file://. */
-	file_image: { params: { path: string }; result: { image: ViewImage } };
+	file_image: { params: { path: string; thumbnail?: boolean }; result: { image: ViewImage } };
 	/** idle: starts a turn (deliveredAs: prompt). busy: uses deliverAs, or followUp for legacy callers. Expanded extension commands run immediately and return "command" (no user transcript entry). */
 	prompt: {
 		params: { text: string; images?: PromptImage[]; deliverAs?: "steer" | "followUp"; expandTemplates?: boolean };

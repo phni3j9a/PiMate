@@ -1974,3 +1974,100 @@ it("separates thumbnail and full caches and rejects large originals from RCs ign
 	expect(opRcs(socket)).toHaveLength(3);
 	store.dispose();
 });
+
+describe("Markdown file image retrieval", () => {
+	const image = { mimeType: "image/png", data: "YQ==" };
+	it("deduplicates target/cwd/path/variant requests and keeps full images separate from thumbnails", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		socket.receive(subscribedMsg([], "s1", "idle", { fileImages: true }));
+		const target = { ...store.opTarget()!, cwd: store.getState().view!.cwd };
+		const first = store.fileImage(target, "./x.png", true);
+		const duplicate = store.fileImage(target, "./x.png", true);
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		expect(request).toMatchObject({
+			method: "file_image",
+			params: { path: "./x.png", thumbnail: true },
+			expectInstanceId: "i1",
+			expectSessionId: "s1",
+		});
+		expect(opRcs(socket)).toHaveLength(1);
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { image } },
+		});
+		expect(await first).toEqual(image);
+		expect(await duplicate).toEqual(image);
+		expect(await store.fileImage(target, "./x.png", true)).toEqual(image);
+		expect(opRcs(socket)).toHaveLength(1);
+		const full = store.fileImage(target, "./x.png", false);
+		await flush();
+		const fullRequest = opRcs(socket).at(-1).request;
+		expect(fullRequest.params.thumbnail).toBe(false);
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: fullRequest.id, ok: true, result: { image } },
+		});
+		expect(await full).toEqual(image);
+		expect(opRcs(socket)).toHaveLength(2);
+		store.dispose();
+	});
+	it("gates the capability and rejects changed host/instance/session/cwd, including in-flight replies", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		const target = { ...store.opTarget()!, cwd: store.getState().view!.cwd };
+		await expect(store.fileImage(target, "./x.png", true)).rejects.toThrow("更新");
+		expect(opRcs(socket)).toHaveLength(0);
+		socket.receive(subscribedMsg([], "s1", "idle", { fileImages: true }));
+		for (const changed of [{ hostId: "other" }, { instanceId: "other" }, { sessionId: "other" }, { cwd: "/other" }])
+			await expect(store.fileImage({ ...target, ...changed }, "./x.png", true)).rejects.toThrow("会話が変わりました");
+		const pending = store.fileImage(target, "./x.png", true);
+		const rejected = expect(pending).rejects.toThrow("会話が変わりました");
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		socket.receive(subscribedMsg([], "s1", "idle", { fileImages: true, cwd: "/different-cwd" }));
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: request.id, ok: true, result: { image } },
+		});
+		await rejected;
+		await expect(store.fileImage(target, "./x.png", true)).rejects.toThrow("会話が変わりました");
+		const next = store.fileImage({ ...target, cwd: "/different-cwd" }, "./x.png", true);
+		await flush();
+		const nextRequest = opRcs(socket).at(-1).request;
+		expect(opRcs(socket)).toHaveLength(2);
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: { type: "response", id: nextRequest.id, ok: true, result: { image } },
+		});
+		expect(await next).toEqual(image);
+		store.dispose();
+	});
+	it("rejects large originals from older RCs that ignore thumbnail mode", async () => {
+		const { store } = await setup();
+		const socket = connect();
+		socket.receive(subscribedMsg([], "s1", "idle", { fileImages: true }));
+		const target = { ...store.opTarget()!, cwd: store.getState().view!.cwd };
+		const pending = store.fileImage(target, "./x.png", true);
+		const rejected = expect(pending).rejects.toThrow("画像を読み込めません");
+		await flush();
+		const request = opRcs(socket).at(-1).request;
+		socket.receive({
+			type: "rc_result",
+			instanceId: "i1",
+			response: {
+				type: "response",
+				id: request.id,
+				ok: true,
+				result: { image: { ...image, data: Buffer.alloc(512 * 1024 + 1).toString("base64") } },
+			},
+		});
+		await rejected;
+		store.dispose();
+	});
+});

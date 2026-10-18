@@ -62,7 +62,7 @@ export async function viewImage(bytes: Buffer, mimeType: string, thumbnail = fal
 	return { mimeType: mimeType as ViewImage["mimeType"], data: bytes.toString("base64") };
 }
 
-export async function fileImage(path: string, cwd: string): Promise<ViewImage> {
+export async function fileImage(path: string, cwd: string, thumbnail = false): Promise<ViewImage> {
 	const resolved = resolveImagePath(path, cwd);
 	let file: FileHandle | undefined;
 	try {
@@ -81,7 +81,7 @@ export async function fileImage(path: string, cwd: string): Promise<ViewImage> {
 		const bytes = Buffer.concat(chunks);
 		const mimeType = imageMimeType(bytes);
 		if (!mimeType) throw new RcError("unsupported", "Unsupported image format");
-		return await viewImage(bytes, mimeType);
+		return await viewImage(bytes, mimeType, thumbnail);
 	} catch (error) {
 		if (error instanceof RcError) throw error;
 		const code = (error as NodeJS.ErrnoException).code;
