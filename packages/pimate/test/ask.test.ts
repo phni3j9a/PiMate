@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type AskParams, askSequential, formatAnswers, parseMulti } from "../src/extension/ask.ts";
+import { type AskParams, askSequential, formatAnswers, parseMulti, validAnswers } from "../src/extension/ask.ts";
 
 /** Scripted ui.select/input: each reply is consumed in order; the reply is a function of the dialog's title/options. */
 function scriptedUI(replies: ((title: string, options?: string[]) => string | undefined)[]) {
@@ -65,6 +65,28 @@ describe("pimate_ask", () => {
 		expect(parseMulti("; only text", labels)).toEqual({ selected: [], custom: "only text" });
 		expect(parseMulti("4", labels)).toEqual({ selected: [], custom: "4" });
 		expect(parseMulti("B and C", labels)).toEqual({ selected: [], custom: "B and C" });
+	});
+
+	it("accepts only phone answers that match the questions", () => {
+		const qs = params.questions;
+		expect(validAnswers(qs, [{ selected: ["SQLite"] }, { selected: [] }])).toBe(true);
+		expect(
+			validAnswers(qs, [
+				{ selected: [], custom: "MySQL" },
+				{ selected: ["Cache", "Queue"], custom: "x" },
+			]),
+		).toBe(true);
+		for (const bad of [
+			undefined,
+			[{ selected: ["SQLite"] }],
+			[{ selected: [] }, { selected: [] }],
+			[{ selected: [], custom: "  " }, { selected: [] }],
+			[{ selected: ["SQLite"], custom: "MySQL" }, { selected: [] }],
+			[{ selected: ["Postgres", "SQLite"] }, { selected: [] }],
+			[{ selected: ["Oracle"] }, { selected: [] }],
+			[{ selected: ["SQLite"] }, { selected: ["Cache", "Cache"] }],
+		])
+			expect(validAnswers(qs, bad)).toBe(false);
 	});
 
 	it("formats answers for the model", () => {

@@ -85,6 +85,11 @@ describe("dispatch", () => {
 		[{ id: "1", method: "prompt", params: { text: 3 } }, "bad_request"],
 		[{ id: "1", method: "set_thinking", params: { level: "huge" } }, "bad_request"],
 		[{ id: "1", method: "session_op", params: { op: "switch" } }, "bad_request"],
+		[{ id: "1", method: "ui_respond", params: { requestId: "r", answers: [{ selected: "A" }] } }, "bad_request"],
+		[
+			{ id: "1", method: "ui_respond", params: { requestId: "r", answers: [{ selected: [], custom: 1 }] } },
+			"bad_request",
+		],
 		[{ id: "1", method: "hello", expectInstanceId: "other" }, "instance_mismatch"],
 		[{ id: "1", method: "hello", expectSessionId: "old" }, "session_changed"],
 	])("rejects %j", async (request, code) => {

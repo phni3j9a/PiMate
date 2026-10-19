@@ -480,6 +480,8 @@ function applyEvent(view: InstanceView, event: Extract<HostMessage, { type: "eve
 }
 
 function matchesPrompt(req: UIRequest, prompt: { kind: string; title?: string }): boolean {
+	// pimate_ask: the PC asks a questionnaire's questions as its own select/input dialogs.
+	if (req.kind === "questionnaire") return true;
 	return req.kind === prompt.kind && (prompt.title === undefined || req.title === prompt.title);
 }
 

@@ -205,6 +205,16 @@ describe("instance view reducer", () => {
 			ev({ type: "ui_prompt", phase: "start", kind: "select", title: "Pick" }),
 		);
 		expect(v.uiPrompt).toBeNull();
+		// pimate_ask: the PC asks the questionnaire as its own select/input dialogs (other titles).
+		v = apply(
+			v,
+			ev({
+				type: "ui_request",
+				request: { requestId: "q", kind: "questionnaire", title: "DB?", questions: [{ question: "DB?", options: [] }] },
+			}),
+			ev({ type: "ui_prompt", phase: "start", kind: "input", title: "Context\n\n(1/2) DB?" }),
+		);
+		expect(v.uiPrompt).toBeNull();
 		v = apply(v, ev({ type: "context", context: null }));
 		expect(v.context).toBeNull();
 		v = reduceView(v, { type: "instance_gone", instanceId: ID }, 0);
