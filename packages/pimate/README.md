@@ -140,6 +140,12 @@ RCはPi組み込み `write` の実行前にファイルを読み、成功時の 
 
 history/liveのtool_resultでは `details` のJSONが256 KiB超（またはJSON化不能）の場合だけ省略し `detailsOmitted: true` を付けます。通常サイズの `edit` の `details.patch` はそのままです。`tool_end` イベントは従来どおり結果/detailsを持ちません。これらの転送制限で元のPiセッションは書き換えません。
 
+## 質問ツール pimate_ask（#77）
+
+RCは `pimate_ask` ツールを `defaultActive: false` で登録します。Pi標準の `"defaultTools": ["+pimate_ask"]` または `--tools +pimate_ask` で有効化します（Pi 1.2.0 / 1.3.0で確認）。他拡張の `ask_user` 等と衝突しないよう専用名にしています。
+
+引数は `questions[]`（1〜4問。`question`、`options[]`（2〜6個の `{ label, description? }`）、`multiSelect?`）と任意の `context`。各問を順に `ctx.ui.select` / `input` で尋ねるため、既存のダイアログ中継でスマホからも回答できます。単一選択は `1. label — description` 形式の選択肢と末尾の自由入力（空/キャンセルで選択肢へ戻る）、複数選択は `1,3; 自由入力` の番号入力（解釈できなければ全文を自由入力扱い）です。どれかのダイアログをキャンセルすると全体キャンセルとしてモデルへ返します（`details: { answers, cancelled }`）。
+
 ## 構成
 
 - `src/extension/index.ts`: Pi lifecycle・イベント・session command trampoline
