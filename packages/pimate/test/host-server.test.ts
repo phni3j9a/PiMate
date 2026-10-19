@@ -471,6 +471,7 @@ it("spawns with only typed CLI flags, sends initial prompt once and rate limits"
 			trust: true,
 			model: { provider: "openai", id: "gpt-6-luna" },
 			thinking: "off",
+			askTool: true,
 			message: "first",
 			command: "not-executed",
 		},
@@ -479,7 +480,7 @@ it("spawns with only typed CLI flags, sends initial prompt once and rate limits"
 	expect(spawn).toHaveBeenCalledWith({
 		cwd: s.dir,
 		trust: true,
-		args: ["--model", "openai/gpt-6-luna", "--thinking", "off"],
+		args: ["--model", "openai/gpt-6-luna", "--thinking", "off", "--tools", "+pimate_ask"],
 	});
 	expect(s.requests.filter((r) => r.method === "prompt")).toEqual([
 		expect.objectContaining({ params: { text: "first", expandTemplates: false } }),

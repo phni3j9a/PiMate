@@ -122,6 +122,8 @@ export interface SpawnParams {
 	trust?: boolean;
 	model?: { provider: string; id: string };
 	thinking?: ThinkingLevel;
+	/** PiMate's `pimate_ask` tool: true adds it (`--tools +pimate_ask`), false removes it, omitted = Pi settings. */
+	askTool?: boolean;
 	/** First prompt, sent once the Pi is ready. */
 	message?: string;
 }
