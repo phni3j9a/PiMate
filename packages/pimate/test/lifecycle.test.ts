@@ -28,7 +28,9 @@ function setup(mobile = false, trust?: string) {
 }
 it.each(["yes", "no"])("only consumes explicit Host-origin trust decision %s", (trust) => {
 	const { hooks, h } = setup(true, trust);
-	expect(hooks.get("project_trust")?.()).toEqual({ trusted: trust });
+	expect(hooks.get("project_trust")?.()).toEqual(
+		trust === "yes" ? { trusted: "yes", remember: true } : { trusted: "no" },
+	);
 	expect(process.env.PIMATE_TRUST).toBeUndefined();
 	expect(process.env.PIMATE_ORIGIN).toBeUndefined();
 	expect(h.trust).toBe(trust);
