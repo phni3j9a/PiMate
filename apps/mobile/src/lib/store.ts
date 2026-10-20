@@ -25,6 +25,7 @@ import type {
 	SubagentAction,
 	SubagentTranscript,
 	ThinkingLevel,
+	UIQuestionAnswer,
 	ViewImage,
 } from "@pimate/protocol";
 import {
@@ -149,6 +150,7 @@ export interface UIAnswer {
 	value?: string;
 	confirmed?: boolean;
 	cancelled?: boolean;
+	answers?: UIQuestionAnswer[];
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; title: string; text: string; code?: string };

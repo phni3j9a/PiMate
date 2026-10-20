@@ -8,6 +8,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { type ModelDefault, type ModelRef, slashCommandName } from "@pimate/protocol";
+import { validAnswers } from "./ask.ts";
 import { createProviderAuth } from "./auth.ts";
 import type { Handlers } from "./dispatch.ts";
 import { RcError } from "./dispatch.ts";
@@ -119,7 +120,10 @@ export function createHandlers(h: Hub): Handlers {
 			ready();
 			const pending = h.pendingUI.get(p.requestId);
 			if (!pending) throw new RcError("no_such_request");
-			if (!p.cancelled) {
+			if (!p.cancelled && pending.request.kind === "questionnaire") {
+				if (!validAnswers(pending.request.questions ?? [], p.answers))
+					throw new RcError("bad_request", "Answers do not match the questions");
+			} else if (!p.cancelled) {
 				if (pending.request.kind === "confirm" ? typeof p.confirmed !== "boolean" : typeof p.value !== "string")
 					throw new RcError("bad_request", "Answer does not match dialog kind");
 				if (pending.request.kind === "select" && !pending.request.options?.includes(p.value!))

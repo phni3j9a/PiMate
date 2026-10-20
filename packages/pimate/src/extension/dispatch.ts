@@ -112,7 +112,20 @@ export function validateRequest(value: unknown): Request {
 				bool("expandTemplates");
 			break;
 		case "ui_respond":
-			ok = str("requestId", true) && str("value") && bool("confirmed") && bool("cancelled");
+			ok =
+				str("requestId", true) &&
+				str("value") &&
+				bool("confirmed") &&
+				bool("cancelled") &&
+				(p.answers === undefined ||
+					(Array.isArray(p.answers) &&
+						p.answers.every(
+							(a) =>
+								object(a) &&
+								Array.isArray(a.selected) &&
+								a.selected.every((x) => typeof x === "string") &&
+								(a.custom === undefined || typeof a.custom === "string"),
+						)));
 			break;
 		case "set_thinking":
 			ok = typeof p.level === "string" && THINKING_LEVELS.includes(p.level);

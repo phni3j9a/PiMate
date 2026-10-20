@@ -1,5 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { UIQuestion, UIQuestionAnswer } from "@pimate/protocol";
 import { type Static, Type } from "typebox";
+import { getHub } from "./hub.ts";
+import { getLocalUI, raceUI } from "./ui.ts";
 
 export const ASK_TOOL = "pimate_ask";
 
@@ -86,6 +89,48 @@ export async function askSequential(
 	return answers;
 }
 
+/** Phone answers (trust boundary): one per question, known labels only, a single label unless multiSelect, and a non-empty answer for single-select. */
+export function validAnswers(questions: UIQuestion[], answers: UIQuestionAnswer[] | undefined): boolean {
+	return (
+		!!answers &&
+		answers.length === questions.length &&
+		answers.every((a, i) => {
+			const q = questions[i];
+			const labels = q.options.map((o) => o.label);
+			if (!a.selected.every((x) => labels.includes(x)) || new Set(a.selected).size !== a.selected.length) return false;
+			return q.multiSelect ? true : a.selected.length + (a.custom?.trim() ? 1 : 0) === 1;
+		})
+	);
+}
+
+/**
+ * With PiMate's dialog relay active, the phone gets the whole questionnaire as one request while the PC asks
+ * question by question (unrelayed). The first to finish wins; the PC's partial answers are then discarded.
+ */
+function ask(ctx: ExtensionContext, params: AskParams, signal?: AbortSignal): Promise<AskAnswer[] | undefined> {
+	const local = getLocalUI(ctx);
+	if (local === ctx.ui) return askSequential(ctx.ui, params, signal);
+	return raceUI(
+		getHub(),
+		{
+			kind: "questionnaire",
+			title: params.questions[0].question,
+			message: params.context,
+			questions: params.questions,
+		},
+		(s) => askSequential(local, params, s),
+		(r) =>
+			r.cancelled || !r.answers
+				? undefined
+				: r.answers.map((a, i) => ({
+						question: params.questions[i].question,
+						selected: a.selected,
+						...(a.custom?.trim() ? { custom: a.custom.trim() } : {}),
+					})),
+		signal,
+	);
+}
+
 export function formatAnswers(answers: AskAnswer[] | undefined): string {
 	if (!answers)
 		return "The user cancelled the questions without answering. Do not assume an answer; ask how to proceed.";
@@ -119,7 +164,7 @@ export function registerAsk(pi: ExtensionAPI): void {
 					content: [{ type: "text", text: "Error: no interactive UI; the user cannot answer questions now." }],
 					details: { answers: [], cancelled: true } satisfies AskDetails,
 				};
-			const answers = await askSequential(ctx.ui, params, signal);
+			const answers = await ask(ctx, params, signal);
 			return {
 				content: [{ type: "text", text: formatAnswers(answers) }],
 				details: { answers: answers ?? [], cancelled: !answers } satisfies AskDetails,

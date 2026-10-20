@@ -17,7 +17,7 @@
  *
  * Dev controls (curl -X POST http://127.0.0.1:47800/_dev/<cmd>):
  *   turn?i=<instanceId>   run the scripted turn as if typed on the PC   (default: the first instance)
- *   ask?i=<id>&kind=select|confirm|input|editor   open a ui_request (instance goes waiting_input)
+ *   ask?i=<id>&kind=select|confirm|input|editor|questionnaire   open a ui_request (instance goes waiting_input)
  *   answered?i=<id>       the oldest open question is answered on the PC (ui_request_end by tui)
  *   custom?i=<id>[&end=1] a TUI-only screen opens (ui_prompt start, "PC で操作が必要") / closes
  *   resume?i=<id>         simulate /resume on the PC (session_changed + new history)
@@ -953,6 +953,25 @@ const ASK = {
 		kind: "select",
 		title: "メールリンクの実装方式は？",
 		options: ["既存の認証 API を拡張", "外部の Magic Link サービスを使う", "今回は UI の整理だけ"],
+	}),
+	questionnaire: () => ({
+		kind: "questionnaire",
+		title: "メールリンクの実装方式は？",
+		message: "ログイン画面にメールリンクを追加します。",
+		questions: [
+			{
+				question: "メールリンクの実装方式は？",
+				options: [
+					{ label: "既存の認証 API を拡張 (Recommended)", description: "依存を増やさず、今のセッション管理を流用" },
+					{ label: "外部の Magic Link サービス", description: "実装は速いが月額費用がかかる" },
+				],
+			},
+			{
+				question: "一緒に入れる変更は？",
+				multiSelect: true,
+				options: [{ label: "E2E テスト" }, { label: "ドキュメント" }, { label: "監査ログ" }],
+			},
+		],
 	}),
 	confirm: () => ({ kind: "confirm", title: "変更をコミットしますか？", message: "3 ファイルを変更しています。" }),
 	input: () => ({ kind: "input", title: "コミットメッセージ", placeholder: "例: fix: ログインの不具合" }),
@@ -2201,7 +2220,7 @@ const server = createServer((req, res) => {
 			case "ask": {
 				if (!inst) return reply(404, {});
 				const make = ASK[url.searchParams.get("kind") ?? "confirm"];
-				if (!make) return reply(400, { error: "kind must be select|confirm|input|editor" });
+				if (!make) return reply(400, { error: "kind must be select|confirm|input|editor|questionnaire" });
 				const request = { requestId: `ui-${Date.now()}`, ...make() };
 				inst.pendingUI.push(request);
 				emit(id, { type: "ui_request", request });

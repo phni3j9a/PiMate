@@ -221,16 +221,23 @@ it.skipIf(!pi || !abduco)(
 				(e) => e !== undefined,
 			);
 			if (asked?.event.type !== "ui_request") throw new Error("Missing pimate_ask dialog");
+			// The phone gets the whole questionnaire; the PC's own question-by-question dialog is not relayed.
 			expect(asked.event.request).toMatchObject({
-				kind: "select",
+				kind: "questionnaire",
 				title: "Which DB?",
-				options: ["1. Postgres", "2. SQLite", "3. Type your own answer"],
+				questions: [{ question: "Which DB?", options: [{ label: "Postgres" }, { label: "SQLite" }] }],
 			});
-			await client.request("ui_respond", { requestId: asked.event.request.requestId, value: "2. SQLite" });
+			const { requestId } = asked.event.request;
+			await expect(
+				client.request("ui_respond", { requestId, answers: [{ selected: ["Oracle"] }] }),
+			).rejects.toMatchObject({ code: "bad_request" });
+			await client.request("ui_respond", { requestId, answers: [{ selected: ["SQLite"] }] });
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),
 			);
+			expect(events.filter((e) => e.event.type === "ui_request")).toHaveLength(1);
+			expect((await client.request("hello", {})).snapshot.pcPrompt ?? null).toBeNull();
 			expect((await client.request("history", {})).items).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({

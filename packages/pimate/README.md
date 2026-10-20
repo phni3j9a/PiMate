@@ -144,7 +144,7 @@ history/liveのtool_resultでは `details` のJSONが256 KiB超（またはJSON�
 
 RCは `pimate_ask` ツールを `defaultActive: false` で登録します。Pi標準の `"defaultTools": ["+pimate_ask"]` または `--tools +pimate_ask` で有効化します（Pi 1.2.0 / 1.3.0で確認）。他拡張の `ask_user` 等と衝突しないよう専用名にしています。
 
-引数は `questions[]`（1〜4問。`question`、`options[]`（2〜6個の `{ label, description? }`）、`multiSelect?`）と任意の `context`。各問を順に `ctx.ui.select` / `input` で尋ねるため、既存のダイアログ中継でスマホからも回答できます。単一選択は `1. label — description` 形式の選択肢と末尾の自由入力（空/キャンセルで選択肢へ戻る）、複数選択は `1,3; 自由入力` の番号入力（解釈できなければ全文を自由入力扱い）です。どれかのダイアログをキャンセルすると全体キャンセルとしてモデルへ返します（`details: { answers, cancelled }`）。
+引数は `questions[]`（1〜4問。`question`、`options[]`（2〜6個の `{ label, description? }`）、`multiSelect?`）と任意の `context`。PiMateのダイアログ中継が有効なときは、スマホへ全問をまとめた `ui_request`（`kind: "questionnaire"`、`questions`、`message` = context）を1件送り、PCでは同じ質問を中継しない `select` / `input` で1問ずつ尋ねます。先に終わった方を採用し、PCの途中回答は破棄します。スマホの回答は `ui_respond { answers: [{ selected, custom? }] }`（問ごと・順番どおり）で、RCが選択肢名・単一選択の1件・件数を検証します。中継がない場合は通常の `select` / `input` だけで尋ねます。単一選択は `1. label — description` 形式の選択肢と末尾の自由入力（空/キャンセルで選択肢へ戻る）、複数選択は `1,3; 自由入力` の番号入力（解釈できなければ全文を自由入力扱い）です。どれかのダイアログをキャンセルすると全体キャンセルとしてモデルへ返します（`details: { answers, cancelled }`）。
 
 ## 構成
 
