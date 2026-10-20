@@ -29,6 +29,16 @@ export default function fixture(pi: ExtensionAPI): void {
 					fauxAssistantMessage("Files updated."),
 				]
 			: []),
+		...(process.env.PIMATE_E2E_ASK
+			? [
+					fauxAssistantMessage(
+						fauxToolCall("pimate_ask", {
+							questions: [{ question: "Which DB?", options: [{ label: "Postgres" }, { label: "SQLite" }] }],
+						}),
+					),
+					fauxAssistantMessage("Thanks for answering."),
+				]
+			: []),
 		fauxAssistantMessage("slow response ".repeat(1000)),
 	]);
 	pi.registerProvider(faux.provider);

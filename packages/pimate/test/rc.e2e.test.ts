@@ -41,6 +41,7 @@ it.skipIf(!pi || !abduco)(
 				PIMATE_E2E: "1",
 				PIMATE_E2E_WRITE_DIFF: "1",
 				PIMATE_E2E_IMAGE_RESIZE: "1",
+				PIMATE_E2E_ASK: "1",
 			},
 		});
 		try {
@@ -59,7 +60,8 @@ it.skipIf(!pi || !abduco)(
 					"--thinking",
 					"off",
 					"--tools",
-					"write,edit,read",
+					// pimate_ask is opt-in (defaultActive: false); naming it here enables it.
+					"write,edit,read,pimate_ask",
 				],
 			});
 			instanceId = launched.instanceId;
@@ -209,6 +211,33 @@ it.skipIf(!pi || !abduco)(
 							toolName: "write",
 							details: expect.objectContaining({ pimate: expect.objectContaining({ patch: expect.any(String) }) }),
 						}),
+					}),
+				]),
+			);
+			events.length = 0;
+			expect(cli("prompt", instanceId, "ask me")).toEqual({ deliveredAs: "prompt" });
+			const asked = await until(
+				() => events.find((e) => e.event.type === "ui_request"),
+				(e) => e !== undefined,
+			);
+			if (asked?.event.type !== "ui_request") throw new Error("Missing pimate_ask dialog");
+			expect(asked.event.request).toMatchObject({
+				kind: "select",
+				title: "Which DB?",
+				options: ["1. Postgres", "2. SQLite", "3. Type your own answer"],
+			});
+			await client.request("ui_respond", { requestId: asked.event.request.requestId, value: "2. SQLite" });
+			await until(
+				() => events,
+				(e) => e.some((x) => x.event.type === "agent_settled"),
+			);
+			expect((await client.request("history", {})).items).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						kind: "tool_result",
+						toolName: "pimate_ask",
+						isError: false,
+						text: expect.stringContaining("→ SQLite"),
 					}),
 				]),
 			);
