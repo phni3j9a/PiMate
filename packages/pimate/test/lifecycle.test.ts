@@ -19,6 +19,7 @@ function setup(mobile = false, trust?: string) {
 			return () => hooks.delete(event);
 		},
 		registerCommand: vi.fn(),
+		registerTool: vi.fn(),
 		events: { on: () => () => {} },
 		getThinkingLevel: () => "off",
 	} as unknown as ExtensionAPI;

@@ -27,6 +27,11 @@ Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j
 - `/pimate start` / `stop` / `restart`: Hostを操作
 - `/pimate uninstall`: Host停止とサービス・`pimate` リンクの削除（設定は保持）
 
+質問ツール `pimate_ask`（既定は無効）: モデルが迷ったときに1〜4問の選択式質問を出し、PCとスマホのどちらからでも回答できます。
+スマホから起動する Pi は、「新しい Pi」画面の「質問ツールを使う」で切り替えます（PCの設定より優先）。PCで起動する Pi は、
+`~/.pi/agent/settings.json`（またはプロジェクトの `.pi/settings.json`）に `"defaultTools": ["+pimate_ask"]` を追加するか、
+`pi --tools +pimate_ask` で有効にします。`defaultTools` をツール名の一覧で書いている場合は `+` を付けず `pimate_ask` を一覧に加えます。
+
 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
 旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
 

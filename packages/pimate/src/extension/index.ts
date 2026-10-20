@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ParamsOf } from "@pimate/protocol";
+import { registerAsk } from "./ask.ts";
 import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
@@ -14,6 +15,7 @@ import { registerWriteDiff } from "./write-diff.ts";
 
 export default function pimate(pi: ExtensionAPI): void {
 	registerSetup(pi);
+	registerAsk(pi);
 	const h = getHub();
 	// Pi recreates extension runtimes on /new, /resume and /reload. The process hub survives,
 	// but old bus and lifecycle subscriptions must not.
@@ -213,8 +215,11 @@ export default function pimate(pi: ExtensionAPI): void {
 			h.emit({ type: "thinking", level: e.level });
 		}),
 		pi.on("ui_prompt_start", (e) => {
-			if (![...h.pendingUI.values()].some((p) => p.request.kind === e.kind && p.request.title === e.title))
-				h.pcPrompt = { kind: e.kind, title: e.title };
+			// pimate_ask's PC-side dialogs belong to a questionnaire the phone can already answer.
+			const relayed = [...h.pendingUI.values()].some(
+				(p) => p.request.kind === "questionnaire" || (p.request.kind === e.kind && p.request.title === e.title),
+			);
+			if (!relayed) h.pcPrompt = { kind: e.kind, title: e.title };
 			h.emit({ type: "ui_prompt", phase: "start", kind: e.kind, title: e.title });
 		}),
 		pi.on("ui_prompt_end", (e) => {

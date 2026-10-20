@@ -41,6 +41,7 @@ it.skipIf(!pi || !abduco)(
 				PIMATE_E2E: "1",
 				PIMATE_E2E_WRITE_DIFF: "1",
 				PIMATE_E2E_IMAGE_RESIZE: "1",
+				PIMATE_E2E_ASK: "1",
 			},
 		});
 		try {
@@ -59,7 +60,8 @@ it.skipIf(!pi || !abduco)(
 					"--thinking",
 					"off",
 					"--tools",
-					"write,edit,read",
+					// pimate_ask is opt-in (defaultActive: false); naming it here enables it.
+					"write,edit,read,pimate_ask",
 				],
 			});
 			instanceId = launched.instanceId;
@@ -209,6 +211,40 @@ it.skipIf(!pi || !abduco)(
 							toolName: "write",
 							details: expect.objectContaining({ pimate: expect.objectContaining({ patch: expect.any(String) }) }),
 						}),
+					}),
+				]),
+			);
+			events.length = 0;
+			expect(cli("prompt", instanceId, "ask me")).toEqual({ deliveredAs: "prompt" });
+			const asked = await until(
+				() => events.find((e) => e.event.type === "ui_request"),
+				(e) => e !== undefined,
+			);
+			if (asked?.event.type !== "ui_request") throw new Error("Missing pimate_ask dialog");
+			// The phone gets the whole questionnaire; the PC's own question-by-question dialog is not relayed.
+			expect(asked.event.request).toMatchObject({
+				kind: "questionnaire",
+				title: "Which DB?",
+				questions: [{ question: "Which DB?", options: [{ label: "Postgres" }, { label: "SQLite" }] }],
+			});
+			const { requestId } = asked.event.request;
+			await expect(
+				client.request("ui_respond", { requestId, answers: [{ selected: ["Oracle"] }] }),
+			).rejects.toMatchObject({ code: "bad_request" });
+			await client.request("ui_respond", { requestId, answers: [{ selected: ["SQLite"] }] });
+			await until(
+				() => events,
+				(e) => e.some((x) => x.event.type === "agent_settled"),
+			);
+			expect(events.filter((e) => e.event.type === "ui_request")).toHaveLength(1);
+			expect((await client.request("hello", {})).snapshot.pcPrompt ?? null).toBeNull();
+			expect((await client.request("history", {})).items).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						kind: "tool_result",
+						toolName: "pimate_ask",
+						isError: false,
+						text: expect.stringContaining("→ SQLite"),
 					}),
 				]),
 			);

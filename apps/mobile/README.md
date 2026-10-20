@@ -29,8 +29,9 @@ M1:
 
 M2:
 
-- 新しい Pi（ドロワー上部の「新しい Pi を起動」）: マシン、最近使ったフォルダ（実行中の件数・最終利用）か手入力のパス（`~/` や `/` から入力すると PC のサブフォルダを候補に出し、タップで `…/名前/` を補完。隠しフォルダは `.` を入力したときだけ。PC パッケージ 0.1.10 以上、[#74](https://github.com/phni3j9a/PiMate/issues/74)）、「このフォルダを信頼する」（Pi が保存した判断で初期値が決まる。オンで起動すると PC の Pi にも保存し、次回からオン。オフは今回のみ）、モデル（そのマシンで動いている Pi から取得。なければ「Pi の既定」）、最初のメッセージ。起動後は一覧に現れるのを待って開く。最初のメッセージが送れなかったときは再送せずにそう表示する
+- 新しい Pi（ドロワー上部の「新しい Pi を起動」）: マシン、最近使ったフォルダ（実行中の件数・最終利用）か手入力のパス（`~/` や `/` から入力すると PC のサブフォルダを候補に出し、タップで `…/名前/` を補完。隠しフォルダは `.` を入力したときだけ。PC パッケージ 0.1.10 以上、[#74](https://github.com/phni3j9a/PiMate/issues/74)）、「このフォルダを信頼する」（Pi が保存した判断で初期値が決まる。オンで起動すると PC の Pi にも保存し、次回からオン。オフは今回のみ）、「質問ツールを使う」（`pimate_ask`。オンで `--tools +pimate_ask`、オフで `-pimate_ask` を付けて起動し、PC の設定より優先。最後の値を端末に記憶、初期値はオフ）、モデル（そのマシンで動いている Pi から取得。なければ「Pi の既定」）、最初のメッセージ。起動後は一覧に現れるのを待って開く。最初のメッセージが送れなかったときは再送せずにそう表示する
 - 質問への回答: select / confirm / input / editor をチャット内のカードで回答（回答は1回だけ送り、送信先の Pi・セッションを確かめる）。PC で回答されたら短い注記を残す
+- PiMate の質問ツール `pimate_ask`（questionnaire）: 1〜4問を1枚のカードで回答。単一選択はラジオ、複数選択はチェックボックス、選択肢の説明、各問の「自分で入力」。単一選択の問いがすべて埋まるまで送信できない。PC 側は同じ質問を1問ずつ出し、先に答えた方を採用（PC の途中回答は破棄）
 - PC でしか操作できない画面（Extension の独自 UI など）は「PC のターミナルで操作が必要です」カードと `pimate attach` のコマンド（コピー可）を表示
 - セッションのメニュー（ヘッダーの「…」）: 統計（メッセージ・トークン・コスト）、新しいセッション、過去のセッションを開く、ここから分岐（ユーザーのメッセージを選ぶ。選んだ文は入力欄に入る）、コンテキストを圧縮、起動元・PC の接続状態・attach コマンド、この Pi を終了（確認あり）
 - モデル・Thinking（入力欄のモデル名）: プロバイダーごとのモデル、そのモデルで使える Thinking レベル、コンテキスト使用量とコスト、圧縮。変更は PC の Pi にも反映される。「お気に入り」は PC の Pi の scoped models（`/scoped-models`・`enabledModels`、Ctrl+P で切り替えるモデル）と共通で、PC の `/model` と同じくお気に入りがあれば「お気に入り」から開き「すべて」に切り替えられる。☆ で追加・削除するとグローバル設定に保存（起動中の PC の Pi の Ctrl+P は再起動後に反映）。新しい Pi のモデル選択もお気に入りから。PC パッケージ 0.1.2 以前では ☆ を出さない（[#23](https://github.com/phni3j9a/PiMate/issues/23)）。「新しい Pi の既定」で現在のモデルと Thinking を PC の Pi の既定（`/model` の Default model と同じ `settings.json` の `defaultProvider`・`defaultModel`・`defaultThinkingLevel`）に保存でき、新しい Pi 画面の「Pi の既定」にそのモデル名を表示する。Thinking 非対応のモデルでは既定の Thinking を変えない（[#72](https://github.com/phni3j9a/PiMate/issues/72)）
@@ -192,7 +193,7 @@ node apps/mobile/scripts/dev-fake-host.mjs --port 47800   # ペアリング用�
 adb reverse tcp:47800 tcp:47800
 # スマホから「md」で始まるメッセージを送ると Markdown の見本（見出し・リスト・表・引用・コード）を返す
 curl -X POST http://127.0.0.1:47800/_dev/turn             # PCで打ったときの1ターンを再生（read / edit / write / bash。drop / offline?s=20 なども）
-curl -X POST "http://127.0.0.1:47800/_dev/ask?kind=select" # 質問を出す（select / confirm / input / editor）。answered で PC 側の回答
+curl -X POST "http://127.0.0.1:47800/_dev/ask?kind=select" # 質問を出す（select / confirm / input / editor / questionnaire）。answered で PC 側の回答
 curl -X POST http://127.0.0.1:47800/_dev/custom            # PC でしか操作できない画面（?end=1 で終了）
 curl -X POST http://127.0.0.1:47800/_dev/resume            # PC で /resume（model で PC 側のモデル変更）
 curl -X POST "http://127.0.0.1:47800/_dev/refuse-shutdown?on=1" # 「この Pi を終了」を断らせる（on=0 で戻す）

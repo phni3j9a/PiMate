@@ -2,7 +2,7 @@
  * Questions from Pi shown inside the chat (docs/design Chat-Waiting), and the "needs the PC" card (Chat-Attach).
  * Never a modal: the user can still scroll the transcript. Answers go through the store's guarded `ui_respond`.
  */
-import type { UIRequest } from "@pimate/protocol";
+import type { UIQuestion, UIRequest } from "@pimate/protocol";
 import { createContext, useContext, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -35,9 +35,15 @@ const LABEL: Record<UIRequest["kind"], string> = {
 	confirm: "確認してください",
 	input: "入力してください",
 	editor: "編集してください",
+	questionnaire: "質問に答えてください",
 };
 
 export function DialogCard({ request, marginTop }: { request: UIRequest; marginTop: number }) {
+	if (request.kind === "questionnaire") return <QuestionnaireCard request={request} marginTop={marginTop} />;
+	return <SimpleDialogCard request={request} marginTop={marginTop} />;
+}
+
+function SimpleDialogCard({ request, marginTop }: { request: UIRequest; marginTop: number }) {
 	const { answering, canAnswer, onAnswer } = useContext(DialogContext);
 	const [choice, setChoice] = useState<string | null>(null);
 	const [text, setText] = useState(request.kind === "editor" ? (request.message ?? "") : "");
@@ -135,6 +141,149 @@ export function DialogCard({ request, marginTop }: { request: UIRequest; marginT
 	);
 }
 
+type Draft = { selected: string[]; own: boolean; text: string };
+
+/** pimate_ask: every question in one card; single-select needs an option or own text, multi-select may stay empty. */
+function QuestionnaireCard({ request, marginTop }: { request: UIRequest; marginTop: number }) {
+	const { answering, canAnswer, onAnswer } = useContext(DialogContext);
+	const questions = request.questions ?? [];
+	const [drafts, setDrafts] = useState<Draft[]>(() => questions.map(() => ({ selected: [], own: false, text: "" })));
+	const busy = answering === request.requestId;
+	const disabled = !canAnswer || answering !== null;
+	const done = (q: UIQuestion, d: Draft) => q.multiSelect || d.selected.length > 0 || (d.own && !!d.text.trim());
+	const ready = questions.every((q, i) => done(q, drafts[i]));
+	const update = (i: number, next: (d: Draft, q: UIQuestion) => Draft) =>
+		setDrafts((all) => all.map((d, j) => (j === i ? next(d, questions[i]) : d)));
+	const toggle = (i: number, label: string) =>
+		update(i, (d, q) =>
+			q.multiSelect
+				? {
+						...d,
+						selected: d.selected.includes(label) ? d.selected.filter((x) => x !== label) : [...d.selected, label],
+					}
+				: { ...d, selected: [label], own: false },
+		);
+	const toggleOwn = (i: number) =>
+		update(i, (d, q) => (q.multiSelect ? { ...d, own: !d.own } : { ...d, selected: [], own: true }));
+	const submit = () =>
+		onAnswer(request.requestId, {
+			answers: drafts.map((d) => ({
+				selected: d.selected,
+				...(d.own && d.text.trim() ? { custom: d.text.trim() } : {}),
+			})),
+		});
+
+	return (
+		<View style={[styles.card, { marginTop }]}>
+			<View style={styles.head}>
+				<StatusMark kind="waiting" />
+				<Text style={styles.label}>{LABEL.questionnaire}</Text>
+			</View>
+			{request.message ? <Text style={[styles.message, { marginTop: 10 }]}>{request.message}</Text> : null}
+			{questions.map((q, i) => {
+				const d = drafts[i];
+				const Mark = q.multiSelect ? CheckMark : RadioMark;
+				const role = q.multiSelect ? "checkbox" : "radio";
+				return (
+					// biome-ignore lint/suspicious/noArrayIndexKey: a request's questions never change order.
+					<View key={i} style={i > 0 ? styles.nextQuestion : undefined}>
+						<Text style={styles.title} accessibilityRole="header">
+							{questions.length > 1 ? `${i + 1}/${questions.length}　` : ""}
+							{q.question}
+						</Text>
+						{q.multiSelect ? <Text style={styles.hint}>当てはまるものをすべて選択</Text> : null}
+						<View
+							accessibilityRole={q.multiSelect ? undefined : "radiogroup"}
+							accessibilityLabel={q.question}
+							style={styles.options}
+						>
+							{q.options.map((o) => {
+								const on = d.selected.includes(o.label);
+								return (
+									<Pressable
+										key={o.label}
+										accessibilityRole={role}
+										accessibilityState={{ checked: on, disabled }}
+										disabled={disabled}
+										onPress={() => toggle(i, o.label)}
+										style={({ pressed }) => [styles.option, pressed && styles.pressed]}
+									>
+										<Mark on={on} />
+										<View style={{ flex: 1 }}>
+											<Text style={styles.optionText}>{o.label}</Text>
+											{o.description ? <Text style={styles.optionDescription}>{o.description}</Text> : null}
+										</View>
+									</Pressable>
+								);
+							})}
+							<Pressable
+								accessibilityRole={role}
+								accessibilityState={{ checked: d.own, disabled }}
+								disabled={disabled}
+								onPress={() => toggleOwn(i)}
+								style={({ pressed }) => [styles.option, pressed && styles.pressed]}
+							>
+								<Mark on={d.own} />
+								<Text style={styles.optionText}>自分で入力</Text>
+							</Pressable>
+						</View>
+						{d.own ? (
+							<TextInput
+								value={d.text}
+								onChangeText={(text) => update(i, (x) => ({ ...x, text }))}
+								placeholder="回答を入力"
+								placeholderTextColor={colors.textTertiary}
+								editable={!disabled}
+								multiline
+								style={[styles.input, { marginTop: 4 }]}
+								accessibilityLabel={`${q.question}：自分で入力`}
+							/>
+						) : null}
+					</View>
+				);
+			})}
+			<View style={styles.actions}>
+				<TextButton
+					label="キャンセル"
+					tone="secondary"
+					weight="400"
+					disabled={disabled}
+					onPress={() => onAnswer(request.requestId, { cancelled: true })}
+				/>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="回答する"
+					accessibilityState={{ disabled: disabled || !ready, busy }}
+					disabled={disabled || !ready}
+					onPress={submit}
+					style={({ pressed }) => [
+						styles.answer,
+						(disabled || !ready) && !busy && styles.answerOff,
+						pressed && styles.pressed,
+					]}
+				>
+					{busy ? <ActivityIndicator color={colors.onAccent} size="small" /> : null}
+					<Text style={[styles.answerText, (disabled || !ready) && !busy && { color: colors.textSecondary }]}>
+						回答する
+					</Text>
+				</Pressable>
+			</View>
+		</View>
+	);
+}
+
+function RadioMark({ on }: { on: boolean }) {
+	return <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>;
+}
+
+function CheckMark({ on }: { on: boolean }) {
+	return (
+		<View style={[styles.radio, styles.check, on && styles.radioOn]}>
+			{on ? <Text style={styles.checkTick}>✓</Text> : null}
+		</View>
+	);
+}
+
 /** A TUI screen the phone cannot answer: point to the PC terminal (and `pimate attach` when there is one). */
 export function PcPromptCard({ title, marginTop }: { title: string | null; marginTop: number }) {
 	const { abducoSession } = useContext(DialogContext);
@@ -179,6 +328,10 @@ const styles = StyleSheet.create({
 	radioOn: { borderColor: colors.accent, backgroundColor: colors.accent },
 	radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.onAccent },
 	optionText: { ...typography.body, flex: 1, color: colors.text },
+	optionDescription: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+	check: { borderRadius: 4 },
+	checkTick: { fontSize: 13, lineHeight: 16, fontWeight: "700", color: colors.onAccent },
+	nextQuestion: { marginTop: 16 },
 	input: {
 		marginTop: 12,
 		minHeight: 44,

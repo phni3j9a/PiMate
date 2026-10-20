@@ -375,6 +375,7 @@ export class HostServer {
 				args: [
 					...(p.model ? ["--model", `${p.model.provider}/${p.model.id}`] : []),
 					...(p.thinking ? ["--thinking", p.thinking] : []),
+					...(p.askTool === undefined ? [] : ["--tools", `${p.askTool ? "+" : "-"}pimate_ask`]),
 				],
 			});
 			let messageError: string | undefined;

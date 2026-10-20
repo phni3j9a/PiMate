@@ -5,8 +5,8 @@ Pi は Host の子として使い捨てにせず、abduco の端末セッショ�
 
 ## 前提
 
-- Node.js 22.23 以降（TypeScriptの型除去）、Pi **1.2.0**、Unix-domain socket 対応OS。
-- リポジトリルートで `npm install` 済み。Pi関連パッケージは peer dependency（開発時の型は1.2.0固定）。
+- Node.js 22.23 以降（TypeScriptの型除去）、Pi **1.2.0以上**（開発は1.3.0）、Unix-domain socket 対応OS。
+- リポジトリルートで `npm install` 済み。Pi関連パッケージは peer dependency（開発時の型は1.3.0固定）。
 - 起動機能には abduco。`PIMATE_ABDUCO`（利用者が信頼するoverride）→ 同梱 `bin/<platform>-<arch>/abduco`（SHA-256照合）→ `PATH` の順に解決します。同梱が不在/不一致/未対応archなら警告してPATHへfallbackします。
 - Linuxでは user systemd manager が利用可能なら `systemd-run --user --scope` を使用し、Hostのcgroupから分離します。それ以外は detached spawn。後者はHostのサービス終了時に同じcgroupごと終了される可能性があります。ログアウト後の生存には別途 linger 設定が必要です。
 
@@ -140,6 +140,12 @@ RCはPi組み込み `write` の実行前にファイルを読み、成功時の 
 
 history/liveのtool_resultでは `details` のJSONが256 KiB超（またはJSON化不能）の場合だけ省略し `detailsOmitted: true` を付けます。通常サイズの `edit` の `details.patch` はそのままです。`tool_end` イベントは従来どおり結果/detailsを持ちません。これらの転送制限で元のPiセッションは書き換えません。
 
+## 質問ツール pimate_ask（#77）
+
+RCは `pimate_ask` ツールを `defaultActive: false` で登録します。Pi標準の `"defaultTools": ["+pimate_ask"]` または `--tools +pimate_ask` で有効化します（Pi 1.2.0 / 1.3.0で確認）。スマホからの起動では spawn の `askTool: true|false` をHostが `--tools +pimate_ask` / `-pimate_ask` に変換します（省略時はPiの設定どおり）。他拡張の `ask_user` 等と衝突しないよう専用名にしています。
+
+引数は `questions[]`（1〜4問。`question`、`options[]`（2〜6個の `{ label, description? }`）、`multiSelect?`）と任意の `context`。PiMateのダイアログ中継が有効なときは、スマホへ全問をまとめた `ui_request`（`kind: "questionnaire"`、`questions`、`message` = context）を1件送り、PCでは同じ質問を中継しない `select` / `input` で1問ずつ尋ねます。先に終わった方を採用し、PCの途中回答は破棄します。スマホの回答は `ui_respond { answers: [{ selected, custom? }] }`（問ごと・順番どおり）で、RCが選択肢名・単一選択の1件・件数を検証します。中継がない場合は通常の `select` / `input` だけで尋ねます。単一選択は `1. label — description` 形式の選択肢と末尾の自由入力（空/キャンセルで選択肢へ戻る）、複数選択は `1,3; 自由入力` の番号入力（解釈できなければ全文を自由入力扱い）です。どれかのダイアログをキャンセルすると全体キャンセルとしてモデルへ返します（`details: { answers, cancelled }`）。
+
 ## 構成
 
 - `src/extension/index.ts`: Pi lifecycle・イベント・session command trampoline
@@ -163,7 +169,7 @@ npx biome check packages
 
 E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
-`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
+`test/fixtures/faux.ts` は pi-ai 1.3.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
 手動でも上記CLIのspawnに以下を渡すと同じfixtureを使用できます（最初の応答後、2回目を送りabortする）。終了時はattachしてPiを終了し、abducoセッションも閉じてください。
 
@@ -187,7 +193,7 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 ```sh
 packages/pimate/scripts/build-abduco-linux.sh amd64
 npm run build -w @pimate/pimate          # dist/package/ を再生成
-npm run test:pack -w @pimate/pimate      # clean npm install + 実Pi 1.2.0のロード/faux会話
+npm run test:pack -w @pimate/pimate      # clean npm install + 対応下限の実Pi 1.2.0でロード/faux会話
 cd packages/pimate/dist/package && npm pack
 ```
 

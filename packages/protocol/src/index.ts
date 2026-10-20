@@ -118,7 +118,20 @@ export type TranscriptItem =
 	/** Compaction summaries, branch summaries, custom messages etc. shown as a single line. */
 	| { kind: "other"; entryId: string; label: string; text?: string; timestamp?: number };
 
-export type UIRequestKind = "select" | "confirm" | "input" | "editor";
+export type UIRequestKind = "select" | "confirm" | "input" | "editor" | "questionnaire";
+
+/** One question of a `questionnaire` request (PiMate's own `pimate_ask` tool). */
+export interface UIQuestion {
+	question: string;
+	options: { label: string; description?: string }[];
+	multiSelect?: boolean;
+}
+
+/** Answer to one UIQuestion: chosen option labels (at most one unless multiSelect) and/or the user's own text. */
+export interface UIQuestionAnswer {
+	selected: string[];
+	custom?: string;
+}
 
 /** A dialog opened by Pi or any extension through ctx.ui, answerable from the phone. */
 export interface UIRequest {
@@ -130,6 +143,8 @@ export interface UIRequest {
 	placeholder?: string;
 	/** editor: the TUI editor stays open after a remote answer (Pi's editor() has no AbortSignal). */
 	tuiStaysOpen?: boolean;
+	/** questionnaire: all questions, answered together (`message` is the optional context). */
+	questions?: UIQuestion[];
 }
 
 /** Context window usage (ctx.getContextUsage()). `tokens`/`percent` are null right after compaction. */
@@ -348,7 +363,14 @@ export interface RcMethods extends AuthMethods {
 	};
 	abort: { params: Record<string, never>; result: Record<string, never> };
 	ui_respond: {
-		params: { requestId: string; value?: string; confirmed?: boolean; cancelled?: boolean };
+		params: {
+			requestId: string;
+			value?: string;
+			confirmed?: boolean;
+			cancelled?: boolean;
+			/** questionnaire: one answer per question, in order. */
+			answers?: UIQuestionAnswer[];
+		};
 		result: Record<string, never>;
 	};
 	set_thinking: { params: { level: ThinkingLevel }; result: { thinking: ThinkingLevel } };

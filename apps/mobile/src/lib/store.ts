@@ -25,6 +25,7 @@ import type {
 	SubagentAction,
 	SubagentTranscript,
 	ThinkingLevel,
+	UIQuestionAnswer,
 	ViewImage,
 } from "@pimate/protocol";
 import {
@@ -37,7 +38,7 @@ import {
 import { type BuiltinCommand, commandIntent } from "./commands";
 import { EntryImageCache, validViewImage } from "./entryImages";
 import { type AuthFailure, type ConnectionState, HostConnection, RcError, type SocketLike } from "./hostConnection";
-import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection } from "./hostRegistry";
+import { HostRegistry, type KeyValueStorage, type PairedHost, type Selection, type SpawnPrefs } from "./hostRegistry";
 import {
 	conversationLabel,
 	createView,
@@ -149,6 +150,7 @@ export interface UIAnswer {
 	value?: string;
 	confirmed?: boolean;
 	cancelled?: boolean;
+	answers?: UIQuestionAnswer[];
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; title: string; text: string; code?: string };
@@ -1276,6 +1278,15 @@ export class AppStore {
 		} catch {
 			return [];
 		}
+	}
+
+	/** Last New Pi switch values; unreadable storage means off. */
+	loadSpawnPrefs(): Promise<SpawnPrefs> {
+		return this.registry.loadSpawnPrefs().catch(() => ({ askTool: false }));
+	}
+
+	saveSpawnPrefs(prefs: SpawnPrefs): void {
+		void this.registry.saveSpawnPrefs(prefs).catch(() => {});
 	}
 
 	/**

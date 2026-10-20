@@ -60,6 +60,7 @@ export default function NewPiScreen() {
 	const [pathFocused, setPathFocused] = useState(false);
 	const [listing, setListing] = useState<{ hostId: string; parent: string; names: string[] } | null>(null);
 	const [trust, setTrust] = useState(false);
+	const [askTool, setAskTool] = useState(false);
 	const [models, setModels] = useState<Models>(null);
 	const [model, setModel] = useState<ModelRef | null>(null);
 	const [thinking, setThinking] = useState<ThinkingLevel | null>(null);
@@ -76,6 +77,19 @@ export default function NewPiScreen() {
 			mounted.current = false;
 		};
 	}, []);
+
+	// The remembered question-tool switch; a change made before it loads wins.
+	const touched = useRef(false);
+	useEffect(() => {
+		void appStore.loadSpawnPrefs().then((saved) => {
+			if (mounted.current && !touched.current) setAskTool(saved.askTool);
+		});
+	}, []);
+	const changeAskTool = (value: boolean) => {
+		touched.current = true;
+		setAskTool(value);
+		appStore.saveSpawnPrefs({ askTool: value });
+	};
 
 	// Folders and models of the chosen machine (reloaded when it changes or reconnects).
 	useEffect(() => {
@@ -153,6 +167,7 @@ export default function NewPiScreen() {
 			{
 				cwd,
 				trust,
+				askTool,
 				...(model ? { model } : {}),
 				...(model && thinking ? { thinking } : {}),
 				...(message.trim() ? { message: message.trim() } : {}),
@@ -241,6 +256,22 @@ export default function NewPiScreen() {
 							value={trust}
 							onValueChange={setTrust}
 							accessibilityLabel="このフォルダを信頼する"
+							trackColor={{ false: colors.control, true: colors.accent }}
+							thumbColor={colors.onAccent}
+						/>
+					</View>
+
+					<View style={styles.trust}>
+						<View style={styles.flex}>
+							<Text style={styles.trustTitle}>質問ツールを使う</Text>
+							<Text style={styles.trustText}>
+								迷ったときに Pi が選択式で質問します（pimate_ask）。スマホからも回答できます。
+							</Text>
+						</View>
+						<Switch
+							value={askTool}
+							onValueChange={changeAskTool}
+							accessibilityLabel="質問ツールを使う"
 							trackColor={{ false: colors.control, true: colors.accent }}
 							thumbColor={colors.onAccent}
 						/>
