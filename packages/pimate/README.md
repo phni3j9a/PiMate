@@ -110,7 +110,7 @@ Pi 組み込みコマンドはこの一覧には含まれません。対応す�
 - 認証済みWSの `dirs { path }`（`auth_ok` の `host.dirs: true` のときのみ）は、新しい Pi のフォルダ補完用に `path`（絶対パスか `~/...`）直下のフォルダ名だけを返します（フォルダへのsymlinkを含む。ファイル名・中身は返さない。名前順で最大1000件、読めないときは空）。古いHostは未知のメッセージで接続を閉じるため、アプリは対応Hostにだけ送ります。
 - WS `spawn` は絶対パス/`~/...` の既存ディレクトリ、model、thinking、trust、任意の初回messageのみ受け付けます。リモート任意CLI引数やOSコマンドは公開しません。Host全体で同時起動1件、起動間隔3秒。自動retry/resendはありません。
 - 初回messageをPiのCLI引数には渡しません。RCがreadyになるまで最大30秒待ち、`prompt` をsession/instance guard付き・template展開なしで **1回だけ** 送ります。message指定時のspawn_resultはその応答まで待ちます。起動後に送信できなかった場合は `ok:true` のまま `messageError` を付けて返し、再送しません（届いたかは一覧・履歴で確認）。
-- Host起動Piへ `PIMATE_TRUST=yes|no` を渡し、RCの `project_trust` handlerが**今回のみ**決定します。trust省略はnoで、保存判断にかかわらず自動承認しません。環境変数はRCロード時に消し、ツールの子プロセスへ引き継ぎません。PCから通常起動したPiのtrustフローは変更せず、trust.jsonも書き換えません。Piのtrustはsandboxではありません。PiのCLI `--approve/--no-approve` や先に決定する別のuser extensionは優先されるため、起動コマンド/拡張設定は信頼できるものにしてください。
+- Host起動Piへ `PIMATE_TRUST=yes|no` を渡し、RCの `project_trust` handlerが決定します。`yes` はPCの確認で「保存する」と答えたときと同じく `remember: true` でPiの `trust.json` に保存し、次回は新しいPi画面のトグルが最初からオンになり、PCでそのフォルダのPiを起動したときも確認が出ません。`no` は今回のみで保存しません（トグルの初期値でもあり、PCの確認を恒久的に消さないため）。trust省略はnoで、保存判断にかかわらず自動承認しません。環境変数はRCロード時に消し、ツールの子プロセスへ引き継ぎません。PCから通常起動したPiのtrustフローは変更しません。Piのtrustはsandboxではありません。PiのCLI `--approve/--no-approve` や先に決定する別のuser extensionは優先されるため、起動コマンド/拡張設定は信頼できるものにしてください。
 
 ### 起動コマンド設定とPCへのattach
 

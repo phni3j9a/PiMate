@@ -23,7 +23,12 @@ export default function pimate(pi: ExtensionAPI): void {
 	h.auth = undefined;
 	h.subscriptions = registerWriteDiff(pi);
 	h.handlers = createHandlers(h);
-	if (h.trust) h.subscriptions.push(pi.on("project_trust", () => ({ trusted: h.trust! })));
+	// A "yes" from the phone is saved like the PC prompt's, so the folder is trusted next time too.
+	// "no" is not saved: it is also the switch's default and must not silence the PC prompt for good.
+	if (h.trust)
+		h.subscriptions.push(
+			pi.on("project_trust", () => ({ trusted: h.trust!, ...(h.trust === "yes" ? { remember: true } : {}) })),
+		);
 	const rebuildSubagents = (ctx: ExtensionContext) => {
 		h.subagents?.dispose();
 		h.subagents = new SubagentRegistry(h);

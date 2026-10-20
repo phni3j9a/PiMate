@@ -233,7 +233,8 @@ export default function NewPiScreen() {
 						<View style={styles.flex}>
 							<Text style={styles.trustTitle}>このフォルダを信頼する</Text>
 							<Text style={styles.trustText}>
-								フォルダ内の設定と Extension を読み込みます。起動時の Pi の確認は省かれます。
+								フォルダ内の設定と Extension を読み込みます。オンにすると PC の Pi
+								にも記憶され、次回から確認されません。
 							</Text>
 						</View>
 						<Switch
