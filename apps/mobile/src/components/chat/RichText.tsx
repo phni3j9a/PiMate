@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useContext, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
@@ -62,7 +62,7 @@ function Spans({ spans }: { spans: Span[] }) {
 	});
 }
 
-function CodeBlock({ text, lang }: { text: string; lang?: string }) {
+function CopyButton({ text, label }: { text: string; label: string }) {
 	const [copied, setCopied] = useState(false);
 	useEffect(() => {
 		if (!copied) return;
@@ -70,19 +70,34 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 		return () => clearTimeout(t);
 	}, [copied]);
 	return (
+		<IconButton
+			label={copied ? "コピーしました" : label}
+			onPress={() => {
+				void Clipboard.setStringAsync(text)
+					.then((saved) => {
+						if (!saved) throw new Error("Clipboard write failed");
+						setCopied(true);
+					})
+					.catch(() => Alert.alert("コピーできませんでした", "もう一度お試しください。"));
+			}}
+			size={32}
+		>
+			{copied ? <CheckIcon size={16} /> : <CopyIcon size={16} color={colors.textSecondary} />}
+		</IconButton>
+	);
+}
+
+function CodeBlock({ text, lang }: { text: string; lang?: string }) {
+	return (
 		<View style={styles.codeBlock}>
 			<View style={styles.codeHead}>
 				<Text style={styles.codeLang}>{lang ?? ""}</Text>
-				<IconButton
-					label={copied ? "コピーしました" : "コードをコピー"}
-					onPress={() => void Clipboard.setStringAsync(text).then(() => setCopied(true))}
-					size={32}
-				>
-					{copied ? <CheckIcon size={16} /> : <CopyIcon size={16} color={colors.textSecondary} />}
-				</IconButton>
+				<CopyButton text={text} label="コードをコピー" />
 			</View>
 			{/* Tabs render about one space wide on Android, which flattens indentation. */}
-			<Text style={styles.codeText}>{text.replaceAll("\t", "  ")}</Text>
+			<Text style={styles.codeText} selectable>
+				{text.replaceAll("\t", "  ")}
+			</Text>
 		</View>
 	);
 }
@@ -124,7 +139,7 @@ function Table({
 					{cells[c]?.some((span) => span.image) ? (
 						<Blocks blocks={splitImageSpans({ type: "paragraph", spans: cells[c] })} gallery={gallery} />
 					) : (
-						<Text style={[styles.cell, head && styles.bold, { textAlign: ALIGN[align[c] ?? ""] ?? "left" }]}>
+						<Text style={[styles.cell, head && styles.bold, { textAlign: ALIGN[align[c] ?? ""] ?? "left" }]} selectable>
 							<Spans spans={cells[c] ?? []} />
 						</Text>
 					)}
@@ -182,7 +197,7 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 						) : (
 							<Text style={[styles.paragraph, styles.markerCol]}>{block.marker}</Text>
 						)}
-						<Text style={[styles.paragraph, styles.itemText]}>
+						<Text style={[styles.paragraph, styles.itemText]} selectable>
 							<Spans spans={block.spans} />
 						</Text>
 					</View>
@@ -192,6 +207,7 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 					<Text
 						key={key}
 						accessibilityRole="header"
+						selectable
 						style={[styles.paragraph, styles.bold, styles.heading, HEADING[Math.min(block.level, 3) - 1]]}
 					>
 						<Spans spans={block.spans} />
@@ -209,7 +225,7 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 				return <View key={key} style={styles.rule} />;
 			default:
 				return (
-					<Text key={key} style={styles.paragraph}>
+					<Text key={key} style={styles.paragraph} selectable>
 						<Spans spans={block.spans} />
 					</Text>
 				);
@@ -231,6 +247,9 @@ export function RichText({ text, scope }: { text: string; scope?: string }) {
 		<FileImageContext.Provider value={loadFile}>
 			<View style={styles.root}>
 				<Blocks blocks={blocks} gallery={gallery} />
+				<View style={styles.actions}>
+					<CopyButton text={text} label="回答全文をコピー（Markdown）" />
+				</View>
 			</View>
 		</FileImageContext.Provider>
 	);
@@ -238,6 +257,7 @@ export function RichText({ text, scope }: { text: string; scope?: string }) {
 
 const styles = StyleSheet.create({
 	root: { gap: 8 },
+	actions: { alignItems: "flex-start" },
 	paragraph: { ...typography.body, color: colors.text },
 	bold: { fontWeight: "600" },
 	italic: { fontStyle: "italic" },
