@@ -5,8 +5,8 @@ Pi は Host の子として使い捨てにせず、abduco の端末セッショ�
 
 ## 前提
 
-- Node.js 22.23 以降（TypeScriptの型除去）、Pi **1.2.0**、Unix-domain socket 対応OS。
-- リポジトリルートで `npm install` 済み。Pi関連パッケージは peer dependency（開発時の型は1.2.0固定）。
+- Node.js 22.23 以降（TypeScriptの型除去）、Pi **1.2.0以上**（開発は1.3.0）、Unix-domain socket 対応OS。
+- リポジトリルートで `npm install` 済み。Pi関連パッケージは peer dependency（開発時の型は1.3.0固定）。
 - 起動機能には abduco。`PIMATE_ABDUCO`（利用者が信頼するoverride）→ 同梱 `bin/<platform>-<arch>/abduco`（SHA-256照合）→ `PATH` の順に解決します。同梱が不在/不一致/未対応archなら警告してPATHへfallbackします。
 - Linuxでは user systemd manager が利用可能なら `systemd-run --user --scope` を使用し、Hostのcgroupから分離します。それ以外は detached spawn。後者はHostのサービス終了時に同じcgroupごと終了される可能性があります。ログアウト後の生存には別途 linger 設定が必要です。
 
@@ -163,7 +163,7 @@ npx biome check packages
 
 E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
-`test/fixtures/faux.ts` は pi-ai 1.2.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
+`test/fixtures/faux.ts` は pi-ai 1.3.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 
 手動でも上記CLIのspawnに以下を渡すと同じfixtureを使用できます（最初の応答後、2回目を送りabortする）。終了時はattachしてPiを終了し、abducoセッションも閉じてください。
 
@@ -187,7 +187,7 @@ DockerのAlpine/muslでコミット固定のソースを静的ビルドし、`bi
 ```sh
 packages/pimate/scripts/build-abduco-linux.sh amd64
 npm run build -w @pimate/pimate          # dist/package/ を再生成
-npm run test:pack -w @pimate/pimate      # clean npm install + 実Pi 1.2.0のロード/faux会話
+npm run test:pack -w @pimate/pimate      # clean npm install + 対応下限の実Pi 1.2.0でロード/faux会話
 cd packages/pimate/dist/package && npm pack
 ```
 
