@@ -1,6 +1,13 @@
 import type { PairingLink } from "@pimate/protocol";
 import { describe, expect, it } from "vitest";
-import { HostRegistry, hostKey, INDEX_KEY, MemoryStorage, type PairedHost } from "../src/lib/hostRegistry";
+import {
+	HostRegistry,
+	hostKey,
+	INDEX_KEY,
+	MemoryStorage,
+	type PairedHost,
+	SPAWN_PREFS_KEY,
+} from "../src/lib/hostRegistry";
 import { formatPairingLink, type PairingFailure, pairWithHost, parsePairingLink } from "../src/lib/pairing";
 
 const host = (id: string, patch: Partial<PairedHost> = {}): PairedHost => ({
@@ -48,6 +55,11 @@ describe("HostRegistry", () => {
 		expect(await reg.loadSelection()).toEqual({ hostId: "y", instanceId: "i" });
 		await reg.saveSelection(null);
 		expect(await reg.loadSelection()).toBeNull();
+		expect(await reg.loadSpawnPrefs()).toEqual({ askTool: false });
+		await reg.saveSpawnPrefs({ askTool: true });
+		expect(await reg.loadSpawnPrefs()).toEqual({ askTool: true });
+		await storage.setItem(SPAWN_PREFS_KEY, "{not json");
+		expect(await reg.loadSpawnPrefs()).toEqual({ askTool: false });
 	});
 });
 

@@ -22,6 +22,7 @@ export async function validateSpawn(value: unknown, home: string): Promise<Spawn
 		!p.cwd ||
 		p.cwd.includes("\0") ||
 		(p.trust !== undefined && typeof p.trust !== "boolean") ||
+		(p.askTool !== undefined && typeof p.askTool !== "boolean") ||
 		(p.message !== undefined &&
 			(typeof p.message !== "string" || !p.message.trim() || p.message.length > 128 * 1024)) ||
 		(p.thinking !== undefined && !["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(p.thinking)) ||

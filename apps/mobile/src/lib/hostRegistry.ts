@@ -30,6 +30,12 @@ export interface Selection {
 
 export const INDEX_KEY = "pimate.hosts";
 export const SELECTION_KEY = "pimate.selection";
+export const SPAWN_PREFS_KEY = "pimate.spawnPrefs";
+
+/** Last switch values of the New Pi screen (off until changed). */
+export interface SpawnPrefs {
+	askTool: boolean;
+}
 
 function hex(text: string): string {
 	let out = "";
@@ -106,6 +112,15 @@ export class HostRegistry {
 	async saveSelection(selection: Selection | null): Promise<void> {
 		if (selection) await this.storage.setItem(SELECTION_KEY, JSON.stringify(selection));
 		else await this.storage.deleteItem(SELECTION_KEY);
+	}
+
+	async loadSpawnPrefs(): Promise<SpawnPrefs> {
+		const value = parse(await this.storage.getItem(SPAWN_PREFS_KEY)) as Partial<SpawnPrefs> | null;
+		return { askTool: value?.askTool === true };
+	}
+
+	async saveSpawnPrefs(prefs: SpawnPrefs): Promise<void> {
+		await this.storage.setItem(SPAWN_PREFS_KEY, JSON.stringify(prefs));
 	}
 }
 
