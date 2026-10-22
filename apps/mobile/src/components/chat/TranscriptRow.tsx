@@ -1,8 +1,7 @@
 /** One row of the chat transcript (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
 import type { SubagentRun } from "@pimate/protocol";
-import * as Clipboard from "expo-clipboard";
 import { memo } from "react";
-import { Platform, Pressable, StyleSheet, Text, ToastAndroid, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ChangeDiff } from "@/components/diff/DiffView";
 import { BulbIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, SwapIcon } from "@/components/icons";
@@ -68,13 +67,9 @@ export const TranscriptRow = memo(function TranscriptRow({
 			);
 		case "text":
 			return (
-				<Pressable
-					style={margin}
-					onLongPress={() => copyMessage(row.text)}
-					accessibilityHint="長押しで回答をコピーします"
-				>
+				<View style={margin}>
 					<RichText text={row.text} scope={row.key} />
-				</Pressable>
+				</View>
 			);
 		case "thinking":
 			return <ThinkingRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
@@ -133,13 +128,6 @@ export const TranscriptRow = memo(function TranscriptRow({
 		}
 	}
 });
-
-/** Long-press copies the whole answer as Markdown (code blocks also have their own copy button). */
-function copyMessage(text: string) {
-	void Clipboard.setStringAsync(text).then(() => {
-		if (Platform.OS === "android") ToastAndroid.show("コピーしました", ToastAndroid.SHORT);
-	});
-}
 
 function ThinkingRow({
 	row,
