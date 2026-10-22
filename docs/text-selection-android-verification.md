@@ -8,9 +8,9 @@
 - 部分コピーは表示されている文字が対象。コード内のタブは従来どおり半角スペース2個で表示され、そのまま部分コピーされる。元のタブを保つ場合はコード全体のコピーボタンを使う。
 - 親チャットと子の作業記録は共通の `TranscriptRow` / `RichText` を使う。PC・プロトコルの変更や新しい依存はない。
 
-## 環境と結果
+## エミュレーターの環境と結果
 
-Android API 35 / x86_64 の read-only AVD、1080×2400、アプリから見た幅360dp。Expo SDK 57 / React Native 0.86.3、署名済み release APK と loopback の fake Host を使用。接続中の実機にはインストールせず、実 Pi・実アカウントは使用しない。
+Android API 35 / x86_64 の read-only AVD、1080×2400、アプリから見た幅360dp。Expo SDK 57 / React Native 0.86.3、署名済み release APK と loopback の fake Host を使用。この段階では実機にはインストールせず、実 Pi・実アカウントは使用しない。
 
 | 確認 | 結果 |
 | --- | --- |
@@ -33,6 +33,30 @@ Android API 35 / x86_64 の read-only AVD、1080×2400、アプリから見た�
 - `npm run build:android -w @pimate/mobile`（APK の署名検証を含む）
 - `apps/mobile/test/richTextSelection.test.ts`: 実際の Markdown 描画を native view の mock で展開し、選択対象・元Markdownと元コードのコピー・クリップボードの失敗（reject / false）を検証。OS の範囲選択そのものは上記のエミュレーターで確認。
 
+## Pixel 3 実機での追加確認
+
+Android 11 / API 30、1080×2160、density 440（幅約393dp）。ユーザーの依頼で、既存の0.1.3へ同じ署名の検証用0.1.7 APKを `adb install -r` で上書きした。アプリデータの消去・アンインストールはしていない。検証対象は実装コミット `9cccbdc`、APK SHA-256 は `8d646a5eac3c5d91fbd27e0f7ebb531164155d904aa51f2ff4ee399a8e637285`。
+
+実機でも loopback の fake Host（47882、USB reverse）だけを操作し、実 Pi・実アカウント・既存接続情報の変更はしない。
+
+| 確認 | 結果 |
+| --- | --- |
+| 本文の範囲調整・部分コピー | OK。「使い方」から「使い方を書きました」へハンドルで広げ、入力欄へ貼り付けた文字列を assert。Drawer は開かない |
+| コード・表セルの部分コピー | OK。`Hello` / `components` だけをコピーし、入力欄で assert |
+| コード全体コピー | OK。138文字の関数全体と元のタブを貼り付けて確認。成功のチェック表示も画像で確認 |
+| 回答全文コピー | OK。999文字の元Markdown（見出し・太字・表・コードフェンスを含む）を貼り付けて確認 |
+| 見出し・リスト・引用 | OK。選択ハンドルとOSのコピーメニューを画像で確認 |
+| 表の左右送り・縦送り | OK。遅い横ドラッグで列位置が変わること、左右往復でDrawerが開かないことをassert。表から会話の縦送りも確認 |
+| 表の外の右スワイプ | OK。Drawerが開くことをassert |
+| ライト / ダーク | OK。選択・ハンドル・コピーメニュー・ボタンの表示を画像で確認 |
+| 文字倍率1.3 | ライトで長文・コード・コピーボタンの配置を画像で確認 |
+
+追加修正が必要な不具合は確認されなかった。ライトテーマのナビゲーションバーの視認性は既知の [#46](https://github.com/phni3j9a/PiMate/issues/46) の範囲で、今回の変更対象外。
+
+テスト中の文章はfake Hostだけに送り、実 Pi へは送っていない。コピー確認用の下書きは最終的に空にした。追加した今回のfake Hostだけをアプリから削除し、既存の3件の接続情報は保持。Hostプロセス・USB reverseを停止／解除し、端末上の録画・UI dumpも削除した。OSの文字倍率1.0・テーマ自動を復元。**端末には検証用0.1.7 APKを残している**（公開APKへの差し替えはしていない）。
+
+画面録画・UI階層・スクリーンショットはPCの `/tmp/pimate-selection-pixel3/` に保存し、抜き出したフレームも確認した。性能計測ではない。
+
 ## 再確認
 
 1. [mobile README](../apps/mobile/README.md#pcのpiなしで画面を確認する) の fake Host に接続し、`md` を送る。
@@ -42,6 +66,6 @@ Android API 35 / x86_64 の read-only AVD、1080×2400、アプリから見た�
 
 ## 残事項
 
-実機、iOS、子の作業記録画面での操作、TalkBack / VoiceOver、生成中に文字が増える間の選択維持、画面外まで選択ハンドルを動かす操作、性能計測は未検証。
+iOS、Pixel 3以外の実機、子の作業記録画面での操作、TalkBack / VoiceOver、生成中に文字が増える間の選択維持、画面外まで選択ハンドルを動かす操作、性能計測は未検証。
 
 アプリのバージョンは上げず、公開 APK / Release は変更しない。`apps/mobile/dist/pimate-0.1.7.apk` は開発確認用であり、配布版とは別のビルド。
