@@ -4,9 +4,11 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.7 / PCパッケージ0.1.9 です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.8 / PCパッケージ0.1.10 です。回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
+
+依存監査の警告も未解消です（high 18 / moderate 6、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
 
 ## プロバイダーへのログイン／ログアウト
 
@@ -47,9 +49,9 @@ M3（表示）:
 - 差分の出どころ: edit は Pi の `details.patch`、write は RC が付ける `details.pimate`（`write_diff`）。それがない古い履歴や、大きすぎ・バイナリ・読めない・同時に複数の変更があった場合は、そう書いたうえで書き込んだ内容を表示する（新規ファイルとは言わない）
 - 停止ボタンはターンの実行中だけ表示（ターン外の Extension の質問では出さない）。中断したメッセージの「0 in · 0 out」は出さない
 - シートはキーボードを避ける。新しい Pi のモデル選択にも検索。セッションのメニューの操作が断られたときはシートの中に表示する
-- 回答の Markdown（[#23](https://github.com/phni3j9a/PiMate/issues/23)）: `marked` の lexer で解析し、表示は自作（`src/lib/richText.ts` / `src/components/chat/RichText.tsx`）。見出し（h1〜h3 の大きさ）、リスト（入れ子・番号・チェックボックス）、引用、表（横スクロール）、区切り線、太字・斜体・取り消し線、インラインコード、http(s) リンク（アプリ内ブラウザ）。`これは**「太字」**です` のように CommonMark が太字にしない日本語の書き方も太字にする。コードブロックは折り返し表示で、言語名とコピーボタンつき（ストリーミング中の閉じていない ``` もコード）。開発版（未配布、[#82](https://github.com/phni3j9a/PiMate/issues/82)）では本文・見出し・リスト・引用・表のセル・コードを長押しし、OS 標準のハンドルで範囲を調整して部分コピーできます。選択は同じ表示ブロック内に限り、段落・リスト項目・表のセル・コードブロックをまたげません。回答末尾のコピーボタンは Markdown 全文、コード右上のボタンは元コード全体をコピーします。コードの部分コピーは表示どおり（タブは半角スペース2個）です。親チャット・子の作業記録に共通で適用され、PC 側の更新は不要です（[Android の検証範囲](../../docs/text-selection-android-verification.md)）
+- 回答の Markdown（[#23](https://github.com/phni3j9a/PiMate/issues/23)）: `marked` の lexer で解析し、表示は自作（`src/lib/richText.ts` / `src/components/chat/RichText.tsx`）。見出し（h1〜h3 の大きさ）、リスト（入れ子・番号・チェックボックス）、引用、表（横スクロール）、区切り線、太字・斜体・取り消し線、インラインコード、http(s) リンク（アプリ内ブラウザ）。`これは**「太字」**です` のように CommonMark が太字にしない日本語の書き方も太字にする。コードブロックは折り返し表示で、言語名とコピーボタンつき（ストリーミング中の閉じていない ``` もコード）。Android 0.1.8 以降（[#82](https://github.com/phni3j9a/PiMate/issues/82)）では本文・見出し・リスト・引用・表のセル・コードを長押しし、OS 標準のハンドルで範囲を調整して部分コピーできます。選択は同じ表示ブロック内に限り、段落・リスト項目・表のセル・コードブロックをまたげません。回答末尾のコピーボタンは Markdown 全文、コード右上のボタンは元コード全体をコピーします。コードの部分コピーは表示どおり（タブは半角スペース2個）です。親チャット・子の作業記録に共通で適用され、PC 側の更新は不要です（[Android の検証範囲](../../docs/text-selection-android-verification.md)）
 
-表の上では左右のスワイプを表に優先し、表の外で右へスワイプすると従来どおり一覧を開きます。表からの縦スクロールも維持します。開発版では長押しはセル内の範囲選択です（[#63](https://github.com/phni3j9a/PiMate/issues/63)、[Android の確認範囲・再確認手順](../../docs/table-scroll-android-verification.md)）。
+表の上では左右のスワイプを表に優先し、表の外で右へスワイプすると従来どおり一覧を開きます。表からの縦スクロールも維持します。Android 0.1.8 以降の長押しはセル内の範囲選択です（[#63](https://github.com/phni3j9a/PiMate/issues/63)、[Android の確認範囲・再確認手順](../../docs/table-scroll-android-verification.md)）。
 
 同じファイルへの変更は `./`・`..` を POSIX の規則で正規化して集約する。インスタンスの cwd が分かるときは絶対・相対パスも同一視する（シンボリックリンクの解決はしない）。同じ範囲内で新規作成したファイルは、後で編集しても A のまま。
 
@@ -136,7 +138,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.7.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.8.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -156,14 +158,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.7.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.8.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.7 apps/mobile/dist/pimate-0.1.7.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.7' --notes-file <リリースノート>
+gh release create app-v0.1.8 apps/mobile/dist/pimate-0.1.8.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.8' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
