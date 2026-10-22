@@ -2,7 +2,7 @@
   "expo": {
     "name": "PiMate",
     "slug": "pimate",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "orientation": "portrait",
     "icon": "./assets/brand/icon-light.png",
     "scheme": "pimate",
