@@ -131,6 +131,10 @@ async function main(): Promise<void> {
 	});
 	const until = (seconds: number) =>
 		Promise.race([ended, sleep(seconds * 1000, undefined, { ref: false }).then(() => watch.result("timeout"))]);
+	const settled = async (result: TurnResult) =>
+		result.outcome === "done" && !result.reply && !result.error
+			? watch.settledFrom((await client.request("history", {})).items)
+			: result;
 	try {
 		const snapshot = await client.connect();
 		const early = watch.start(snapshot);
@@ -152,16 +156,16 @@ async function main(): Promise<void> {
 					break;
 				}
 				const held = watch.arm(result.deliveredAs !== "prompt");
-				print({ ...result, ...(held ?? (await until(timeout))) });
+				print({ ...result, ...(await settled(held ?? (await until(timeout)))) });
 				break;
 			}
 			case "wait": {
 				const timeout = option("--timeout", 300);
 				if (rest.length) throw new Error(usage);
-				if (early) print(early);
+				if (early) print(await settled(early));
 				else if (snapshot.status === "idle")
 					print(watch.result("idle", lastAssistant((await client.request("history", {})).items)));
-				else print(await until(timeout));
+				else print(await settled(await until(timeout)));
 				break;
 			}
 			case "abort":

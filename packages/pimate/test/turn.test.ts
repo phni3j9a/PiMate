@@ -41,6 +41,36 @@ it("drops the previous turn's settle when the prompt started a new turn", () => 
 	expect(watch.next(ev({ type: "agent_settled", aborted: false }))).toEqual({ outcome: "done", reply: "ours" });
 });
 
+it("keeps its own turn's result when it arrives together with the prompt reply", () => {
+	seq = 0;
+	const watch = new TurnWatch(false);
+	expect(watch.start(snapshot(0))).toBeNull();
+	expect(watch.next(ev({ type: "agent_settled", aborted: false }))).toBeNull();
+	expect(watch.next(ev({ type: "agent_start" }))).toBeNull();
+	expect(watch.next(assistant("ours"))).toBeNull();
+	expect(watch.next(ev({ type: "agent_settled", aborted: false }))).toBeNull();
+	expect(watch.arm(false)).toEqual({ outcome: "done", reply: "ours" });
+});
+
+it("returns a dialog that is already open when the message only got queued", () => {
+	seq = 0;
+	const watch = new TurnWatch(false);
+	expect(watch.start(snapshot(0, [dialog]))).toBeNull();
+	expect(watch.arm(true)).toEqual({ outcome: "waiting_input", pending: [dialog] });
+});
+
+it("reads back a final answer sent before it connected", () => {
+	const watch = new TurnWatch();
+	const items: TranscriptItem[] = [
+		{ kind: "assistant", entryId: "1", text: "", toolCalls: [], stopReason: "error", errorMessage: "rate limited" },
+	];
+	expect(watch.settledFrom(items)).toEqual({ outcome: "failed", error: "rate limited" });
+	expect(watch.settledFrom([{ kind: "assistant", entryId: "2", text: "hi", toolCalls: [] }])).toEqual({
+		outcome: "done",
+		reply: "hi",
+	});
+});
+
 it("keeps a busy run's settle that raced ahead of the steer reply", () => {
 	seq = 0;
 	const watch = new TurnWatch(false);
