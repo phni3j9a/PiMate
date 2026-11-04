@@ -15,6 +15,11 @@ export class TurnWatch {
 	private armed: boolean;
 	private seq: number | undefined;
 	private held: TurnResult | null = null;
+	/**
+	 * A turn started while unarmed: an idle Pi's new turn, so what is held after it is ours. The CLI connects right
+	 * before sending, so another turn would have to start and settle within one local round-trip to be mistaken.
+	 */
+	private started = false;
 	private early: EventMessage[] = [];
 	private last: Assistant | undefined;
 	private pending = new Map<string, UIRequest>();
@@ -26,13 +31,20 @@ export class TurnWatch {
 
 	/**
 	 * Call with the prompt reply. A busy Pi (steer/followUp) ends the run that took the message, even if that
-	 * settle raced ahead of the reply; an idle Pi (prompt) starts a new turn, so anything held was the previous one.
+	 * settle raced ahead of the reply; an idle Pi (prompt) starts a new turn, so only results after its start count.
+	 * A dialog that is still open is returned at once: a queued message does not re-send it.
 	 */
-	arm(keepHeld: boolean): TurnResult | null {
-		const held = keepHeld ? this.held : null;
+	arm(busy: boolean): TurnResult | null {
+		const held = busy || this.started ? this.held : null;
 		this.armed = true;
 		this.held = null;
-		return held;
+		return held ?? (this.pending.size ? this.result("waiting_input") : null);
+	}
+
+	/** A settle whose final answer predates hello (e.g. during agent_before_settle hooks) has none; read it back. */
+	settledFrom(items: TranscriptItem[]): TurnResult {
+		const last = lastAssistant(items);
+		return this.result(last?.stopReason === "error" ? "failed" : "done", last);
 	}
 
 	/** Seeds from the hello snapshot and replays events that raced ahead of it. */
@@ -53,8 +65,13 @@ export class TurnWatch {
 		this.seq = message.seq;
 		const e = message.event;
 		let result: TurnResult | null = null;
-		if (e.type === "agent_start") this.last = undefined;
-		else if (e.type === "message_end" && e.item.kind === "assistant") this.last = e.item;
+		if (e.type === "agent_start") {
+			this.last = undefined;
+			if (!this.armed) {
+				this.started = true;
+				this.held = null;
+			}
+		} else if (e.type === "message_end" && e.item.kind === "assistant") this.last = e.item;
 		else if (e.type === "ui_request_end") this.pending.delete(e.requestId);
 		else if (e.type === "ui_request") {
 			this.pending.set(e.request.requestId, e.request);

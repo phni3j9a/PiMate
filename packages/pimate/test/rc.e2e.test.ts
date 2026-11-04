@@ -80,14 +80,16 @@ it.skipIf(!pi || !abduco)(
 				origin: "mobile",
 				model: { provider: "pimate-faux", id: "scripted" },
 			});
-			const cli = (...args: string[]) =>
+			const cliInput = (input: string | undefined, ...args: string[]) =>
 				JSON.parse(
 					execFileSync(process.execPath, [join(root, "packages/pimate/src/host/cli.ts"), ...args], {
 						env: { ...process.env, PIMATE_RUN_DIR: host.runDir, PIMATE_ABDUCO: abduco },
 						encoding: "utf8",
 						timeout: 10000,
+						input,
 					}),
 				);
+			const cli = (...args: string[]) => cliInput(undefined, ...args);
 			expect(cli("list")).toEqual(expect.arrayContaining([expect.objectContaining({ instanceId, reachable: true })]));
 			expect((await client.request("hello", {})).snapshot).toMatchObject({
 				promptImages: true,
@@ -171,7 +173,7 @@ it.skipIf(!pi || !abduco)(
 			expect(events.every((e, i) => !i || e.seq === events[i - 1].seq + 1)).toBe(true);
 			events.length = 0;
 			// What an outside agent (e.g. Grok Bot over local exec) runs: send, then block until the turn settles.
-			expect(cli("prompt", instanceId, "write and edit a file", "--wait", "--timeout", "8")).toEqual({
+			expect(cliInput("write and edit\na file\n", "prompt", instanceId, "-", "--wait", "--timeout", "8")).toEqual({
 				deliveredAs: "prompt",
 				outcome: "done",
 				reply: "Files updated.",

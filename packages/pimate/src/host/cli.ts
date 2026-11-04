@@ -120,6 +120,15 @@ async function main(): Promise<void> {
 		if (!Number.isInteger(value) || value < 1) throw new Error(usage);
 		return value;
 	};
+	// Parse prompt args (and read stdin) before connecting: events buffered while stdin blocks would look like
+	// they followed our prompt. Then only one local round-trip separates hello from the prompt.
+	const steer = command === "prompt" && flag("--steer");
+	const follow = command === "prompt" && flag("--follow-up");
+	const wait = command === "prompt" && flag("--wait");
+	const timeout = command === "prompt" || command === "wait" ? option("--timeout", 300) : 300;
+	// `-` reads stdin, so multi-line prompts need no shell quoting.
+	const text = command === "prompt" && rest.join(" ") === "-" ? readFileSync(0, "utf8").trimEnd() : rest.join(" ");
+	if (command === "prompt" && (!text || (steer && follow))) throw new Error(usage);
 	// Listen before connecting: a turn may settle while hello is in flight.
 	const watch = new TurnWatch(command !== "prompt");
 	const ended = new Promise<TurnResult>((resolve) => {
@@ -131,18 +140,15 @@ async function main(): Promise<void> {
 	});
 	const until = (seconds: number) =>
 		Promise.race([ended, sleep(seconds * 1000, undefined, { ref: false }).then(() => watch.result("timeout"))]);
+	const settled = async (result: TurnResult) =>
+		result.outcome === "done" && !result.reply && !result.error
+			? watch.settledFrom((await client.request("history", {})).items)
+			: result;
 	try {
 		const snapshot = await client.connect();
 		const early = watch.start(snapshot);
 		switch (command) {
 			case "prompt": {
-				const steer = flag("--steer");
-				const follow = flag("--follow-up");
-				const wait = flag("--wait");
-				const timeout = option("--timeout", 300);
-				// `-` reads stdin, so multi-line prompts need no shell quoting.
-				const text = rest.join(" ") === "-" ? readFileSync(0, "utf8").trimEnd() : rest.join(" ");
-				if (!text || (steer && follow)) throw new Error(usage);
 				const result = await client.request("prompt", {
 					text,
 					deliverAs: steer ? "steer" : follow ? "followUp" : undefined,
@@ -152,16 +158,15 @@ async function main(): Promise<void> {
 					break;
 				}
 				const held = watch.arm(result.deliveredAs !== "prompt");
-				print({ ...result, ...(held ?? (await until(timeout))) });
+				print({ ...result, ...(await settled(held ?? (await until(timeout)))) });
 				break;
 			}
 			case "wait": {
-				const timeout = option("--timeout", 300);
 				if (rest.length) throw new Error(usage);
-				if (early) print(early);
+				if (early) print(await settled(early));
 				else if (snapshot.status === "idle")
 					print(watch.result("idle", lastAssistant((await client.request("history", {})).items)));
-				else print(await until(timeout));
+				else print(await settled(await until(timeout)));
 				break;
 			}
 			case "abort":
