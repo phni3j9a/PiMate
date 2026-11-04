@@ -301,3 +301,13 @@ PC に `gh` をインストールし、Host と同じユーザーで **`gh auth 
 Host は認証後に `alerts:true` capability を通知し、アプリが `watch_alerts` をオンにしている間だけ全 Pi のライブ RC イベントを監視します。初回 snapshot は基準として使うだけで、未選択 Pi の history は取りません。アプリへの通知には本文を含めません。通常の selected subscription は従来どおりです。
 
 RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつないだ場合は通知なし・チャットのみ。更新後 `/pimate restart` を実行してください。[通知対象と制限](../../docs/notifications.md)。
+
+## Grok Bot Routine Webhook（任意）
+
+Grok Bot で Webhook トリガーの Routine を作成し、PC の端末で `pimate webhook setup --machine <表示名>` を実行します。表示に従い URL、続けて `Authorization: ...` を貼り付けます（`--machine` の既定値はホスト名）。キーをチャットや Bot のツールに渡さないでください。`pimate webhook test` で接続確認、`pimate webhook status` で設定と対象を確認できます。
+
+Bot が `spawn` した後に `pimate webhook watch <instanceId>` を実行したインスタンスだけが送信対象です。通常の PC・スマホの Pi セッションは対象になりません。解除は `pimate webhook unwatch <instanceId>`、全停止・設定削除は `pimate webhook off` です。Host の再起動は不要です。
+
+イベントは `request.opened`（質問、選択肢、任意の `context`）、`request.resolved`（`by`）、`pi.finished` / `pi.failed`（最大600文字の `lastReply`、失敗時 `error`）、`pi.child`（`kind`）、接続確認用 `test` です。共通フィールドは `eventId`、`machine`、`instanceId`、`sessionId`、`title`、`cwd`、`sentAt`、英文の `text` です。質問のタイトルは `requestTitle` です。この PC の `pimate ui` で回答した質問の解決通知は省略します。
+
+各イベントは Routine を1回実行し、週の利用枠を消費します（最大300回/時）。URL とキーは設定ディレクトリの `webhook.json` に 0600 で保存されます。秘密情報とホームパスの伏せ字はベストエフォートであり、すべての秘密を検出できる保証はありません。Host 停止中のイベントは再送されませんが、再接続時にまだ開いている質問は送信します。再試行キューはメモリ内のみです。

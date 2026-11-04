@@ -581,3 +581,87 @@ it.each([{ cwd: "/tmp" }, { path: "/tmp" }, { repo: "other/repo" }, { args: ["--
 		expect(await c.closed).toBe(4400);
 	},
 );
+
+it("webhooks watch only selected instances, deduplicate snapshots and suppress locally answered resolutions", async () => {
+	const { createServer: httpServer } = await import("node:http");
+	const { atomicWrite } = await import("../src/host/config.ts");
+	const { markAnswered } = await import("../src/host/webhook.ts");
+	const events: Record<string, unknown>[] = [];
+	const sink = httpServer(async (req, res) => {
+		const chunks: Buffer[] = [];
+		for await (const chunk of req) chunks.push(Buffer.from(chunk));
+		events.push(JSON.parse(Buffer.concat(chunks).toString()));
+		res.writeHead(200).end();
+	});
+	await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+	cleanup.push(() => new Promise<void>((resolve) => sink.close(() => resolve())));
+	const t = await setup(true);
+	const dir = t.server.config.dir;
+	atomicWrite(join(dir, "webhook.json"), {
+		url: `http://127.0.0.1:${(sink.address() as { port: number }).port}`,
+		headers: {},
+		machine: "test",
+	});
+	await t.server.refresh();
+	await vi.waitFor(() => expect(t.sockets.size).toBe(0));
+	const question = { requestId: "question", kind: "select" as const, title: "Pick", options: ["one", "two"] };
+	t.snapshot.pendingUI = [question];
+	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	await t.server.refresh();
+	await vi.waitFor(() => expect(events).toHaveLength(1));
+	expect(events[0]).toMatchObject({ event: "request.opened", requestId: "question" });
+	for (const socket of t.sockets) socket.destroy();
+	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
+	await t.server.refresh();
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	expect(events).toHaveLength(1);
+	markAnswered(dir, "live", "question");
+	t.emit(1, { type: "ui_request_end", requestId: "question", by: "remote" });
+	t.emit(2, { type: "ui_request", request: { ...question, requestId: "second" } });
+	await vi.waitFor(() => expect(events).toHaveLength(2));
+	t.emit(3, { type: "ui_request_end", requestId: "second", by: "tui" });
+	await vi.waitFor(() => expect(events).toHaveLength(3));
+	expect(events.map((event) => event.event)).toEqual(["request.opened", "request.opened", "request.resolved"]);
+	expect(events[2]).toMatchObject({ requestId: "second", by: "tui", kind: "select" });
+	const phone = await t.authed();
+	phone.send({ type: "watch_alerts", enabled: true });
+	phone.send({ type: "ping", t: 7 });
+	await phone.box.next("pong");
+	t.emit(4, { type: "agent_start" });
+	t.emit(5, {
+		type: "message_end",
+		item: { kind: "assistant", entryId: "reply", text: "done", stopReason: "stop", toolCalls: [] },
+	});
+	t.emit(6, { type: "agent_settled", aborted: false });
+	expect(await phone.box.next("alert")).toMatchObject({ alert: { kind: "complete" } });
+	await vi.waitFor(() => expect(events).toHaveLength(4));
+	expect(events[3]).toMatchObject({ event: "pi.finished", lastReply: "done" });
+	t.emit(7, { type: "agent_start" });
+	t.emit(8, {
+		type: "message_end",
+		item: { kind: "assistant", entryId: "fail", text: "", stopReason: "error", errorMessage: "failed", toolCalls: [] },
+	});
+	t.emit(9, { type: "agent_settled", aborted: false });
+	await vi.waitFor(() => expect(events).toHaveLength(5));
+	expect(events[4]).toMatchObject({ event: "pi.failed", error: "failed" });
+	const run = {
+		id: "child",
+		backend: "example" as const,
+		background: false,
+		mode: "single" as const,
+		state: "running" as const,
+		children: [],
+		actions: [],
+	};
+	t.emit(10, { type: "subagent_run", run });
+	t.emit(11, { type: "subagent_run", run: { ...run, state: "waiting" } });
+	await vi.waitFor(() => expect(events).toHaveLength(6));
+	expect(events[5]).toMatchObject({ event: "pi.child", kind: "child_waiting" });
+	await t.server.close();
+	const restarted = new HostServer({ core: t.core, configDir: dir, listen: ["127.0.0.1"], port: 0, pollMs: 60_000 });
+	await restarted.start();
+	cleanup.push(() => restarted.close());
+	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	expect(events).toHaveLength(6);
+});
