@@ -15,7 +15,10 @@ export class TurnWatch {
 	private armed: boolean;
 	private seq: number | undefined;
 	private held: TurnResult | null = null;
-	/** A turn started while unarmed: an idle Pi's new turn, so what is held after it is ours. */
+	/**
+	 * A turn started while unarmed: an idle Pi's new turn, so what is held after it is ours. The CLI connects right
+	 * before sending, so another turn would have to start and settle within one local round-trip to be mistaken.
+	 */
 	private started = false;
 	private early: EventMessage[] = [];
 	private last: Assistant | undefined;
