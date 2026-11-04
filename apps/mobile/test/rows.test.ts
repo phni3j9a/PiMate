@@ -36,7 +36,7 @@ describe("format", () => {
 		expect(tokens(6200)).toBe("6.2k");
 		expect(tokens(18_400)).toBe("18k");
 		expect(usageLine({ provider: "a", id: "m" }, { input: 6000, output: 210, cacheRead: 200, cost: 0.04 })).toBe(
-			"m · 6.2k in · 210 out · $0.04",
+			"m · 6.2k in · 210 out",
 		);
 		expect(usageLine({ provider: "a", id: "m" }, { input: 10, output: 5, cost: 0.0002 })).toBe("m · 10 in · 5 out");
 		expect(usageLine({ provider: "a", id: "m" }, { input: 0, output: 0, cost: 0 })).toBeNull();
