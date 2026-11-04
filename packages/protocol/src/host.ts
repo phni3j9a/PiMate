@@ -71,6 +71,8 @@ export interface PiAlert {
 }
 
 export interface HostInfo {
+	/** Read-only GitHub queries via the PC's gh login; never send to older Hosts. */
+	github?: boolean;
 	/** Optional capability: only send watch_alerts when true. */
 	alerts?: boolean;
 	/** Auth RPC timeout/long-poll support; RC providerAuth capability is also required. */
@@ -130,6 +132,47 @@ export interface SpawnParams {
 
 export type SpawnErrorCode = "bad_request" | "not_found" | "not_directory" | "spawn_failed" | "unsupported";
 
+/** Only the selected Host-known instance repository; no paths, repos or CLI arguments from the app. */
+export type GitHubQuery = { kind: "list" } | { kind: "issue" | "pr"; number: number };
+export type GitHubCheckState = "passed" | "failed" | "pending";
+export interface GitHubCheck {
+	name: string;
+	state: GitHubCheckState;
+}
+export interface GitHubSummary {
+	kind: "issue" | "pr";
+	number: number;
+	title: string;
+	state: string;
+	author: string;
+	url: string;
+	updatedAt: string;
+	labels: string[];
+	isDraft?: boolean;
+	reviewDecision?: string;
+	ci?: Record<GitHubCheckState, number>;
+}
+export interface GitHubDetail extends GitHubSummary {
+	body: string;
+	bodyTruncated: boolean;
+	createdAt: string;
+	comments: { author: string; body: string; createdAt: string; bodyTruncated: boolean }[];
+	commentsTruncated: boolean;
+	headRefName?: string;
+	baseRefName?: string;
+	additions?: number;
+	deletions?: number;
+	changedFiles?: number;
+	checks?: GitHubCheck[];
+	checksTruncated?: boolean;
+}
+/** Lists are open only, at most 30 each. Details include at most 30 comments; truncation is explicit. */
+export type GitHubData =
+	| { kind: "list"; repo: { name: string; url: string }; issues: GitHubSummary[]; prs: GitHubSummary[] }
+	| { kind: "detail"; item: GitHubDetail };
+export type GitHubErrorCode = "gh_missing" | "gh_auth" | "not_github" | "not_found" | "failed";
+export type GitHubResult = { ok: true; data: GitHubData } | { ok: false; code: GitHubErrorCode; message: string };
+
 // ---------------------------------------------------------------- app -> Host
 
 export type AppMessage =
@@ -141,6 +184,7 @@ export type AppMessage =
 	| { type: "rc"; instanceId: string; request: Request }
 	| { type: "ping"; t: number }
 	| { type: "folders"; requestId: string }
+	| { type: "github"; requestId: string; instanceId: string; query: GitHubQuery }
 	/** Subfolder names of `path` (absolute or `~/...`) for completing the new Pi folder. */
 	| { type: "dirs"; requestId: string; path: string }
 	| { type: "spawn"; requestId: string; params: SpawnParams };
@@ -166,6 +210,7 @@ export type HostMessage =
 	| { type: "instance_gone"; instanceId: string }
 	| { type: "pong"; t: number }
 	| { type: "folders_result"; requestId: string; home: string; folders: FolderInfo[] }
+	| ({ type: "github_result"; requestId: string } & GitHubResult)
 	/** Directory names only (no files), sorted; empty when the path is missing or unreadable. */
 	| { type: "dirs_result"; requestId: string; dirs: string[] }
 	| {

@@ -12,6 +12,8 @@
  */
 import {
 	type AppMessage,
+	type GitHubQuery,
+	type GitHubResult,
 	HOST_PROTOCOL_VERSION,
 	HostCloseCode,
 	type HostInfo,
@@ -207,6 +209,11 @@ export class HostConnection {
 		return this.hostRequest<DirsResult>({ type: "dirs", requestId, path });
 	}
 
+	/** Read-only queries for a Host-known instance; caller must gate on info.github. */
+	github(requestId: string, instanceId: string, query: GitHubQuery): Promise<GitHubResult> {
+		return this.hostRequest<GitHubResult>({ type: "github", requestId, instanceId, query });
+	}
+
 	/** Starts a new Pi on this Host. Never retried: a dropped socket rejects with `outcome_unknown`. */
 	spawn(requestId: string, params: SpawnParams): Promise<SpawnResult> {
 		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
@@ -336,6 +343,7 @@ export class HostConnection {
 			}
 			case "folders_result":
 			case "dirs_result":
+			case "github_result":
 			case "spawn_result": {
 				const p = this.hostPending.get(msg.requestId);
 				if (p) {

@@ -155,7 +155,7 @@ async function setup(fake = false) {
 	async function authed() {
 		const credentials = (await (await pair()).json()) as PairResponse;
 		const client = await connect(credentials.token);
-		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true, dirs: true } });
+		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true, dirs: true, github: true } });
 		await client.box.next("instances");
 		return { ...client, credentials };
 	}
@@ -544,3 +544,40 @@ it("opt-in alert watchers see unselected instances without history and can opt o
 	await a.box.next("pong");
 	expect(a.box.received.filter((m) => m.type === "alert")).toHaveLength(1);
 });
+
+it("returns an error for a GitHub query on an unknown Pi without disconnecting", async () => {
+	const t = await setup();
+	const c = await t.authed();
+	c.send({ type: "github", requestId: "gh-1", instanceId: "unknown", query: { kind: "list" } });
+	expect(await c.box.next("github_result")).toEqual({
+		type: "github_result",
+		requestId: "gh-1",
+		ok: false,
+		code: "not_found",
+		message: "Pi instance not found",
+	});
+	c.send({ type: "ping", t: 42 });
+	expect(await c.box.next("pong")).toMatchObject({ t: 42 });
+});
+
+it.each([
+	{ kind: "issue", number: 0 },
+	{ kind: "pr", number: "--web" },
+	{ kind: "list", repo: "other/repo" },
+	{ kind: "command", args: ["auth", "token"] },
+])("closes malformed GitHub queries with protocol code: %o", async (query) => {
+	const t = await setup();
+	const c = await t.authed();
+	c.send({ type: "github", requestId: "gh", instanceId: "known", query });
+	expect(await c.closed).toBe(4400);
+});
+
+it.each([{ cwd: "/tmp" }, { path: "/tmp" }, { repo: "other/repo" }, { args: ["--web"] }, { requestId: "" }])(
+	"rejects extra GitHub inputs and invalid requestId: %o",
+	async (extra) => {
+		const t = await setup();
+		const c = await t.authed();
+		c.send({ type: "github", requestId: "gh", instanceId: "known", query: { kind: "list" }, ...extra });
+		expect(await c.closed).toBe(4400);
+	},
+);
