@@ -302,6 +302,12 @@ Host は認証後に `alerts:true` capability を通知し、アプリが `watch
 
 RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつないだ場合は通知なし・チャットのみ。更新後 `/pimate restart` を実行してください。[通知対象と制限](../../docs/notifications.md)。
 
+## Grok Bot Skills（任意）
+
+Grok Bot が `pimate` CLI で Pi を操作し、質問・完了を会話へ届けるための4つの Skill を npm パッケージに同梱しています。Grok Bot はディスクから自動読込しません。Bot にサーバー上の `~/.pi/agent/npm/node_modules/@phni3j9a/pimate/grok-bot/skills/` の各フォルダー内 `SKILL.md` を読ませ、それぞれ同じ名前・説明のプライベート Skill として全文をそのまま保存するよう依頼してください。PiMate 更新後も全 Skill を読み直して保存し直します。
+
+Grok Bot デスクトップアプリの設定 →「コンピューター」にある「このコンピューターでの実行」（Execution on this computer）は、通常「毎回確認」（Ask every time）を推奨します。不在時のおまかせ（delegated mode）には「常に許可」（Always allow）が必要ですが、すべての Bot がサーバー上で任意のコマンドを確認なしで実行できるようになります。再起動後はデスクトップアプリが起動するまでローカル実行できません。Claude Code（`~/.claude/skills`）や Codex（`~/.agents/skills`）など他のエージェントでも各フォルダーをコピーして使えます。
+
 ## Grok Bot Routine Webhook（任意）
 
 Grok Bot で Webhook トリガーの Routine を作成し、PC の端末で `pimate webhook setup --machine <表示名>` を実行します。表示に従い URL、続けて `Authorization: ...` を貼り付けます（`--machine` の既定値はホスト名）。キーをチャットや Bot のツールに渡さないでください。`pimate webhook test` で接続確認、`pimate webhook status` で設定と対象を確認できます。
