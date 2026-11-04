@@ -32,6 +32,8 @@ Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j
 `~/.pi/agent/settings.json`（またはプロジェクトの `.pi/settings.json`）に `"defaultTools": ["+pimate_ask"]` を追加するか、
 `pi --tools +pimate_ask` で有効にします。`defaultTools` をツール名の一覧で書いている場合は `+` を付けず `pimate_ask` を一覧に加えます。
 
+Grok Bot 用の Skill を `grok-bot/skills/` に同梱しています。設定と安全上の注意は下記の詳細ドキュメントを参照してください。
+
 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
 旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
 

@@ -57,7 +57,7 @@ writeFileSync(
 			pi: { extensions: ["./dist/extension.js"] },
 			bin: { pimate: "./dist/cli.js" },
 			peerDependencies: source.peerDependencies,
-			files: ["dist", "bin", "README.md", "LICENSE", "THIRD_PARTY_NOTICES"],
+			files: ["dist", "bin", "grok-bot", "README.md", "LICENSE", "THIRD_PARTY_NOTICES"],
 			repository: { type: "git", url: "git+https://github.com/phni3j9a/PiMate.git" },
 		},
 		null,
@@ -66,6 +66,7 @@ writeFileSync(
 );
 cpSync(`${root}/../../LICENSE`, `${out}/LICENSE`);
 cpSync(`${root}/PACKAGE_README.md`, `${out}/README.md`);
+cpSync(`${root}/grok-bot`, `${out}/grok-bot`, { recursive: true });
 let notices = readFileSync(`${root}/THIRD_PARTY_NOTICES`, "utf8");
 const included = new Set();
 for (const input of Object.keys(result.metafile.inputs)) {

@@ -27,6 +27,9 @@ try {
 		"@earendil-works/pi-coding-agent@1.2.0",
 	]);
 	const installed = join(temp, "node_modules/@phni3j9a/pimate");
+	for (const name of ["pimate-rules", "pimate-getting-started", "pimate-send", "pimate-phone-answers"]) {
+		assert.ok(readFileSync(join(installed, "grok-bot/skills", name, "SKILL.md"), "utf8").length > 0);
+	}
 	const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
 	assert.deepEqual(manifest.bin, { pimate: "./dist/cli.js" });
 	assert.deepEqual(manifest.pi.extensions, ["./dist/extension.js"]);
