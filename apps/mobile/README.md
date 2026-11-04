@@ -4,7 +4,7 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.8 / PCパッケージ0.1.10 です。回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.9 / PCパッケージ0.1.11 です。GitHub の Issue / PR の表示（下記）を追加し、メッセージ末尾の1回分のコスト表示を削除しました。GitHub の表示には PC 0.1.11 以上と PC の `gh` ログイン、Host の再起動が必要です。Android 0.1.8 で回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
@@ -75,7 +75,7 @@ M5c（アプリ / Host 0.1.1）:
 
 詳しい通知対象・安全策・ネイティブ検証・未検証事項は [docs/notifications.md](../../docs/notifications.md)。
 
-## GitHub の Issue と PR（[#88](https://github.com/phni3j9a/PiMate/issues/88)）
+## GitHub の Issue と PR（Android 0.1.9 / PC 0.1.11 以上、[#88](https://github.com/phni3j9a/PiMate/issues/88)）
 
 チャットのヘッダー → セッションメニュー →「Issue と PR」で、その Pi のリポジトリの Open Issue / PR を各30件まで表示します。Issue / PR を切り替え、「再読み込み」で更新できます。詳細は本文・ラベル・コメントをチャットと同じ Markdown で表示し、PR はドラフト・レビュー状態・CI・ブランチ・変更量も表示します。「GitHubで開く」は端末のブラウザ等で開きます。
 
@@ -147,7 +147,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.8.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.9.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -167,14 +167,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.8.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.9.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.8 apps/mobile/dist/pimate-0.1.8.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.8' --notes-file <リリースノート>
+gh release create app-v0.1.9 apps/mobile/dist/pimate-0.1.9.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.9' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
@@ -210,6 +210,8 @@ curl -X POST http://127.0.0.1:47800/_dev/resume            # PC で /resume（mo
 curl -X POST "http://127.0.0.1:47800/_dev/refuse-shutdown?on=1" # 「この Pi を終了」を断らせる（on=0 で戻す）
 curl -X POST "http://127.0.0.1:47800/_dev/sub?kind=waiting"  # サブエージェント（下を参照）
 ```
+
+セッションメニューの「Issue と PR」は決まった見本（Issue 2件・PR 2件と詳細）を返します。`~/work/api` の Pi は `gh` 未ログイン、`~/code/website` の Pi は GitHub 以外のフォルダの案内を再現します。`/_dev/auth?oldHost=1` の後に `drop` すると入口が消えます（旧 Host）。
 
 サブエージェント: 「認証まわりのレビュー」は、起動時から pi-subagents のバックグラウンド実行（reviewer × 3。約10秒ごとに作業が進み、1人が先に終わる）と以前の実行（完了・失敗）を持っています。操作は実行・子の `actions` に従い、割り込む（作業記録にあなたの発言が入る）、後で伝える（次の一歩で入る）、停止（停止中 → 停止）、続きを依頼（`resumedFrom` つきの新しい実行）を再現します。`/_dev/sub?kind=…`:
 

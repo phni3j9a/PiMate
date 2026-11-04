@@ -32,6 +32,9 @@
  *   pair                  print a fresh pairing link
  *   quota?source=claude|codex&p=85[&reset=60]  a newer PC-wide quota reaches every Pi (5h window, reset in s)
  *
+ * GitHub (#88): read-only `github` queries with canned issues/PRs. By instance cwd: ~/work/api → gh_auth,
+ *   ~/code/website → not_github, others → data. oldHost=1 hides the capability.
+ *
  * M4 subagents: "認証まわりのレビュー" (~/work/api) starts with a pi-subagents background run of 3 reviewers that
  * progress every 3.5 s (activity, transcript via cursor; one finishes first) plus 以前の実行 (complete + failed).
  * subagent_control follows each run's/child's actions: steer (appends a user item), follow_up (delivered at the
@@ -495,6 +498,7 @@ class Peer {
 					platform: "linux",
 					providerAuth: !authOptions.oldHost,
 					dirs: !authOptions.oldHost,
+					github: !authOptions.oldHost,
 				},
 			});
 			this.send({ type: "instances", instances: summaries() });
@@ -516,6 +520,12 @@ class Peer {
 				return this.dirs(msg);
 			case "spawn":
 				return this.spawn(msg);
+			case "github":
+				if (authOptions.oldHost) return this.close(4400);
+				return setTimeout(
+					() => this.send({ type: "github_result", requestId: msg.requestId, ...fakeGitHub(msg) }),
+					400,
+				);
 			default:
 				return this.close(4400);
 		}
@@ -667,6 +677,102 @@ let refuseShutdown = false;
 let spawning = false;
 
 // ------------------------------------------------------------------ transient fake provider auth (no real credentials)
+
+// Canned, read-only GitHub data shaped like the Host's normalized gh output (packages/pimate/src/host/github.ts).
+const GH_URL = "https://github.com/dev/demo";
+const ghIssue = (number, title, labels, updatedAgo) => ({
+	kind: "issue",
+	number,
+	title,
+	state: "OPEN",
+	author: "dev",
+	url: `${GH_URL}/issues/${number}`,
+	updatedAt: new Date(Date.now() - updatedAgo).toISOString(),
+	labels,
+});
+const ghPr = (number, title, extra) => ({
+	...ghIssue(number, title, [], 40 * MIN),
+	kind: "pr",
+	url: `${GH_URL}/pull/${number}`,
+	isDraft: false,
+	reviewDecision: "REVIEW_REQUIRED",
+	ci: { passed: 0, failed: 0, pending: 0 },
+	...extra,
+});
+const GH_ISSUES = [
+	ghIssue(42, "ログイン後にトークンの更新が失敗する", ["bug"], 2 * 3600_000),
+	ghIssue(37, "設定画面にダークテーマの切り替えを追加する", ["enhancement", "ui"], 26 * 3600_000),
+];
+const GH_PRS = [
+	ghPr(45, "トークン更新の再試行を追加する", {
+		reviewDecision: "CHANGES_REQUESTED",
+		ci: { passed: 2, failed: 1, pending: 0 },
+	}),
+	ghPr(44, "ダークテーマの切り替え（作業中）", { isDraft: true, ci: { passed: 1, failed: 0, pending: 1 } }),
+];
+function fakeGitHub(msg) {
+	const inst = instances.get(msg.instanceId);
+	if (!inst) return { ok: false, code: "not_found", message: "Pi instance not found" };
+	const cwd = inst.summary.cwd;
+	if (cwd.endsWith("/work/api"))
+		return { ok: false, code: "gh_auth", message: "To get started with GitHub CLI, please run:  gh auth login" };
+	if (cwd.endsWith("/code/website"))
+		return {
+			ok: false,
+			code: "not_github",
+			message: "none of the git remotes configured for this repository point to a known GitHub host",
+		};
+	const q = msg.query ?? {};
+	if (q.kind === "list")
+		return {
+			ok: true,
+			data: { kind: "list", repo: { name: "dev/demo", url: GH_URL }, issues: GH_ISSUES, prs: GH_PRS },
+		};
+	const base = [...GH_ISSUES, ...GH_PRS].find((i) => i.kind === q.kind && i.number === q.number);
+	if (!base)
+		return {
+			ok: false,
+			code: "not_found",
+			message: `Could not resolve to an issue or pull request with the number of ${q.number}.`,
+		};
+	const comments = [
+		{
+			author: "reviewer",
+			body: "再現手順を教えてください。",
+			createdAt: new Date(Date.now() - 90 * MIN).toISOString(),
+			bodyTruncated: false,
+		},
+		{
+			author: "dev",
+			body: "1. ログインする\n2. 1時間待つ\n3. `GET /me` が **401** になる",
+			createdAt: new Date(Date.now() - 60 * MIN).toISOString(),
+			bodyTruncated: false,
+		},
+	];
+	const item = {
+		...base,
+		body: "## 概要\n\nアクセストークンの期限が切れたあと、更新リクエストが失敗します。\n\n- 対象: Android / iOS\n- 影響: 再ログインが必要\n\n```ts\nawait refresh(token);\n```",
+		bodyTruncated: false,
+		createdAt: new Date(Date.now() - 3 * 86400_000).toISOString(),
+		comments,
+		commentsTruncated: base.number === 42,
+	};
+	if (base.kind === "pr")
+		Object.assign(item, {
+			headRefName: `feat/${base.number}-token-retry`,
+			baseRefName: "main",
+			additions: 48,
+			deletions: 12,
+			changedFiles: 3,
+			checks: [
+				{ name: "lint", state: "passed" },
+				{ name: "test", state: base.ci.failed ? "failed" : "pending" },
+				{ name: "build", state: "passed" },
+			].slice(0, base.ci.passed + base.ci.failed + base.ci.pending),
+			checksTruncated: false,
+		});
+	return { ok: true, data: { kind: "detail", item } };
+}
 
 const authOptions = { old: false, oldHost: false, fail: false, refresh: false, badurl: false, saving: 200 };
 const authStored = new Map([["anthropic", "oauth"]]);
