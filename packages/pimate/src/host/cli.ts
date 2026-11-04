@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 import { DEFAULT_HOST_PORT, formatPairingLink } from "@pimate/protocol";
 import QRCode from "qrcode";
 import { HostConfig } from "./config.ts";
 import { HostCore, parseAbducoList } from "./index.ts";
 import { defaultListenAddresses, HostServer } from "./server.ts";
+import { conversation, lastAssistant, type TurnResult, TurnWatch } from "./turn.ts";
 
 const usage =
-	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text> [--steer|--follow-up] | abort <id> | history <id> | watch <id> | ui <id> <requestId> <value|--confirm|--cancel>";
+	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text|-> [--steer|--follow-up] [--wait [--timeout S]] | wait <id> [--timeout S] | abort <id> | history <id> [--last N] | watch <id> | ui <id> <requestId> <value|--confirm|--cancel|--answers JSON>";
 async function main(): Promise<void> {
 	const [command, ...args] = process.argv.slice(2);
 	if (command === "--help" || command === "-h") {
@@ -103,38 +106,88 @@ async function main(): Promise<void> {
 		print(await host.spawn({ cwd: flags[1], args: separator < 0 ? [] : args.slice(separator + 1) }));
 		return;
 	}
-	if (!["prompt", "abort", "history", "watch", "ui"].includes(command) || !args[0]) throw new Error(usage);
+	if (!["prompt", "wait", "abort", "history", "watch", "ui"].includes(command) || !args[0]) throw new Error(usage);
 	const client = host.client(args[0]);
+	const rest = args.slice(1);
+	const flag = (name: string) => {
+		const i = rest.indexOf(name);
+		if (i >= 0) rest.splice(i, 1);
+		return i >= 0;
+	};
+	const option = (name: string, fallback: number) => {
+		if (!rest.includes(name)) return fallback;
+		const value = Number(rest.splice(rest.indexOf(name), 2)[1]);
+		if (!Number.isInteger(value) || value < 1) throw new Error(usage);
+		return value;
+	};
+	// Listen before connecting: a turn may settle while hello is in flight.
+	const watch = new TurnWatch(command !== "prompt");
+	const ended = new Promise<TurnResult>((resolve) => {
+		client.onEvent((message) => {
+			const result = watch.next(message);
+			if (result) resolve(result);
+		});
+		client.onClose(() => resolve(watch.result("closed")));
+	});
+	const until = (seconds: number) =>
+		Promise.race([ended, sleep(seconds * 1000, undefined, { ref: false }).then(() => watch.result("timeout"))]);
 	try {
-		await client.connect();
+		const snapshot = await client.connect();
+		const early = watch.start(snapshot);
 		switch (command) {
 			case "prompt": {
-				const steer = args.includes("--steer");
-				const follow = args.includes("--follow-up");
-				const text = args
-					.slice(1)
-					.filter((a) => a !== "--steer" && a !== "--follow-up")
-					.join(" ");
+				const steer = flag("--steer");
+				const follow = flag("--follow-up");
+				const wait = flag("--wait");
+				const timeout = option("--timeout", 300);
+				// `-` reads stdin, so multi-line prompts need no shell quoting.
+				const text = rest.join(" ") === "-" ? readFileSync(0, "utf8").trimEnd() : rest.join(" ");
 				if (!text || (steer && follow)) throw new Error(usage);
-				print(await client.request("prompt", { text, deliverAs: steer ? "steer" : follow ? "followUp" : undefined }));
+				const result = await client.request("prompt", {
+					text,
+					deliverAs: steer ? "steer" : follow ? "followUp" : undefined,
+				});
+				if (!wait || result.deliveredAs === "command") {
+					print(result);
+					break;
+				}
+				const held = watch.arm(result.deliveredAs !== "prompt");
+				print({ ...result, ...(held ?? (await until(timeout))) });
+				break;
+			}
+			case "wait": {
+				const timeout = option("--timeout", 300);
+				if (rest.length) throw new Error(usage);
+				if (early) print(early);
+				else if (snapshot.status === "idle")
+					print(watch.result("idle", lastAssistant((await client.request("history", {})).items)));
+				else print(await until(timeout));
 				break;
 			}
 			case "abort":
 				print(await client.request("abort", {}));
 				break;
-			case "history":
-				print(await client.request("history", {}));
+			case "history": {
+				const last = option("--last", 0);
+				if (rest.length) throw new Error(usage);
+				const history = await client.request("history", {});
+				print(last ? conversation(history.items).slice(-last) : history);
 				break;
+			}
 			case "ui": {
 				if (!args[1] || args[2] === undefined) throw new Error(usage);
+				const answers = args[2] === "--answers" ? JSON.parse(args[3] ?? "null") : undefined;
+				if (args[2] === "--answers" && (!Array.isArray(answers) || args.length !== 4)) throw new Error(usage);
 				print(
 					await client.request("ui_respond", {
 						requestId: args[1],
-						...(args[2] === "--cancel"
-							? { cancelled: true }
-							: args[2] === "--confirm"
-								? { confirmed: true }
-								: { value: args.slice(2).join(" ") }),
+						...(answers
+							? { answers }
+							: args[2] === "--cancel"
+								? { cancelled: true }
+								: args[2] === "--confirm"
+									? { confirmed: true }
+									: { value: args.slice(2).join(" ") }),
 					}),
 				);
 				break;

@@ -35,7 +35,18 @@ node packages/pimate/src/host/cli.ts watch <instanceId>
 node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> '回答'
 node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> --confirm
 node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> --cancel
+node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> --answers '[{"selected":["SQLite"]}]'
+
+# 外部のエージェント（Grok Bot のローカル実行など）向け: 送って結果まで待つ
+node packages/pimate/src/host/cli.ts prompt <instanceId> '説明してください' --wait --timeout 300
+node packages/pimate/src/host/cli.ts prompt <instanceId> - --wait <<'EOF'
+複数行の指示は標準入力から渡せます
+EOF
+node packages/pimate/src/host/cli.ts wait <instanceId> --timeout 300
+node packages/pimate/src/host/cli.ts history <instanceId> --last 6
 ```
+
+`--wait` と `wait` は、ターンの終了または質問・確認の表示まで待ち、`outcome`（`done` / `failed` / `aborted` / `waiting_input` / `timeout` / `idle` / `closed`）と最後の回答 `reply`、開いている質問 `pending` を JSON で返します。待機の既定は300秒です。`timeout` で返った場合も送信は済んでいるので、再送せずに `wait` で待ち直します。`wait` は、何も動いていなければ `idle` と直前の回答を返します。`history --last N` は、ユーザーとアシスタントの本文だけを、直近 N 件まで古い順に返します。Grok Bot との連携の全体像は [#91](https://github.com/phni3j9a/PiMate/issues/91) を参照してください。
 
 `HostCore` / `RcClient` は `@pimate/pimate/host` からインポートできます。`await client.connect()` は `hello` も実行します。`client.request(method, params, guards?)` は型付きで、既定の待ち時間は5秒です。長時間RPCには `new RcClient(runDir, id, timeoutMs)` を使用してください。`onEvent()` の返り値で購読解除、`close()` で切断します。
 

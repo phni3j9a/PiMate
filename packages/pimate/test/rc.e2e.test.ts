@@ -170,7 +170,12 @@ it.skipIf(!pi || !abduco)(
 			}
 			expect(events.every((e, i) => !i || e.seq === events[i - 1].seq + 1)).toBe(true);
 			events.length = 0;
-			expect(cli("prompt", instanceId, "write and edit a file")).toEqual({ deliveredAs: "prompt" });
+			// What an outside agent (e.g. Grok Bot over local exec) runs: send, then block until the turn settles.
+			expect(cli("prompt", instanceId, "write and edit a file", "--wait", "--timeout", "8")).toEqual({
+				deliveredAs: "prompt",
+				outcome: "done",
+				reply: "Files updated.",
+			});
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),
@@ -215,7 +220,11 @@ it.skipIf(!pi || !abduco)(
 				]),
 			);
 			events.length = 0;
-			expect(cli("prompt", instanceId, "ask me")).toEqual({ deliveredAs: "prompt" });
+			expect(cli("prompt", instanceId, "ask me", "--wait", "--timeout", "8")).toMatchObject({
+				deliveredAs: "prompt",
+				outcome: "waiting_input",
+				pending: [{ kind: "questionnaire", title: "Which DB?" }],
+			});
 			const asked = await until(
 				() => events.find((e) => e.event.type === "ui_request"),
 				(e) => e !== undefined,
@@ -231,7 +240,16 @@ it.skipIf(!pi || !abduco)(
 			await expect(
 				client.request("ui_respond", { requestId, answers: [{ selected: ["Oracle"] }] }),
 			).rejects.toMatchObject({ code: "bad_request" });
-			await client.request("ui_respond", { requestId, answers: [{ selected: ["SQLite"] }] });
+			expect(cli("ui", instanceId, requestId, "--answers", JSON.stringify([{ selected: ["SQLite"] }]))).toEqual({});
+			// The answer starts the next model call, which may already have settled before `wait` connects.
+			const settled = cli("wait", instanceId, "--timeout", "8");
+			expect(settled).toMatchObject({ reply: "Thanks for answering." });
+			expect(["done", "idle"]).toContain(settled.outcome);
+			expect(cli("wait", instanceId)).toEqual({ outcome: "idle", reply: "Thanks for answering." });
+			expect(cli("history", instanceId, "--last", "2")).toEqual([
+				{ kind: "user", text: "ask me" },
+				{ kind: "assistant", text: "Thanks for answering." },
+			]);
 			await until(
 				() => events,
 				(e) => e.some((x) => x.event.type === "agent_settled"),
