@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer, type Socket } from "node:net";
 import { type NetworkInterfaceInfo, tmpdir } from "node:os";
@@ -58,7 +58,7 @@ function inbox(ws: WebSocket) {
 		},
 	};
 }
-async function setup(fake = false) {
+async function setup(fake = false, beforeStart?: (configDir: string) => void) {
 	const dir = temp();
 	const core = new HostCore({ runDir: join(dir, "run"), env: { PIMATE_ABDUCO: "/absent" }, probeTimeoutMs: 100 });
 	const snapshot: InstanceSnapshot = {
@@ -78,7 +78,7 @@ async function setup(fake = false) {
 	};
 	const sockets = new Set<Socket>();
 	const requests: Request[] = [];
-	const hooks: { history?: (req: Request, socket: Socket) => void } = {};
+	const hooks: { history?: (req: Request, socket: Socket) => void; ui?: (req: Request, socket: Socket) => void } = {};
 	if (fake) {
 		writeFileSync(join(core.runDir, "live.json"), JSON.stringify({ ...snapshot, updatedAt: 1 }));
 		const rc = createServer((socket) => {
@@ -90,6 +90,10 @@ async function setup(fake = false) {
 				requests.push(req);
 				if (req.method === "history" && hooks.history) {
 					hooks.history(req, socket);
+					return;
+				}
+				if (req.method === "ui_respond" && hooks.ui) {
+					hooks.ui(req, socket);
 					return;
 				}
 				if (req.expectSessionId && req.expectSessionId !== snapshot.session?.id) {
@@ -124,6 +128,10 @@ async function setup(fake = false) {
 			for (const socket of sockets) socket.destroy();
 			await new Promise<void>((r) => rc.close(() => r()));
 		});
+	}
+	if (beforeStart) {
+		new HostConfig(join(dir, "config"));
+		beforeStart(join(dir, "config"));
 	}
 	const server = new HostServer({
 		core,
@@ -664,4 +672,217 @@ it("webhooks watch only selected instances, deduplicate snapshots and suppress l
 	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	expect(events).toHaveLength(6);
+});
+
+it("ignores invalid webhook files at start and refresh and isolates phone fanout from webhook errors", async () => {
+	const t = await setup(true, (dir) => {
+		for (const name of ["webhook-state.json", "webhook-watch.json", "webhook.json", "answered-here.json"])
+			writeFileSync(join(dir, name), "{");
+		writeFileSync(join(dir, "webhook-watch.lock"), "stale");
+	});
+	const a = await t.authed();
+	a.send({ type: "watch_alerts", enabled: true });
+	a.send({ type: "subscribe", instanceId: "live" });
+	await a.box.next("subscribed");
+	for (const value of ["null", "[]", '"wrong"', '{"headers":null}']) {
+		for (const name of ["webhook-watch.json", "webhook.json", "answered-here.json"])
+			writeFileSync(join(t.server.config.dir, name), value);
+		await expect(t.server.refresh()).resolves.toBeUndefined();
+	}
+	const server = t.server as unknown as { webhookEvent: () => void };
+	const broken = vi.spyOn(server, "webhookEvent").mockImplementation(() => {
+		throw new Error("secret must not appear");
+	});
+	t.emit(1, { type: "status", status: "waiting_input" });
+	expect(await a.box.next("alert")).toMatchObject({ alert: { kind: "input" } });
+	expect(await a.box.next("event")).toMatchObject({ event: { type: "status" } });
+	broken.mockRestore();
+});
+
+it("uses live tracked pending UI when a watched phone link is already connected", async () => {
+	const { createServer: httpServer } = await import("node:http");
+	const { atomicWrite } = await import("../src/host/config.ts");
+	const events: Record<string, unknown>[] = [];
+	const sink = httpServer(async (req, res) => {
+		const chunks: Buffer[] = [];
+		for await (const c of req) chunks.push(Buffer.from(c));
+		events.push(JSON.parse(Buffer.concat(chunks).toString()));
+		res.writeHead(200).end();
+	});
+	await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+	cleanup.push(() => new Promise<void>((resolve) => sink.close(() => resolve())));
+	const t = await setup(true);
+	const phone = await t.authed();
+	phone.send({ type: "subscribe", instanceId: "live" });
+	await phone.box.next("subscribed");
+	const question = { requestId: "closed", kind: "select" as const, title: "Pick", options: ["one"] };
+	t.emit(1, { type: "ui_request", request: question });
+	t.emit(2, { type: "ui_request_end", requestId: "closed", by: "tui" });
+	t.emit(3, { type: "ui_request", request: { ...question, requestId: "open" } });
+	for (let i = 0; i < 3; i++) await phone.box.next("event");
+	const dir = t.server.config.dir;
+	atomicWrite(join(dir, "webhook.json"), {
+		url: `http://127.0.0.1:${(sink.address() as { port: number }).port}`,
+		machine: "test",
+		headers: {},
+	});
+	atomicWrite(join(dir, "webhook-watch.json"), ["live", "gone"]);
+	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
+	await t.server.refresh();
+	await vi.waitFor(() => expect(events).toHaveLength(1));
+	expect(events[0]).toMatchObject({ event: "request.opened", requestId: "open" });
+	expect(JSON.parse(readFileSync(join(dir, "webhook-watch.json"), "utf8"))).toEqual(["live", "gone"]);
+});
+
+it("continues queued resolution when persisting delivered-open state fails", async () => {
+	const { createServer: httpServer } = await import("node:http");
+	const { atomicWrite } = await import("../src/host/config.ts");
+	const events: Record<string, unknown>[] = [];
+	let release: (() => void) | undefined;
+	const sink = httpServer(async (req, res) => {
+		const chunks: Buffer[] = [];
+		for await (const c of req) chunks.push(Buffer.from(c));
+		events.push(JSON.parse(Buffer.concat(chunks).toString()));
+		if (events.length === 1) release = () => res.writeHead(200).end();
+		else res.writeHead(200).end();
+	});
+	await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+	cleanup.push(() => new Promise<void>((resolve) => sink.close(() => resolve())));
+	const t = await setup(true);
+	const dir = t.server.config.dir;
+	mkdirSync(join(dir, "webhook-state.json"));
+	atomicWrite(join(dir, "webhook.json"), {
+		url: `http://127.0.0.1:${(sink.address() as { port: number }).port}`,
+		machine: "test",
+		headers: {},
+	});
+	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	await t.server.refresh();
+	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	t.emit(1, { type: "ui_request", request: { requestId: "r", kind: "input", title: "Question" } });
+	await vi.waitFor(() => expect(release).toBeDefined());
+	t.emit(2, { type: "ui_request_end", requestId: "r", by: "tui" });
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	release?.();
+	await vi.waitFor(() => expect(events).toHaveLength(2));
+	expect(events[1]).toMatchObject({ event: "request.resolved", requestId: "r" });
+});
+
+it("CLI UI answers despite marker write failure and clears markers after rejected responses", async () => {
+	const { spawn } = await import("node:child_process");
+	const { fileURLToPath } = await import("node:url");
+	const { answeredHere } = await import("../src/host/webhook.ts");
+	const t = await setup(true);
+	const run = (dir: string) =>
+		new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+			const child = spawn(
+				process.execPath,
+				[fileURLToPath(new URL("../src/host/cli.ts", import.meta.url)), "ui", "live", "request", "answer"],
+				{ env: { ...process.env, PIMATE_CONFIG_DIR: dir, PIMATE_RUN_DIR: t.core.runDir, PIMATE_ABDUCO: "/absent" } },
+			);
+			let output = "";
+			child.stdout.on("data", (data) => {
+				output += String(data);
+			});
+			child.stderr.on("data", (data) => {
+				output += String(data);
+			});
+			child.on("error", reject);
+			child.on("close", (code) => resolve({ code, output }));
+		});
+	const blocked = join(t.dir, "not-a-directory");
+	writeFileSync(blocked, "x");
+	const result = await run(blocked);
+	expect(result.code).toBe(0);
+	expect(result.output).toContain("webhook write answered-here.json failed");
+	expect(t.requests.some((request) => request.method === "ui_respond")).toBe(true);
+	writeFileSync(join(t.server.config.dir, "answered-here.lock"), "stale");
+	let markerSeen = false;
+	t.hooks.ui = (req, socket) => {
+		markerSeen = answeredHere(t.server.config.dir, "live", "request");
+		socket.write(
+			encodeLine({ type: "response", id: req.id, ok: false, error: { code: "bad_request", message: "invalid label" } }),
+		);
+	};
+	const rejected = await run(t.server.config.dir);
+	expect(rejected.code).toBe(1);
+	expect(rejected.output).toContain("invalid label");
+	expect(markerSeen).toBe(true);
+	expect(answeredHere(t.server.config.dir, "live", "request")).toBe(false);
+});
+
+it("keeps queued deliveries after an instance is unwatched", async () => {
+	const { createServer: httpServer } = await import("node:http");
+	const { atomicWrite } = await import("../src/host/config.ts");
+	const events: Record<string, unknown>[] = [];
+	let status = 401;
+	const sink = httpServer(async (req, res) => {
+		const chunks: Buffer[] = [];
+		for await (const c of req) chunks.push(Buffer.from(c));
+		events.push(JSON.parse(Buffer.concat(chunks).toString()));
+		res.writeHead(status).end();
+	});
+	await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+	cleanup.push(() => new Promise<void>((resolve) => sink.close(() => resolve())));
+	const t = await setup(true);
+	const dir = t.server.config.dir;
+	atomicWrite(join(dir, "webhook.json"), {
+		url: `http://127.0.0.1:${(sink.address() as { port: number }).port}`,
+		headers: {},
+		machine: "test",
+	});
+	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	await t.server.refresh();
+	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
+	await new Promise((resolve) => setTimeout(resolve, 40));
+	t.emit(1, { type: "agent_start" });
+	t.emit(2, {
+		type: "message_end",
+		item: { kind: "assistant", entryId: "reply", text: "done", stopReason: "stop", toolCalls: [] },
+	});
+	t.emit(3, { type: "agent_settled", aborted: false });
+	await vi.waitFor(() => expect(events).toHaveLength(1));
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	atomicWrite(join(dir, "webhook-watch.json"), []);
+	await t.server.refresh();
+	status = 200;
+	const delivery = (t.server as unknown as { delivery: { retry: () => Promise<void> } }).delivery;
+	await delivery.retry();
+	expect(events).toHaveLength(2);
+	expect(events[1]).toMatchObject({ event: "pi.finished" });
+});
+
+it("CLI watch ignores stale locks and prunes dead instance ids when writing", async () => {
+	const { spawn } = await import("node:child_process");
+	const { fileURLToPath } = await import("node:url");
+	const { atomicWrite } = await import("../src/host/config.ts");
+	const t = await setup(true);
+	const dir = t.server.config.dir;
+	atomicWrite(join(dir, "webhook-watch.json"), ["gone"]);
+	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
+	const run = (action: string) =>
+		new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+			const child = spawn(
+				process.execPath,
+				[fileURLToPath(new URL("../src/host/cli.ts", import.meta.url)), "webhook", action, "live"],
+				{ env: { ...process.env, PIMATE_CONFIG_DIR: dir, PIMATE_RUN_DIR: t.core.runDir, PIMATE_ABDUCO: "/absent" } },
+			);
+			let output = "";
+			child.stdout.on("data", (data) => {
+				output += String(data);
+			});
+			child.stderr.on("data", (data) => {
+				output += String(data);
+			});
+			child.on("error", reject);
+			child.on("close", (code) => resolve({ code, output }));
+		});
+	const watched = await run("watch");
+	expect(watched.code).toBe(0);
+	expect(JSON.parse(watched.output).watched).toEqual(["live"]);
+	atomicWrite(join(dir, "webhook-watch.json"), ["live", "gone"]);
+	const unwatched = await run("unwatch");
+	expect(unwatched.code).toBe(0);
+	expect(JSON.parse(unwatched.output).watched).toEqual([]);
 });

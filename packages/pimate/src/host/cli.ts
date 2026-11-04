@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DEFAULT_HOST_PORT, formatPairingLink } from "@pimate/protocol";
 import QRCode from "qrcode";
-import { atomicWrite, HostConfig } from "./config.ts";
+import { atomicWrite, HostConfig, resolveConfigDir } from "./config.ts";
 import { HostCore, parseAbducoList } from "./index.ts";
 import { defaultListenAddresses, HostServer } from "./server.ts";
 import { conversation, lastAssistant, type TurnResult, TurnWatch } from "./turn.ts";
@@ -14,11 +14,12 @@ import {
 	off,
 	payload,
 	post,
-	readJSON,
+	readWebhookConfig,
 	setupInput,
+	unmarkAnswered,
 	updateWatches,
-	type WebhookConfig,
 	watches,
+	webhookError,
 } from "./webhook.ts";
 
 const usage =
@@ -97,22 +98,22 @@ async function main(): Promise<void> {
 			atomicWrite(join(config.dir, "webhook.json"), await setupInput(process.stdin, rest[1]));
 			console.log("saved webhook.json");
 		} else if (action === "status" && !rest.length) {
-			const saved = readJSON<WebhookConfig | null>(config.dir, "webhook.json", null);
+			const saved = readWebhookConfig(config.dir);
 			print({ configured: !!saved, machine: saved?.machine ?? null, watched: watches(config.dir) });
 		} else if (action === "off" && !rest.length) {
 			off(config.dir);
 			console.log("webhook off");
 		} else if ((action === "watch" || action === "unwatch") && rest.length === 1) {
-			if (action === "watch" && !(await host.list()).some((i) => i.instanceId === rest[0]))
-				throw new Error("NOT_FOUND");
+			const existing = new Set((await host.list()).map((i) => i.instanceId));
+			if (action === "watch" && !existing.has(rest[0])) throw new Error("NOT_FOUND");
 			const ids = updateWatches(config.dir, (current) => {
-				const next = current.filter((id) => id !== rest[0]);
+				const next = current.filter((id) => id !== rest[0] && existing.has(id));
 				if (action === "watch") next.push(rest[0]);
 				return next;
 			});
 			print({ watched: ids });
 		} else if (action === "test" && !rest.length) {
-			const saved = readJSON<WebhookConfig | null>(config.dir, "webhook.json", null);
+			const saved = readWebhookConfig(config.dir);
 			if (!saved) throw new Error("WEBHOOK_NOT_CONFIGURED");
 			const result = await post(saved, payload(saved, "test", "", null, "", "", String(Date.now())));
 			if (!result.ok)
@@ -231,19 +232,35 @@ async function main(): Promise<void> {
 				if (!args[1] || args[2] === undefined) throw new Error(usage);
 				const answers = args[2] === "--answers" ? JSON.parse(args[3] ?? "null") : undefined;
 				if (args[2] === "--answers" && (!Array.isArray(answers) || args.length !== 4)) throw new Error(usage);
-				markAnswered(new HostConfig().dir, args[0], args[1]);
-				print(
-					await client.request("ui_respond", {
-						requestId: args[1],
-						...(answers
-							? { answers }
-							: args[2] === "--cancel"
-								? { cancelled: true }
-								: args[2] === "--confirm"
-									? { confirmed: true }
-									: { value: args.slice(2).join(" ") }),
-					}),
-				);
+				const dir = resolveConfigDir();
+				let marker: number | undefined;
+				try {
+					marker = markAnswered(dir, args[0], args[1]);
+				} catch {
+					webhookError("write answered-here.json");
+				}
+				try {
+					print(
+						await client.request("ui_respond", {
+							requestId: args[1],
+							...(answers
+								? { answers }
+								: args[2] === "--cancel"
+									? { cancelled: true }
+									: args[2] === "--confirm"
+										? { confirmed: true }
+										: { value: args.slice(2).join(" ") }),
+						}),
+					);
+				} catch (error) {
+					if (marker !== undefined)
+						try {
+							unmarkAnswered(dir, args[0], args[1], marker);
+						} catch {
+							webhookError("remove answered-here marker");
+						}
+					throw error;
+				}
 				break;
 			}
 			case "watch": {

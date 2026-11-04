@@ -173,3 +173,54 @@ it("retries rejected deliveries for ten rounds and transient errors for at most 
 		vi.useRealTimers();
 	}
 });
+
+it("isolates delivery callbacks, including retry callbacks", async () => {
+	const { vi } = await import("vitest");
+	const { WebhookDelivery } = await import("../src/host/webhook.ts");
+	const config = { url: "http://127.0.0.1:1234", headers: {}, machine: "test" };
+	const event = payload(config, "test", "instance", null, "", "", "r");
+	let status = 200;
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => new Response("", { status })),
+	);
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const delivery = new WebhookDelivery(() => config);
+	try {
+		await expect(
+			delivery.send(event, () => {
+				throw new Error("disk");
+			}),
+		).resolves.toBeUndefined();
+		status = 401;
+		await delivery.send(event, () => {
+			throw new Error("disk");
+		});
+		status = 200;
+		await expect((delivery as unknown as { retry: () => Promise<void> }).retry()).resolves.toBeUndefined();
+	} finally {
+		delivery.close();
+		log.mockRestore();
+		vi.unstubAllGlobals();
+	}
+});
+
+it("treats invalid webhook data as absent and ignores obsolete lock files", async () => {
+	const { writeFileSync } = await import("node:fs");
+	const { readWebhookConfig, timestamps, updateWatches, watches } = await import("../src/host/webhook.ts");
+	const dir = mkdtempSync(join(tmpdir(), "pimate-invalid-webhook-"));
+	dirs.push(dir);
+	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
+	writeFileSync(join(dir, "answered-here.lock"), "stale");
+	for (const value of ["{", "null", "[]", '"bad"']) {
+		for (const file of ["webhook.json", "webhook-watch.json", "answered-here.json", "webhook-state.json"])
+			writeFileSync(join(dir, file), value);
+		expect(readWebhookConfig(dir)).toBeNull();
+		expect(watches(dir)).toEqual([]);
+		expect(timestamps(dir, "webhook-state.json")).toEqual({});
+		expect(answeredHere(dir, "instance", "request")).toBe(false);
+	}
+	expect(updateWatches(dir, () => ["instance"])).toEqual(["instance"]);
+	markAnswered(dir, "instance", "request");
+	expect(answeredHere(dir, "instance", "request")).toBe(true);
+});

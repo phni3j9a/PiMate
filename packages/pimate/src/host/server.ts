@@ -11,7 +11,6 @@ import {
 	HOST_PROTOCOL_VERSION,
 	HostCloseCode,
 	type HostMessage,
-	type InstanceSnapshot,
 	type InstanceSummary,
 	PROTOCOL_VERSION,
 	type Request,
@@ -29,11 +28,12 @@ import { hostHome, listDirs, listFolders, SpawnError, validateSpawn } from "./op
 import {
 	answeredHere,
 	payload,
-	readJSON,
-	updateWatches,
+	readWebhookConfig,
+	timestamps,
 	type WebhookConfig,
 	WebhookDelivery,
 	watches,
+	webhookError,
 } from "./webhook.ts";
 
 const execFileAsync = promisify(execFile);
@@ -95,6 +95,8 @@ type Link = {
 	backoff: number;
 	requests: number;
 	webhookSeeded?: boolean;
+	pendingUI?: Map<string, UIRequest>;
+	pendingSessionId?: string | null;
 	userText?: string;
 	assistantText?: string;
 	errorText?: string;
@@ -134,10 +136,8 @@ export class HostServer {
 		this.options = options;
 		this.core = options.core ?? new HostCore();
 		this.config = new HostConfig(options.configDir);
-		this.opened = readJSON(this.config.dir, "webhook-state.json", {});
-		this.delivery = new WebhookDelivery((event) =>
-			this.webhookWatching(event.instanceId) ? this.webhookConfig : null,
-		);
+		this.opened = timestamps(this.config.dir, "webhook-state.json");
+		this.delivery = new WebhookDelivery(() => this.webhookConfig);
 		this.wss.on("connection", (ws) => this.accept(ws));
 	}
 	async start(): Promise<{ address: string; port: number }[]> {
@@ -530,16 +530,10 @@ export class HostServer {
 				this.instances = next;
 				for (const peer of this.peers) if (peer.deviceId) this.send(peer, { type: "instances", instances: next });
 			}
-			this.webhookConfig = readJSON<WebhookConfig | null>(this.config.dir, "webhook.json", null);
-			const ids = watches(this.config.dir);
-			const existing = ids.filter((id) => next.some((instance) => instance.instanceId === id));
-			if (ids.length !== existing.length) {
-				this.watched = new Set(
-					updateWatches(this.config.dir, (current) =>
-						current.filter((id) => next.some((instance) => instance.instanceId === id)),
-					),
-				);
-			} else this.watched = new Set(existing);
+			this.webhookConfig = readWebhookConfig(this.config.dir);
+			this.watched = new Set(
+				watches(this.config.dir).filter((id) => next.some((instance) => instance.instanceId === id)),
+			);
 			this.watchAlerts();
 		} finally {
 			this.polling = false;
@@ -556,14 +550,10 @@ export class HostServer {
 			if (!this.watching() && !this.webhookWatching(instance.instanceId)) continue;
 			const link = this.link(instance.instanceId);
 			void this.connect(link)
-				.then(async (client) => {
+				.then(() => {
 					if (this.webhookWatching(link.id) && !link.webhookSeeded) {
 						link.webhookSeeded = true;
-						try {
-							this.webhookSnapshot(link, (await client.request("hello", {})).snapshot);
-						} catch {
-							link.webhookSeeded = false;
-						}
+						this.webhookSafe(() => this.webhookSnapshot(link));
 					}
 				})
 				.catch(() => this.reconnect(link));
@@ -579,9 +569,26 @@ export class HostServer {
 	private requestKey(id: string, requestId: string): string {
 		return hash(JSON.stringify([id, requestId])).slice(0, 16);
 	}
-	private webhookSnapshot(link: Link, snapshot: InstanceSnapshot): void {
+	private webhookSafe(fn: () => void): void {
+		try {
+			fn();
+		} catch {
+			webhookError("event");
+		}
+	}
+	private webhookSnapshot(link: Link): void {
 		if (!this.webhookWatching(link.id)) return;
-		for (const request of snapshot.pendingUI) this.webhookOpen(link, request, snapshot.session?.id ?? null);
+		for (const request of link.pendingUI?.values() ?? [])
+			this.webhookOpen(link, request, link.pendingSessionId ?? null);
+	}
+	private trackPending(link: Link, event: EventMessage): void {
+		if (!link.pendingUI) return;
+		const e = event.event;
+		if (e.type === "session_changed") {
+			link.pendingUI.clear();
+			link.pendingSessionId = event.sessionId;
+		} else if (e.type === "ui_request") link.pendingUI.set(e.request.requestId, e.request);
+		else if (e.type === "ui_request_end") link.pendingUI.delete(e.requestId);
 	}
 	private webhookOpen(link: Link, request: UIRequest, sessionId: string | null): void {
 		const config = this.webhookConfig;
@@ -613,7 +620,11 @@ export class HostServer {
 						.sort((a, b) => b[1] - a[1])
 						.slice(0, 1000),
 				);
-				atomicWrite(join(this.config.dir, "webhook-state.json"), this.opened);
+				try {
+					atomicWrite(join(this.config.dir, "webhook-state.json"), this.opened);
+				} catch {
+					webhookError("write webhook-state.json");
+				}
 				const closed = this.closing.get(key);
 				if (closed) {
 					this.closing.delete(key);
@@ -713,11 +724,20 @@ export class HostServer {
 				client.close();
 				throw new Error("Link closed");
 			}
+			this.webhookSafe(() => {
+				link.pendingUI = new Map(snapshot.pendingUI.map((request) => [request.requestId, request]));
+				link.pendingSessionId = snapshot.session?.id ?? null;
+			});
 			if (this.webhookWatching(link.id)) {
 				link.webhookSeeded = true;
-				this.webhookSnapshot(link, snapshot);
+				this.webhookSafe(() => this.webhookSnapshot(link));
 			}
-			for (const event of early) if (event.seq > snapshot.seq) this.webhookEvent(link, event, link.alerts.next(event));
+			for (const event of early)
+				if (event.seq > snapshot.seq) {
+					this.webhookSafe(() => this.trackPending(link, event));
+					const alert = link.alerts.next(event);
+					this.webhookSafe(() => this.webhookEvent(link, event, alert));
+				}
 			link.client = client;
 			link.backoff = 250;
 			client.onClose(() => {
@@ -725,6 +745,7 @@ export class HostServer {
 				link.client = undefined;
 				link.alerts = undefined;
 				link.webhookSeeded = false;
+				link.pendingUI = undefined;
 				this.flush(link);
 				for (const sub of link.subs.values()) {
 					sub.ready = false;
@@ -814,7 +835,8 @@ export class HostServer {
 	}
 	private event(link: Link, event: EventMessage): void {
 		const alert = link.alerts?.next(event) ?? null;
-		if (link.alerts) this.webhookEvent(link, event, alert);
+		this.webhookSafe(() => this.trackPending(link, event));
+		if (link.alerts) this.webhookSafe(() => this.webhookEvent(link, event, alert));
 		if (alert)
 			for (const peer of this.peers) if (peer.deviceId && peer.alerts) this.send(peer, { type: "alert", alert });
 		for (const [peer, sub] of link.subs)

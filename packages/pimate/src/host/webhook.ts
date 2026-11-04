@@ -1,19 +1,62 @@
-import { closeSync, openSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import type { UIRequest } from "@pimate/protocol";
 import { PACKAGE_VERSION } from "../package.ts";
+import { privateRunDir, validInstanceId } from "../runtime.ts";
 import { atomicWrite, hash } from "./config.ts";
 
 export type WebhookConfig = { url: string; headers: Record<string, string>; machine: string };
-export function readJSON<T>(dir: string, file: string, fallback: T): T {
+const logged = new Set<string>();
+export function webhookError(operation: string): void {
+	if (!logged.has(operation)) {
+		logged.add(operation);
+		console.error(`webhook ${operation} failed`);
+	}
+}
+function readJSON<T>(dir: string, file: string, fallback: T, valid: (value: unknown) => value is T): T {
 	try {
-		return JSON.parse(readFileSync(join(dir, file), "utf8")) as T;
+		const value: unknown = JSON.parse(readFileSync(join(dir, file), "utf8"));
+		if (valid(value)) return value;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return fallback;
-		throw error;
 	}
+	webhookError(`read ${file}`);
+	return fallback;
+}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	!!value && typeof value === "object" && !Array.isArray(value);
+export function readWebhookConfig(dir: string): WebhookConfig | null {
+	return readJSON<WebhookConfig | null>(dir, "webhook.json", null, (value): value is WebhookConfig => {
+		if (
+			!isRecord(value) ||
+			typeof value.url !== "string" ||
+			typeof value.machine !== "string" ||
+			!isRecord(value.headers) ||
+			!Object.values(value.headers).every((v) => typeof v === "string")
+		)
+			return false;
+		try {
+			const url = new URL(value.url);
+			return (
+				!url.username &&
+				!url.password &&
+				(url.protocol === "https:" || (url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname)))
+			);
+		} catch {
+			return false;
+		}
+	});
+}
+export function timestamps(dir: string, file: string): Record<string, number> {
+	return readJSON<Record<string, number>>(
+		dir,
+		file,
+		{},
+		(value): value is Record<string, number> =>
+			isRecord(value) && Object.values(value).every((v) => typeof v === "number" && Number.isFinite(v)),
+	);
 }
 export async function setupInput(input: NodeJS.ReadableStream, machine = hostname()): Promise<WebhookConfig> {
 	if ((input as NodeJS.ReadStream).isTTY)
@@ -51,37 +94,39 @@ export async function setupInput(input: NodeJS.ReadableStream, machine = hostnam
 	return { url, headers, machine };
 }
 export function watches(dir: string): string[] {
-	return readJSON<string[]>(dir, "webhook-watch.json", []);
-}
-function locked<T>(dir: string, name: string, update: () => T): T {
-	const path = join(dir, `${name}.lock`);
-	const fd = openSync(path, "wx", 0o600);
-	try {
-		return update();
-	} finally {
-		closeSync(fd);
-		rmSync(path, { force: true });
-	}
+	return readJSON<string[]>(
+		dir,
+		"webhook-watch.json",
+		[],
+		(value): value is string[] =>
+			Array.isArray(value) && value.every((id) => typeof id === "string" && validInstanceId(id)),
+	);
 }
 export function updateWatches(dir: string, update: (ids: string[]) => string[]): string[] {
-	return locked(dir, "webhook-watch", () => {
-		const ids = update(watches(dir));
-		atomicWrite(join(dir, "webhook-watch.json"), ids);
-		return ids;
-	});
+	const ids = update(watches(dir));
+	atomicWrite(join(dir, "webhook-watch.json"), ids);
+	return ids;
 }
 const markerKey = (instanceId: string, requestId: string) => hash(JSON.stringify([instanceId, requestId])).slice(0, 16);
-export function markAnswered(dir: string, instanceId: string, requestId: string): void {
-	locked(dir, "answered-here", () => {
-		const now = Date.now();
-		const entries = readJSON<Record<string, number>>(dir, "answered-here.json", {});
-		for (const [key, time] of Object.entries(entries)) if (now - time > 7 * 86400_000) delete entries[key];
-		entries[markerKey(instanceId, requestId)] = now;
+export function markAnswered(dir: string, instanceId: string, requestId: string): number {
+	privateRunDir(dir);
+	const now = Date.now();
+	const entries = timestamps(dir, "answered-here.json");
+	for (const [key, time] of Object.entries(entries)) if (now - time > 7 * 86400_000) delete entries[key];
+	entries[markerKey(instanceId, requestId)] = now;
+	atomicWrite(join(dir, "answered-here.json"), entries);
+	return now;
+}
+export function unmarkAnswered(dir: string, instanceId: string, requestId: string, markedAt: number): void {
+	const entries = timestamps(dir, "answered-here.json");
+	const key = markerKey(instanceId, requestId);
+	if (entries[key] === markedAt) {
+		delete entries[key];
 		atomicWrite(join(dir, "answered-here.json"), entries);
-	});
+	}
 }
 export function answeredHere(dir: string, instanceId: string, requestId: string): boolean {
-	const time = readJSON<Record<string, number>>(dir, "answered-here.json", {})[markerKey(instanceId, requestId)];
+	const time = timestamps(dir, "answered-here.json")[markerKey(instanceId, requestId)];
 	return typeof time === "number" && Date.now() - time <= 7 * 86400_000;
 }
 // Redaction patterns adapted from T3 Tots t3listen (MIT).
@@ -175,7 +220,9 @@ export class WebhookDelivery {
 	private config: (event: Payload) => WebhookConfig | null;
 	constructor(config: (event: Payload) => WebhookConfig | null) {
 		this.config = config;
-		this.timer = setInterval(() => void this.retry(), 60_000);
+		this.timer = setInterval(() => {
+			void this.retry().catch(() => webhookError("retry"));
+		}, 60_000);
 		this.timer.unref();
 	}
 	private log(event: Payload, result: Result): void {
@@ -183,26 +230,42 @@ export class WebhookDelivery {
 			`webhook ${result.ok ? "sent" : "failed"} ${event.event} ${event.eventId.slice(-12)} ${result.status ? `HTTP ${result.status}` : result.code}`,
 		);
 	}
+	private callback(fn?: () => void): void {
+		if (!fn) return;
+		try {
+			fn();
+		} catch {
+			webhookError("callback");
+		}
+	}
 	private enqueue(item: Item): void {
 		if (this.queue.length < 100) this.queue.push(item);
 		else {
 			console.error(`webhook dropped ${item.event.event} ${item.event.eventId}`);
-			item.onDrop?.();
+			this.callback(item.onDrop);
 		}
 	}
 	async send(event: Payload, onSuccess?: () => void, onDrop?: () => void): Promise<void> {
+		try {
+			await this.sendAttempts(event, onSuccess, onDrop);
+		} catch {
+			webhookError("delivery");
+			this.callback(onDrop);
+		}
+	}
+	private async sendAttempts(event: Payload, onSuccess?: () => void, onDrop?: () => void): Promise<void> {
 		const item = { event, since: Date.now(), rounds: 0, onSuccess, onDrop };
 		for (let i = 0; i < 3 && !this.stopped; i++) {
 			const config = this.config(event);
 			if (!config) {
-				onDrop?.();
+				this.callback(onDrop);
 				return;
 			}
 			const result = await post(config, event);
 			this.log(event, result);
 			if (this.stopped) return;
 			if (result.ok) {
-				onSuccess?.();
+				this.callback(onSuccess);
 				return;
 			}
 			if (!result.retry || i === 2) {
@@ -227,18 +290,18 @@ export class WebhookDelivery {
 		for (const item of items) {
 			const config = this.config(item.event);
 			if (!config || this.stopped) {
-				item.onDrop?.();
+				this.callback(item.onDrop);
 				continue;
 			}
 			item.rounds++;
 			const result = await post(config, item.event);
 			this.log(item.event, result);
 			if (this.stopped) return;
-			if (result.ok) item.onSuccess?.();
+			if (result.ok) this.callback(item.onSuccess);
 			else if (keepRetry(result.retry ? 0 : result.status, "", item.since, item.rounds)) this.enqueue(item);
 			else {
 				console.error(`webhook dropped ${item.event.event} ${item.event.eventId}`);
-				item.onDrop?.();
+				this.callback(item.onDrop);
 			}
 		}
 	}
@@ -252,5 +315,5 @@ export class WebhookDelivery {
 }
 export function off(dir: string): void {
 	rmSync(join(dir, "webhook.json"), { force: true });
-	locked(dir, "webhook-watch", () => rmSync(join(dir, "webhook-watch.json"), { force: true }));
+	rmSync(join(dir, "webhook-watch.json"), { force: true });
 }
