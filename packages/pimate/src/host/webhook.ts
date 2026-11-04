@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 import type { UIRequest } from "@pimate/protocol";
 import { PACKAGE_VERSION } from "../package.ts";
 import { privateRunDir, validInstanceId } from "../runtime.ts";
-import { atomicWrite, hash } from "./config.ts";
+import { hash } from "./config.ts";
 
 export type WebhookConfig = { url: string; headers: Record<string, string>; machine: string };
 const logged = new Set<string>();
@@ -94,8 +94,14 @@ export async function setupInput(input: NodeJS.ReadableStream, machine = hostnam
 	if (!url || !machine.trim()) throw new Error("Invalid webhook setup");
 	return { url, headers, machine };
 }
+/** privateRunDir's rule without creating: a symlinked or shared folder is never followed. */
+function privateDir(path: string): boolean {
+	const st = lstatSync(path);
+	return st.isDirectory() && st.uid === process.getuid?.() && (st.mode & 0o777) === 0o700;
+}
 function entries(dir: string, name: string): string[] {
 	try {
+		if (!privateDir(join(dir, name))) throw new Error("not private");
 		return readdirSync(join(dir, name), { withFileTypes: true })
 			.filter((entry) => entry.isFile())
 			.map((entry) => entry.name);
@@ -110,12 +116,12 @@ export function watches(dir: string): string[] {
 export function setWatch(dir: string, id: string, enabled: boolean): void {
 	if (!validInstanceId(id)) throw new Error("Invalid instance id");
 	const path = join(dir, "webhook-watch", id);
+	privateRunDir(dir);
+	privateRunDir(join(dir, "webhook-watch"));
 	if (!enabled) {
 		rmSync(path, { force: true });
 		return;
 	}
-	privateRunDir(dir);
-	privateRunDir(join(dir, "webhook-watch"));
 	try {
 		writeFileSync(path, "", { flag: "wx", mode: 0o600 });
 	} catch (error) {
@@ -123,7 +129,8 @@ export function setWatch(dir: string, id: string, enabled: boolean): void {
 	}
 }
 const markerKey = (instanceId: string, requestId: string) => hash(JSON.stringify([instanceId, requestId])).slice(0, 16);
-export function markAnswered(dir: string, instanceId: string, requestId: string): string {
+/** Returns a token to undo this mark, or undefined when an earlier answer already marked it (keep that one). */
+export function markAnswered(dir: string, instanceId: string, requestId: string): string | undefined {
 	privateRunDir(dir);
 	const folder = join(dir, "answered-here");
 	privateRunDir(folder);
@@ -137,7 +144,12 @@ export function markAnswered(dir: string, instanceId: string, requestId: string)
 		}
 	}
 	const token = randomUUID();
-	atomicWrite(join(folder, markerKey(instanceId, requestId)), token);
+	try {
+		writeFileSync(join(folder, markerKey(instanceId, requestId)), JSON.stringify(token), { flag: "wx", mode: 0o600 });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined;
+		throw error;
+	}
 	return token;
 }
 export function unmarkAnswered(dir: string, instanceId: string, requestId: string, token: string): void {
@@ -150,6 +162,7 @@ export function unmarkAnswered(dir: string, instanceId: string, requestId: strin
 }
 export function answeredHere(dir: string, instanceId: string, requestId: string): boolean {
 	try {
+		if (!privateDir(join(dir, "answered-here"))) throw new Error("not private");
 		const stat = lstatSync(join(dir, "answered-here", markerKey(instanceId, requestId)));
 		return stat.isFile() && Date.now() - stat.mtimeMs <= 7 * 86400_000;
 	} catch (error) {

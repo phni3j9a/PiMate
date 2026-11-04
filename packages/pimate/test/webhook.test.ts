@@ -305,12 +305,37 @@ it("keeps concurrent watch writers and independent answered markers private", as
 	for (const id of ["one", "two"]) expect(statSync(join(dir, "webhook-watch", id)).mode & 0o777).toBe(0o600);
 	const first = markAnswered(dir, "one", "request");
 	markAnswered(dir, "two", "request");
-	unmarkAnswered(dir, "one", "request", first);
+	unmarkAnswered(dir, "one", "request", first as string);
 	expect(answeredHere(dir, "one", "request")).toBe(false);
 	expect(answeredHere(dir, "two", "request")).toBe(true);
 	expect(statSync(join(dir, "answered-here")).mode & 0o777).toBe(0o700);
 	for (const name of readdirSync(join(dir, "answered-here")))
 		expect(statSync(join(dir, "answered-here", name)).mode & 0o777).toBe(0o600);
+});
+
+it("keeps an earlier answer's marker when a duplicate answer is rejected", () => {
+	const dir = mkdtempSync(join(tmpdir(), "pimate-duplicate-answer-"));
+	dirs.push(dir);
+	expect(markAnswered(dir, "one", "request")).toBeTypeOf("string");
+	// The duplicate gets no token, so its failure cannot undo the first answer's mark.
+	expect(markAnswered(dir, "one", "request")).toBeUndefined();
+	expect(answeredHere(dir, "one", "request")).toBe(true);
+});
+
+it("never follows a symlinked watch or marker folder", async () => {
+	const { mkdirSync, symlinkSync, writeFileSync, existsSync } = await import("node:fs");
+	const { setWatch, watches } = await import("../src/host/webhook.ts");
+	const dir = mkdtempSync(join(tmpdir(), "pimate-symlink-watch-"));
+	dirs.push(dir);
+	const outside = join(dir, "outside");
+	mkdirSync(outside, { mode: 0o700 });
+	writeFileSync(join(outside, "live"), "keep");
+	symlinkSync(outside, join(dir, "webhook-watch"));
+	symlinkSync(outside, join(dir, "answered-here"));
+	expect(watches(dir)).toEqual([]);
+	expect(() => setWatch(dir, "live", false)).toThrow(/not private/);
+	expect(existsSync(join(outside, "live"))).toBe(true);
+	expect(answeredHere(dir, "one", "request")).toBe(false);
 });
 
 it("avoids repeating a request title identical to a question", () => {
