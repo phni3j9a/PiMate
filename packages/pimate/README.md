@@ -306,7 +306,7 @@ RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつな
 
 Grok Bot で Webhook トリガーの Routine を作成し、PC の端末で `pimate webhook setup --machine <表示名>` を実行します。表示に従い URL、続けて `Authorization: ...` を貼り付けます（`--machine` の既定値はホスト名）。キーをチャットや Bot のツールに渡さないでください。`pimate webhook test` で接続確認、`pimate webhook status` で設定と対象を確認できます。
 
-Bot が `spawn` した後に `pimate webhook watch <instanceId>` を実行したインスタンスだけが送信対象です。通常の PC・スマホの Pi セッションは対象になりません。解除は `pimate webhook unwatch <instanceId>`、全停止・設定削除は `pimate webhook off` です。Host の再起動は不要です。
+Bot が `spawn` した後に `pimate webhook watch <instanceId>` を実行したインスタンスだけが送信対象です。通常の PC・スマホの Pi セッションは対象になりません。解除は `pimate webhook unwatch <instanceId>`、全停止・設定削除は `pimate webhook off` です。Host の再起動は不要です。監視対象は設定ディレクトリの `webhook-watch/` 内に ID ごとの 0600 ファイルで保存し、終了したインスタンスは Host が送信対象から除外します。`pimate ui` の回答済みマーカーも `answered-here/` に個別保存し、7日で期限切れになります。
 
 イベントは `request.opened`（質問、選択肢、任意の `context`）、`request.resolved`（`by`）、`pi.finished` / `pi.failed`（最大600文字の `lastReply`、失敗時 `error`）、`pi.child`（`kind`）、接続確認用 `test` です。共通フィールドは `eventId`、`machine`、`instanceId`、`sessionId`、`title`、`cwd`、`sentAt`、英文の `text` です。質問のタイトルは `requestTitle` です。この PC の `pimate ui` で回答した質問の解決通知は省略します。
 

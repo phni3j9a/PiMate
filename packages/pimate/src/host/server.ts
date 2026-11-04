@@ -80,6 +80,15 @@ export async function defaultListenAddresses(): Promise<string[]> {
 const RESULT_EVENTS: ReadonlySet<string> = new Set(["session_op_done", "compact_done", "compact_error", "notify"]);
 const MAX_BUFFER = 8 * 1024 * 1024;
 type Peer = { alerts?: boolean; ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
+type ClosedRequest = {
+	instanceId: string;
+	requestId: string;
+	by: "tui" | "remote" | "error";
+	sessionId: string | null;
+	cwd: string;
+	title?: string;
+	kind?: UIRequest["kind"];
+};
 type Subscription = { ready: boolean; buffer: EventMessage[]; bytes: number; generation: number; seq: number };
 type Link = {
 	alerts?: AlertTracker;
@@ -117,7 +126,7 @@ export class HostServer {
 	private watched = new Set<string>();
 	private opened: Record<string, number> = {};
 	private opening = new Set<string>();
-	private closing = new Map<string, { requestId: string; by: "tui" | "remote" | "error"; sessionId: string | null }>();
+	private closing = new Map<string, ClosedRequest>();
 	private requestKinds = new Map<string, UIRequest["kind"]>();
 	private delivery: WebhookDelivery;
 	private servers: Server[] = [];
@@ -628,7 +637,7 @@ export class HostServer {
 				const closed = this.closing.get(key);
 				if (closed) {
 					this.closing.delete(key);
-					this.webhookResolved(link, closed.requestId, closed.by, closed.sessionId);
+					this.webhookResolved(closed);
 				}
 			},
 			() => {
@@ -637,25 +646,13 @@ export class HostServer {
 			},
 		);
 	}
-	private webhookResolved(
-		link: Link,
-		requestId: string,
-		by: "tui" | "remote" | "error",
-		sessionId: string | null,
-	): void {
+	private webhookResolved(closed: ClosedRequest): void {
 		const config = this.webhookConfig;
-		const instance = this.instances.find((i) => i.instanceId === link.id);
-		const key = this.requestKey(link.id, requestId);
-		if (
-			config &&
-			instance &&
-			this.webhookWatching(link.id) &&
-			this.opened[key] &&
-			!answeredHere(this.config.dir, link.id, requestId)
-		) {
-			const kind = this.requestKinds.get(key);
+		const { instanceId, requestId, by, sessionId, cwd, title, kind } = closed;
+		const key = this.requestKey(instanceId, requestId);
+		if (config && this.opened[key] && !answeredHere(this.config.dir, instanceId, requestId)) {
 			void this.delivery.send(
-				payload(config, "request.resolved", link.id, sessionId, instance.cwd, instance.session?.name, requestId, {
+				payload(config, "request.resolved", instanceId, sessionId, cwd, title, requestId, {
 					requestId,
 					...(kind ? { kind } : {}),
 					by,
@@ -664,6 +661,7 @@ export class HostServer {
 		}
 		this.requestKinds.delete(key);
 	}
+
 	private webhookEvent(link: Link, message: EventMessage, alert: ReturnType<AlertTracker["next"]>): void {
 		const config = this.webhookConfig;
 		const instance = this.instances.find((i) => i.instanceId === link.id);
@@ -681,9 +679,17 @@ export class HostServer {
 		} else if (e.type === "ui_request") this.webhookOpen(link, e.request, message.sessionId);
 		else if (e.type === "ui_request_end") {
 			const key = this.requestKey(link.id, e.requestId);
-			if (this.opening.has(key))
-				this.closing.set(key, { requestId: e.requestId, by: e.by, sessionId: message.sessionId });
-			else this.webhookResolved(link, e.requestId, e.by, message.sessionId);
+			const closed: ClosedRequest = {
+				instanceId: link.id,
+				requestId: e.requestId,
+				by: e.by,
+				sessionId: message.sessionId,
+				cwd: instance.cwd,
+				title: instance.session?.name,
+				kind: this.requestKinds.get(key),
+			};
+			if (this.opening.has(key)) this.closing.set(key, closed);
+			else this.webhookResolved(closed);
 		}
 		if (alert && alert.kind !== "input") {
 			const event = alert.kind === "complete" ? "pi.finished" : alert.kind === "failed" ? "pi.failed" : "pi.child";

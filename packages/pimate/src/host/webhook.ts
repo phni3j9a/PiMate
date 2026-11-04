@@ -1,4 +1,5 @@
-import { readFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -93,41 +94,68 @@ export async function setupInput(input: NodeJS.ReadableStream, machine = hostnam
 	if (!url || !machine.trim()) throw new Error("Invalid webhook setup");
 	return { url, headers, machine };
 }
-export function watches(dir: string): string[] {
-	return readJSON<string[]>(
-		dir,
-		"webhook-watch.json",
-		[],
-		(value): value is string[] =>
-			Array.isArray(value) && value.every((id) => typeof id === "string" && validInstanceId(id)),
-	);
+function entries(dir: string, name: string): string[] {
+	try {
+		return readdirSync(join(dir, name), { withFileTypes: true })
+			.filter((entry) => entry.isFile())
+			.map((entry) => entry.name);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") webhookError(`read ${name}`);
+		return [];
+	}
 }
-export function updateWatches(dir: string, update: (ids: string[]) => string[]): string[] {
-	const ids = update(watches(dir));
-	atomicWrite(join(dir, "webhook-watch.json"), ids);
-	return ids;
+export function watches(dir: string): string[] {
+	return entries(dir, "webhook-watch").filter(validInstanceId).sort();
+}
+export function setWatch(dir: string, id: string, enabled: boolean): void {
+	if (!validInstanceId(id)) throw new Error("Invalid instance id");
+	const path = join(dir, "webhook-watch", id);
+	if (!enabled) {
+		rmSync(path, { force: true });
+		return;
+	}
+	privateRunDir(dir);
+	privateRunDir(join(dir, "webhook-watch"));
+	try {
+		writeFileSync(path, "", { flag: "wx", mode: 0o600 });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+	}
 }
 const markerKey = (instanceId: string, requestId: string) => hash(JSON.stringify([instanceId, requestId])).slice(0, 16);
-export function markAnswered(dir: string, instanceId: string, requestId: string): number {
+export function markAnswered(dir: string, instanceId: string, requestId: string): string {
 	privateRunDir(dir);
+	const folder = join(dir, "answered-here");
+	privateRunDir(folder);
 	const now = Date.now();
-	const entries = timestamps(dir, "answered-here.json");
-	for (const [key, time] of Object.entries(entries)) if (now - time > 7 * 86400_000) delete entries[key];
-	entries[markerKey(instanceId, requestId)] = now;
-	atomicWrite(join(dir, "answered-here.json"), entries);
-	return now;
+	for (const name of entries(dir, "answered-here")) {
+		if (!/^[a-f0-9]{16}$/.test(name)) continue;
+		try {
+			if (now - lstatSync(join(folder, name)).mtimeMs > 7 * 86400_000) rmSync(join(folder, name), { force: true });
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
+	}
+	const token = randomUUID();
+	atomicWrite(join(folder, markerKey(instanceId, requestId)), token);
+	return token;
 }
-export function unmarkAnswered(dir: string, instanceId: string, requestId: string, markedAt: number): void {
-	const entries = timestamps(dir, "answered-here.json");
-	const key = markerKey(instanceId, requestId);
-	if (entries[key] === markedAt) {
-		delete entries[key];
-		atomicWrite(join(dir, "answered-here.json"), entries);
+export function unmarkAnswered(dir: string, instanceId: string, requestId: string, token: string): void {
+	const path = join(dir, "answered-here", markerKey(instanceId, requestId));
+	try {
+		if (JSON.parse(readFileSync(path, "utf8")) === token) rmSync(path, { force: true });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 	}
 }
 export function answeredHere(dir: string, instanceId: string, requestId: string): boolean {
-	const time = timestamps(dir, "answered-here.json")[markerKey(instanceId, requestId)];
-	return typeof time === "number" && Date.now() - time <= 7 * 86400_000;
+	try {
+		const stat = lstatSync(join(dir, "answered-here", markerKey(instanceId, requestId)));
+		return stat.isFile() && Date.now() - stat.mtimeMs <= 7 * 86400_000;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") webhookError("read answered-here");
+		return false;
+	}
 }
 // Redaction patterns adapted from T3 Tots t3listen (MIT).
 const SECRET_KEYS = String.raw`sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|(?:sk|rk)_[a-z]+_[A-Za-z0-9_]{16,}|whsec_[A-Za-z0-9+/=_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|xapp-[A-Za-z0-9-]{10,}|npm_[A-Za-z0-9]{30,}|glpat-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY-----|https://hooks\.slack\.com/services/[A-Za-z0-9/]+|https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+`;
@@ -161,7 +189,7 @@ export function payload(
 		.join("; ");
 	const text =
 		event === "request.opened"
-			? `Pi needs input in ${where}: ${[req.title, req.message, questions, req.options?.join(", ")].filter(Boolean).join("; ")}`
+			? `Pi needs input in ${where}: ${[req.questions?.some((q) => q.question === req.title) ? undefined : req.title, req.message, questions, req.options?.join(", ")].filter(Boolean).join("; ")}`
 			: event === "request.resolved"
 				? `Pi request in ${where} was resolved by ${details.by}.`
 				: event === "test"
@@ -186,7 +214,7 @@ export function retryable(status: number, body = ""): boolean {
 export function keepRetry(status: number, body: string, since: number, rounds: number, now = Date.now()): boolean {
 	return retryable(status, body) ? now - since < 86400_000 : rounds < 10;
 }
-type Result = { ok: boolean; status: number; body: string; code?: string; retry: boolean; rateLimited?: boolean };
+type Result = { ok: boolean; status: number; code?: string; retry: boolean; rateLimited?: boolean };
 export async function post(config: WebhookConfig, event: Payload): Promise<Result> {
 	try {
 		const response = await fetch(config.url, {
@@ -196,18 +224,16 @@ export async function post(config: WebhookConfig, event: Payload): Promise<Resul
 			body: JSON.stringify(event),
 			signal: AbortSignal.timeout(20_000),
 		});
-		let body = response.ok ? "" : await response.text().catch(() => "");
-		const retry = retryable(response.status, body);
-		const rateLimited = /rate.?limit|too many|try again/i.test(body);
-		for (const secret of [config.url, ...Object.values(config.headers).flatMap((v) => [v, ...v.split(/\s+/)])]
-			.filter(Boolean)
-			.sort((a, b) => b.length - a.length))
-			body = body.split(secret).join("[redacted]");
-		body = String(clean(body)).replace(/\s+/g, " ").slice(0, 500);
-		return { ok: response.ok, status: response.status, body, retry, rateLimited };
+		const body = response.ok ? "" : await response.text().catch(() => "");
+		return {
+			ok: response.ok,
+			status: response.status,
+			retry: retryable(response.status, body),
+			rateLimited: /rate.?limit|too many|try again/i.test(body),
+		};
 	} catch (error) {
 		const e = error as NodeJS.ErrnoException & { cause?: NodeJS.ErrnoException };
-		return { ok: false, status: 0, body: "", code: e.cause?.code || e.code || e.name || "ERROR", retry: true };
+		return { ok: false, status: 0, code: e.cause?.code || e.code || e.name || "ERROR", retry: true };
 	}
 }
 type Item = { event: Payload; since: number; rounds: number; onSuccess?: () => void; onDrop?: () => void };
@@ -315,5 +341,5 @@ export class WebhookDelivery {
 }
 export function off(dir: string): void {
 	rmSync(join(dir, "webhook.json"), { force: true });
-	rmSync(join(dir, "webhook-watch.json"), { force: true });
+	rmSync(join(dir, "webhook-watch"), { recursive: true, force: true });
 }

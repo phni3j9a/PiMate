@@ -16,8 +16,8 @@ import {
 	post,
 	readWebhookConfig,
 	setupInput,
+	setWatch,
 	unmarkAnswered,
-	updateWatches,
 	watches,
 	webhookError,
 } from "./webhook.ts";
@@ -106,12 +106,8 @@ async function main(): Promise<void> {
 		} else if ((action === "watch" || action === "unwatch") && rest.length === 1) {
 			const existing = new Set((await host.list()).map((i) => i.instanceId));
 			if (action === "watch" && !existing.has(rest[0])) throw new Error("NOT_FOUND");
-			const ids = updateWatches(config.dir, (current) => {
-				const next = current.filter((id) => id !== rest[0] && existing.has(id));
-				if (action === "watch") next.push(rest[0]);
-				return next;
-			});
-			print({ watched: ids });
+			setWatch(config.dir, rest[0], action === "watch");
+			print({ watched: watches(config.dir).filter((id) => existing.has(id)) });
 		} else if (action === "test" && !rest.length) {
 			const saved = readWebhookConfig(config.dir);
 			if (!saved) throw new Error("WEBHOOK_NOT_CONFIGURED");
@@ -119,7 +115,7 @@ async function main(): Promise<void> {
 			if (!result.ok)
 				throw new Error(
 					result.status
-						? `WEBHOOK_REJECTED HTTP ${result.status}: ${result.body}${result.status === 401 || result.status === 403 ? " (key changed, run setup again)" : ""}`
+						? `WEBHOOK_REJECTED HTTP ${result.status}${result.status === 401 || result.status === 403 ? " (key changed, run setup again)" : ""}`
 						: `WEBHOOK_UNREACHABLE ${result.code}`,
 				);
 			print({ ok: true, status: result.status });
@@ -233,7 +229,7 @@ async function main(): Promise<void> {
 				const answers = args[2] === "--answers" ? JSON.parse(args[3] ?? "null") : undefined;
 				if (args[2] === "--answers" && (!Array.isArray(answers) || args.length !== 4)) throw new Error(usage);
 				const dir = resolveConfigDir();
-				let marker: number | undefined;
+				let marker: string | undefined;
 				try {
 					marker = markAnswered(dir, args[0], args[1]);
 				} catch {

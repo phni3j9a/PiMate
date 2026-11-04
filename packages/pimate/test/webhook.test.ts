@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,10 +54,9 @@ it("markers are scoped to an instance and expire", () => {
 	markAnswered(dir, "one", "request");
 	expect(answeredHere(dir, "one", "request")).toBe(true);
 	expect(answeredHere(dir, "two", "request")).toBe(false);
-	const path = join(dir, "answered-here.json");
-	const data = JSON.parse(readFileSync(path, "utf8"));
-	for (const key of Object.keys(data)) data[key] = Date.now() - 8 * 86400_000;
-	atomicWrite(path, data);
+	const path = join(dir, "answered-here", readdirSync(join(dir, "answered-here"))[0]);
+	const old = new Date(Date.now() - 8 * 86400_000);
+	utimesSync(path, old, old);
 	expect(answeredHere(dir, "one", "request")).toBe(false);
 });
 it("posts to loopback and strips configured secrets from rejection bodies", async () => {
@@ -74,7 +73,7 @@ it("posts to loopback and strips configured secrets from rejection bodies", asyn
 		};
 		const result = await post(config, payload(config, "test", "", null, "", "", "test"));
 		expect(result.status).toBe(401);
-		expect(result.body).not.toContain("verysecretvalue");
+		expect(result).not.toHaveProperty("body");
 	} finally {
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
@@ -207,20 +206,139 @@ it("isolates delivery callbacks, including retry callbacks", async () => {
 
 it("treats invalid webhook data as absent and ignores obsolete lock files", async () => {
 	const { writeFileSync } = await import("node:fs");
-	const { readWebhookConfig, timestamps, updateWatches, watches } = await import("../src/host/webhook.ts");
+	const { readWebhookConfig, timestamps, setWatch, watches } = await import("../src/host/webhook.ts");
 	const dir = mkdtempSync(join(tmpdir(), "pimate-invalid-webhook-"));
 	dirs.push(dir);
 	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
 	writeFileSync(join(dir, "answered-here.lock"), "stale");
 	for (const value of ["{", "null", "[]", '"bad"']) {
-		for (const file of ["webhook.json", "webhook-watch.json", "answered-here.json", "webhook-state.json"])
-			writeFileSync(join(dir, file), value);
+		for (const file of ["webhook.json", "webhook-state.json"]) writeFileSync(join(dir, file), value);
 		expect(readWebhookConfig(dir)).toBeNull();
 		expect(watches(dir)).toEqual([]);
 		expect(timestamps(dir, "webhook-state.json")).toEqual({});
 		expect(answeredHere(dir, "instance", "request")).toBe(false);
 	}
-	expect(updateWatches(dir, () => ["instance"])).toEqual(["instance"]);
+	setWatch(dir, "instance", true);
+	expect(watches(dir)).toEqual(["instance"]);
 	markAnswered(dir, "instance", "request");
 	expect(answeredHere(dir, "instance", "request")).toBe(true);
+});
+
+it("never prints a rejection body containing the webhook URL path secret", async () => {
+	const { spawn } = await import("node:child_process");
+	const { fileURLToPath } = await import("node:url");
+	const { vi } = await import("vitest");
+	const { WebhookDelivery } = await import("../src/host/webhook.ts");
+	const dir = mkdtempSync(join(tmpdir(), "pimate-secret-response-"));
+	dirs.push(dir);
+	const secret = "url-path-secret-do-not-print";
+	const server = createServer((req, res) => {
+		res.writeHead(404);
+		res.end(`Cannot POST ${req.url}`);
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const config = {
+		url: `http://127.0.0.1:${(server.address() as { port: number }).port}/hooks/${secret}`,
+		headers: {},
+		machine: "desk",
+	};
+	atomicWrite(join(dir, "webhook.json"), config);
+	const logs = vi.spyOn(console, "error").mockImplementation(() => {});
+	const delivery = new WebhookDelivery(() => config);
+	try {
+		const result = await new Promise<{ code: number | null; output: string }>((resolve, reject) => {
+			const child = spawn(
+				process.execPath,
+				[fileURLToPath(new URL("../src/host/cli.ts", import.meta.url)), "webhook", "test"],
+				{ env: { ...process.env, PIMATE_CONFIG_DIR: dir, PIMATE_RUN_DIR: join(dir, "run"), PIMATE_ABDUCO: "/absent" } },
+			);
+			let output = "";
+			child.stdout.on("data", (c) => {
+				output += String(c);
+			});
+			child.stderr.on("data", (c) => {
+				output += String(c);
+			});
+			child.on("error", reject);
+			child.on("close", (code) => resolve({ code, output }));
+		});
+		expect(result.code).toBe(1);
+		expect(result.output).toContain("WEBHOOK_REJECTED HTTP 404");
+		expect(result.output).not.toContain(secret);
+		expect(result.output).not.toContain("Cannot POST");
+		await delivery.send(payload(config, "test", "i", null, "", "", "r"));
+		expect(JSON.stringify(logs.mock.calls)).not.toContain(secret);
+		expect(JSON.stringify(logs.mock.calls)).not.toContain("Cannot POST");
+	} finally {
+		delivery.close();
+		logs.mockRestore();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+it("keeps concurrent watch writers and independent answered markers private", async () => {
+	const { spawn } = await import("node:child_process");
+	const { fileURLToPath, pathToFileURL } = await import("node:url");
+	const { watches, unmarkAnswered } = await import("../src/host/webhook.ts");
+	const dir = mkdtempSync(join(tmpdir(), "pimate-concurrent-watch-"));
+	dirs.push(dir);
+	const moduleUrl = pathToFileURL(fileURLToPath(new URL("../src/host/webhook.ts", import.meta.url))).href;
+	const write = (id: string) =>
+		new Promise<void>((resolve, reject) => {
+			const child = spawn(
+				process.execPath,
+				[
+					"--input-type=module",
+					"-e",
+					`import { setWatch } from ${JSON.stringify(moduleUrl)}; setWatch(process.argv[1], process.argv[2], true)`,
+					dir,
+					id,
+				],
+				{ stdio: "pipe" },
+			);
+			child.on("error", reject);
+			child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`child exited ${code}`))));
+		});
+	await Promise.all([write("one"), write("two")]);
+	expect(watches(dir)).toEqual(["one", "two"]);
+	expect(statSync(join(dir, "webhook-watch")).mode & 0o777).toBe(0o700);
+	for (const id of ["one", "two"]) expect(statSync(join(dir, "webhook-watch", id)).mode & 0o777).toBe(0o600);
+	const first = markAnswered(dir, "one", "request");
+	markAnswered(dir, "two", "request");
+	unmarkAnswered(dir, "one", "request", first);
+	expect(answeredHere(dir, "one", "request")).toBe(false);
+	expect(answeredHere(dir, "two", "request")).toBe(true);
+	expect(statSync(join(dir, "answered-here")).mode & 0o777).toBe(0o700);
+	for (const name of readdirSync(join(dir, "answered-here")))
+		expect(statSync(join(dir, "answered-here", name)).mode & 0o777).toBe(0o600);
+});
+
+it("avoids repeating a request title identical to a question", () => {
+	const config = { url: "https://example.com", headers: {}, machine: "desk" };
+	const result = payload(config, "request.opened", "i", null, "/tmp", "project", "r", {
+		title: "Which DB?",
+		kind: "questionnaire",
+		questions: [{ question: "Which DB?", options: [{ label: "Postgres" }, { label: "SQLite" }] }],
+	});
+	expect(result.text).toBe('Pi needs input in "project" on desk: Which DB? (Postgres, SQLite)');
+});
+
+it("classifies rate-limit bodies without exposing them in post results", async () => {
+	const server = createServer((_req, res) => {
+		res.writeHead(400);
+		res.end("Automation run rate limit exceeded /secret");
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		const config = {
+			url: `http://127.0.0.1:${(server.address() as { port: number }).port}/secret`,
+			headers: {},
+			machine: "desk",
+		};
+		const result = await post(config, payload(config, "test", "", null, "", "", "r"));
+		expect(result).toMatchObject({ status: 400, retry: true, rateLimited: true });
+		expect(JSON.stringify(result)).not.toContain("secret");
+	} finally {
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
 });

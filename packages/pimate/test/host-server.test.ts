@@ -18,6 +18,7 @@ import { Hub } from "../src/extension/hub.ts";
 import { HostConfig } from "../src/host/config.ts";
 import { HostCore } from "../src/host/index.ts";
 import { HostServer, listenAddresses } from "../src/host/server.ts";
+import { setWatch, watches } from "../src/host/webhook.ts";
 import { PACKAGE_VERSION } from "../src/package.ts";
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -614,7 +615,7 @@ it("webhooks watch only selected instances, deduplicate snapshots and suppress l
 	await vi.waitFor(() => expect(t.sockets.size).toBe(0));
 	const question = { requestId: "question", kind: "select" as const, title: "Pick", options: ["one", "two"] };
 	t.snapshot.pendingUI = [question];
-	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	setWatch(dir, "live", true);
 	await t.server.refresh();
 	await vi.waitFor(() => expect(events).toHaveLength(1));
 	expect(events[0]).toMatchObject({ event: "request.opened", requestId: "question" });
@@ -676,7 +677,7 @@ it("webhooks watch only selected instances, deduplicate snapshots and suppress l
 
 it("ignores invalid webhook files at start and refresh and isolates phone fanout from webhook errors", async () => {
 	const t = await setup(true, (dir) => {
-		for (const name of ["webhook-state.json", "webhook-watch.json", "webhook.json", "answered-here.json"])
+		for (const name of ["webhook-state.json", "webhook-watch", "webhook.json", "answered-here"])
 			writeFileSync(join(dir, name), "{");
 		writeFileSync(join(dir, "webhook-watch.lock"), "stale");
 	});
@@ -685,7 +686,7 @@ it("ignores invalid webhook files at start and refresh and isolates phone fanout
 	a.send({ type: "subscribe", instanceId: "live" });
 	await a.box.next("subscribed");
 	for (const value of ["null", "[]", '"wrong"', '{"headers":null}']) {
-		for (const name of ["webhook-watch.json", "webhook.json", "answered-here.json"])
+		for (const name of ["webhook-watch", "webhook.json", "answered-here"])
 			writeFileSync(join(t.server.config.dir, name), value);
 		await expect(t.server.refresh()).resolves.toBeUndefined();
 	}
@@ -726,12 +727,13 @@ it("uses live tracked pending UI when a watched phone link is already connected"
 		machine: "test",
 		headers: {},
 	});
-	atomicWrite(join(dir, "webhook-watch.json"), ["live", "gone"]);
+	setWatch(dir, "live", true);
+	setWatch(dir, "gone", true);
 	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
 	await t.server.refresh();
 	await vi.waitFor(() => expect(events).toHaveLength(1));
 	expect(events[0]).toMatchObject({ event: "request.opened", requestId: "open" });
-	expect(JSON.parse(readFileSync(join(dir, "webhook-watch.json"), "utf8"))).toEqual(["live", "gone"]);
+	expect(watches(dir)).toEqual(["gone", "live"]);
 });
 
 it("continues queued resolution when persisting delivered-open state fails", async () => {
@@ -756,7 +758,7 @@ it("continues queued resolution when persisting delivered-open state fails", asy
 		machine: "test",
 		headers: {},
 	});
-	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	setWatch(dir, "live", true);
 	await t.server.refresh();
 	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
 	await new Promise((resolve) => setTimeout(resolve, 40));
@@ -832,7 +834,7 @@ it("keeps queued deliveries after an instance is unwatched", async () => {
 		headers: {},
 		machine: "test",
 	});
-	atomicWrite(join(dir, "webhook-watch.json"), ["live"]);
+	setWatch(dir, "live", true);
 	await t.server.refresh();
 	await vi.waitFor(() => expect(t.sockets.size).toBe(1));
 	await new Promise((resolve) => setTimeout(resolve, 40));
@@ -844,7 +846,7 @@ it("keeps queued deliveries after an instance is unwatched", async () => {
 	t.emit(3, { type: "agent_settled", aborted: false });
 	await vi.waitFor(() => expect(events).toHaveLength(1));
 	await new Promise((resolve) => setTimeout(resolve, 30));
-	atomicWrite(join(dir, "webhook-watch.json"), []);
+	setWatch(dir, "live", false);
 	await t.server.refresh();
 	status = 200;
 	const delivery = (t.server as unknown as { delivery: { retry: () => Promise<void> } }).delivery;
@@ -853,13 +855,12 @@ it("keeps queued deliveries after an instance is unwatched", async () => {
 	expect(events[1]).toMatchObject({ event: "pi.finished" });
 });
 
-it("CLI watch ignores stale locks and prunes dead instance ids when writing", async () => {
+it("CLI watch ignores stale locks and reports only live instance ids", async () => {
 	const { spawn } = await import("node:child_process");
 	const { fileURLToPath } = await import("node:url");
-	const { atomicWrite } = await import("../src/host/config.ts");
 	const t = await setup(true);
 	const dir = t.server.config.dir;
-	atomicWrite(join(dir, "webhook-watch.json"), ["gone"]);
+	setWatch(dir, "gone", true);
 	writeFileSync(join(dir, "webhook-watch.lock"), "stale");
 	const run = (action: string) =>
 		new Promise<{ code: number | null; output: string }>((resolve, reject) => {
@@ -881,8 +882,70 @@ it("CLI watch ignores stale locks and prunes dead instance ids when writing", as
 	const watched = await run("watch");
 	expect(watched.code).toBe(0);
 	expect(JSON.parse(watched.output).watched).toEqual(["live"]);
-	atomicWrite(join(dir, "webhook-watch.json"), ["live", "gone"]);
+	setWatch(dir, "live", true);
+	setWatch(dir, "gone", true);
 	const unwatched = await run("unwatch");
 	expect(unwatched.code).toBe(0);
 	expect(JSON.parse(unwatched.output).watched).toEqual([]);
 });
+
+it.each([false, true])(
+	"handles held resolutions after the watched instance exits (answered here: %s)",
+	async (answeredHere) => {
+		const { createServer: httpServer } = await import("node:http");
+		const { atomicWrite } = await import("../src/host/config.ts");
+		const events: Record<string, unknown>[] = [];
+		let release: (() => void) | undefined;
+		const sink = httpServer(async (req, res) => {
+			const chunks: Buffer[] = [];
+			for await (const c of req) chunks.push(Buffer.from(c));
+			events.push(JSON.parse(Buffer.concat(chunks).toString()));
+			if (events.length === 1) release = () => res.writeHead(401).end();
+			else res.writeHead(200).end();
+		});
+		await new Promise<void>((resolve) => sink.listen(0, "127.0.0.1", resolve));
+		cleanup.push(() => new Promise<void>((resolve) => sink.close(() => resolve())));
+		const t = await setup(true);
+		const dir = t.server.config.dir;
+		atomicWrite(join(dir, "webhook.json"), {
+			url: `http://127.0.0.1:${(sink.address() as { port: number }).port}`,
+			headers: {},
+			machine: "desk",
+		});
+		setWatch(dir, "live", true);
+		await t.server.refresh();
+		await vi.waitFor(() => expect(t.sockets.size).toBe(1));
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		t.emit(1, { type: "ui_request", request: { requestId: "question", kind: "input", title: "Question" } });
+		await vi.waitFor(() => expect(release).toBeDefined());
+		t.emit(2, { type: "ui_request_end", requestId: "question", by: "tui" });
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		release?.();
+		const delivery = (t.server as unknown as { delivery: { retry: () => Promise<void>; queue: unknown[] } }).delivery;
+		await vi.waitFor(() => expect(delivery.queue).toHaveLength(1));
+		if (answeredHere) {
+			const { markAnswered } = await import("../src/host/webhook.ts");
+			markAnswered(dir, "live", "question");
+		}
+		setWatch(dir, "live", false);
+		rmSync(join(t.core.runDir, "live.json"), { force: true });
+		for (const socket of t.sockets) socket.destroy();
+		await t.server.refresh();
+		await delivery.retry();
+		if (answeredHere) {
+			await new Promise((resolve) => setTimeout(resolve, 60));
+			expect(events.map((e) => e.event)).toEqual(["request.opened", "request.opened"]);
+		} else {
+			await vi.waitFor(() => expect(events).toHaveLength(3));
+			expect(events.map((e) => e.event)).toEqual(["request.opened", "request.opened", "request.resolved"]);
+			expect(events[2]).toMatchObject({
+				requestId: "question",
+				instanceId: "live",
+				sessionId: "session",
+				by: "tui",
+				kind: "input",
+				cwd: t.dir,
+			});
+		}
+	},
+);
