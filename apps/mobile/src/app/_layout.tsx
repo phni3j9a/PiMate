@@ -52,6 +52,7 @@ export default function RootLayout() {
 				<Stack.Screen name="provider-auth" />
 				<Stack.Screen name="new" />
 				<Stack.Screen name="review" />
+				<Stack.Screen name="github" />
 				<Stack.Screen name="tree" />
 				<Stack.Screen name="subagent" />
 				<Stack.Screen name="notification" />

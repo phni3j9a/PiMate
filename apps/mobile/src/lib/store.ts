@@ -8,6 +8,9 @@
 import type {
 	CommandInfo,
 	FolderInfo,
+	GitHubData,
+	GitHubQuery,
+	GitHubSummary,
 	InstanceSummary,
 	ModelDefault,
 	ModelInfo,
@@ -60,6 +63,7 @@ export interface HostRuntime {
 	authFailure: AuthFailure | null;
 	platform: string | null;
 	alerts: boolean;
+	github?: boolean;
 	instances: InstanceSummary[];
 	nextRetryAt: number | null;
 }
@@ -424,6 +428,7 @@ export class AppStore {
 			authFailure: c?.authFailure ?? (record.needsRepair ? "invalid_token" : null),
 			platform: c?.info?.platform ?? null,
 			alerts: c?.info?.alerts === true,
+			github: c?.info?.github === true,
 			instances: c?.instances ?? [],
 			nextRetryAt: c?.nextRetryAt ?? null,
 		};
@@ -1278,6 +1283,42 @@ export class AppStore {
 		} catch {
 			return [];
 		}
+	}
+
+	/** Never send unknown messages to older Hosts. This target is captured when opening the screen. */
+	async github(target: Selection, query: GitHubQuery): Promise<Result<GitHubData>> {
+		const conn = this.connections.get(target.hostId);
+		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
+		if (conn.info?.github !== true)
+			return { ok: false, title: "PC の更新が必要です", text: "PiMate を更新して Host を再起動してください。" };
+		try {
+			const res = await conn.github(this.deps.randomUUID(), target.instanceId, query);
+			if (res.ok) return { ok: true, value: res.data };
+			const guidance: Record<string, string> = {
+				gh_missing: "PC に GitHub CLI（gh）をインストールし、gh auth login を実行してください。",
+				gh_auth: "PC のターミナルで gh auth login を実行してください。",
+				not_github:
+					"この Pi のフォルダは GitHub のリポジトリではありません。GitHub の remote があるフォルダで Pi を開いてください。",
+				not_found: "対象の Pi、Issue または PR が見つかりません。アクセス権も確認してください。",
+			};
+			return {
+				ok: false,
+				code: res.code,
+				title: "GitHub を読み込めませんでした",
+				text: guidance[res.code] ?? res.message,
+			};
+		} catch {
+			return { ok: false, title: "GitHub を読み込めませんでした", text: "接続を確認して、もう一度お試しください。" };
+		}
+	}
+
+	/** Pre-fill only; never change selection or write a reference into another Pi's draft. */
+	insertGitHubReference(target: Selection, item: Pick<GitHubSummary, "number" | "title" | "url">): boolean {
+		if (!this.isCurrent(draftKey(target)) || this.state.view?.phase === "gone") return false;
+		const current = this.state.drafts[draftKey(target)] ?? "";
+		const reference = `#${item.number}「${item.title}」 ${item.url}`;
+		this.setDraft(current ? `${current}\n${reference}` : reference);
+		return true;
 	}
 
 	/** Last New Pi switch values; unreadable storage means off. */

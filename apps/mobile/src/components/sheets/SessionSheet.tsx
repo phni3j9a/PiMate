@@ -190,6 +190,19 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 				onPress={() => void runInSheet(() => appStore.compact(), onClose, setError)}
 			/>
 
+			{host?.state === "connected" && host.github === true && summary ? (
+				<Row
+					label="Issue と PR"
+					chevron
+					onPress={() => {
+						// Capture before closing the sheet; later selection changes must not retarget the draft.
+						const target = { hostId: host.hostId, instanceId: summary.instanceId };
+						onClose();
+						router.push({ pathname: "/github", params: target });
+					}}
+				/>
+			) : null}
+
 			<Text style={styles.section}>この Pi</Text>
 			{origin ? (
 				<View style={styles.infoRow}>

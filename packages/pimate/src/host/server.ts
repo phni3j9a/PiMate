@@ -20,6 +20,7 @@ import { validInstanceId } from "../runtime.ts";
 import { AlertTracker } from "./alerts.ts";
 import type { RcClient } from "./client.ts";
 import { HostConfig, PairingError } from "./config.ts";
+import { queryGitHub, validGitHubQuery } from "./github.ts";
 import { HostCore } from "./index.ts";
 import { hostHome, listDirs, listFolders, SpawnError, validateSpawn } from "./operations.ts";
 
@@ -273,6 +274,7 @@ export class HostServer {
 							alerts: true,
 							providerAuth: true,
 							dirs: true,
+							github: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });
@@ -302,6 +304,21 @@ export class HostServer {
 				}
 				if (typeof message.instanceId !== "string" || !validInstanceId(message.instanceId))
 					throw new Error("Invalid instance");
+				if (message.type === "github") {
+					if (
+						typeof message.requestId !== "string" ||
+						!message.requestId ||
+						message.requestId.length > 200 ||
+						!validGitHubQuery(message.query) ||
+						Object.keys(message).some((key) => !["type", "requestId", "instanceId", "query"].includes(key))
+					)
+						throw new Error("Invalid GitHub request");
+					const requestId = message.requestId;
+					void queryGitHub(this.instances, message.instanceId, message.query, this.core.env).then((result) =>
+						this.send(peer, { type: "github_result", requestId, ...result }),
+					);
+					return;
+				}
 				if (message.type === "subscribe") {
 					void this.subscribe(peer, message.instanceId);
 					return;

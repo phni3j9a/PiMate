@@ -274,6 +274,17 @@ PIMATE_E2E_REAL_MODEL=1 PIMATE_E2E_REQUIRED=1 npm run test:e2e -w @pimate/pimate
 
 `openai/gpt-6-luna --thinking off` を使い、一時agentDirから既存auth.jsonを参照して短い1応答を検証します。通常のE2E/CIは引き続きfaux providerで無課金です。実モデル用認証が必要です。テストで起動したPi/abducoと一時ディレクトリはfinallyで清掃します。
 
+## GitHub の読み取り（[#88](https://github.com/phni3j9a/PiMate/issues/88)）
+
+Host の `auth_ok.host.github: true` に対応したアプリは、認証済み WS で `github { requestId, instanceId, query }` を送れます。`query` は `{ kind: "list" }` / `{ kind: "issue", number }` / `{ kind: "pr", number }` だけです。Host は自身の一覧から `instanceId` の cwd を引き、固定の読み取り専用 `gh repo view` / `gh issue|pr list|view --json …` を `execFile`（shell なし）で実行します。アプリから cwd・repo・CLI 引数を受け付けません。番号は正の安全な整数だけです。
+
+PC に `gh` をインストールし、Host と同じユーザーで **`gh auth login`** を実行してください（gh 2.45.0で検証）。スマホへ GitHub の認証情報を送りません。Host の環境変数を使い、`GH_PROMPT_DISABLED=1`、`NO_COLOR=1`、`GH_NO_UPDATE_NOTIFIER=1` を設定します。`GH_REPO` は cwd を上書きするため無効にします。各実行は15秒・stdout/stderr 各4 MiB上限です。
+
+- 返信は `github_result { requestId, ok: true, data }`。`data` は `{ kind: "list", repo: { name, url }, issues, prs }`（Open 各30件まで）、または `{ kind: "detail", item }`。PR の CI は CheckRun / StatusContext を Host で `passed` / `failed` / `pending` に正規化して件数と明細を返します。neutral / skipped は成功扱い、未完了・未知の状態は待ちです。
+- 本文32 Ki文字、コメント最新30件・各8 Ki文字、CI 明細100件まで。`bodyTruncated` / `commentsTruncated` / `checksTruncated` で省略を示します。大きすぎる CLI 出力は `failed` です。コメントは通常の会話コメントのみで、PR の行単位レビュー・Diff は含めません。
+- エラーは `{ requestId, ok: false, code, message }`。`code` は `gh_missing` / `gh_auth` / `not_github` / `not_found` / `failed`（message は最大500文字）。未知の Pi は `not_found`、不正な入力は protocol close（4400）です。
+- 書き込み操作・任意リポジトリ・監視・通知・キャッシュはありません。旧 Host に要求を送ると切断されるため、アプリは capability が true のときだけ使います。導入・更新後の Host 再起動は利用者が行ってください。
+
 ## 接続中のローカル通知（M5c、Host 0.1.1）
 
 Host は認証後に `alerts:true` capability を通知し、アプリが `watch_alerts` をオンにしている間だけ全 Pi のライブ RC イベントを監視します。初回 snapshot は基準として使うだけで、未選択 Pi の history は取りません。アプリへの通知には本文を含めません。通常の selected subscription は従来どおりです。
