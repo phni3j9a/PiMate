@@ -16,7 +16,7 @@ export const hash = (value: string): string => createHash("sha256").update(value
 export function resolveConfigDir(env = process.env): string {
 	return resolve(env.PIMATE_CONFIG_DIR || join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "pimate"));
 }
-function atomicWrite(path: string, value: unknown): void {
+export function atomicWrite(path: string, value: unknown): void {
 	const temp = `${path}.${randomUUID()}.tmp`;
 	try {
 		writeFileSync(temp, JSON.stringify(value), { mode: 0o600, flag: "wx" });
