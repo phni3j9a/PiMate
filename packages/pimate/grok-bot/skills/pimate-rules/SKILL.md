@@ -9,7 +9,7 @@ Get the user's yes for the exact action before writing. An explicit request for 
 
 | Skill | Writes |
 |---|---|
-| pimate-send | spawn, prompts and steers; abort only with the user's OK for that abort |
+| pimate-send | spawn, prompts and steers; abort or shutdown only with the user's OK for that instance |
 | pimate-phone-answers | answers under Decisions; webhook setup, watch, unwatch, off and routine creation/pause/deletion |
 | pimate-getting-started | saving skills or updating PiMate only after yes |
 
@@ -42,7 +42,7 @@ Use `pimate` on PATH, else `~/.pi/agent/npm/node_modules/.bin/pimate`; save the 
 | Wait | `pimate wait <id> [--timeout S]` |
 | Read | `pimate history <id> [--last N]` |
 | Answer | `pimate ui <id> <requestId> <value|--confirm|--cancel|--answers JSON>` |
-| Stop | `pimate abort <id>` |
+| Stop | `pimate abort <id>` stops the current run; `pimate shutdown <id>` exits Pi |
 | Webhook | `pimate webhook setup [--machine label]`, `pimate webhook test`, `pimate webhook status`, `pimate webhook watch <id>`, `pimate webhook unwatch <id>`, `pimate webhook off` |
 
 Wait outcomes: `done` finished; `failed` failed (report error); `aborted` stopped; `waiting_input` has `pending` dialogs (pimate-phone-answers "Answering"); `timeout` is unresolved (wait again, do not resend); `idle` was already idle and may include the last reply; `closed` lost the socket or Pi exited (check list). `prompt` returns `deliveredAs`: `prompt`, `steer`, `followUp`, or `command`.

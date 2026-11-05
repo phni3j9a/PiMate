@@ -23,7 +23,7 @@ import {
 } from "./webhook.ts";
 
 const usage =
-	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text|-> [--steer|--follow-up] [--wait [--timeout S]] | wait <id> [--timeout S] | abort <id> | history <id> [--last N] | watch <id> | ui <id> <requestId> <value|--confirm|--cancel|--answers JSON> | webhook <setup|test|status|off|watch|unwatch>";
+	"Usage: pimate serve [--port N] [--listen ADDR]... | pair [--address host:port] [--port N] | devices | revoke <deviceId> | list | attach [abducoSession] | spawn --cwd <dir> [-- pi args] | prompt <id> <text|-> [--steer|--follow-up] [--wait [--timeout S]] | wait <id> [--timeout S] | abort <id> | shutdown <id> | history <id> [--last N] | watch <id> | ui <id> <requestId> <value|--confirm|--cancel|--answers JSON> | webhook <setup|test|status|off|watch|unwatch>";
 async function main(): Promise<void> {
 	const [command, ...args] = process.argv.slice(2);
 	if (command === "--help" || command === "-h") {
@@ -151,7 +151,8 @@ async function main(): Promise<void> {
 		print(await host.spawn({ cwd: flags[1], args: separator < 0 ? [] : args.slice(separator + 1) }));
 		return;
 	}
-	if (!["prompt", "wait", "abort", "history", "watch", "ui"].includes(command) || !args[0]) throw new Error(usage);
+	if (!["prompt", "wait", "abort", "shutdown", "history", "watch", "ui"].includes(command) || !args[0])
+		throw new Error(usage);
 	const client = host.client(args[0]);
 	const rest = args.slice(1);
 	const flag = (name: string) => {
@@ -216,6 +217,9 @@ async function main(): Promise<void> {
 			}
 			case "abort":
 				print(await client.request("abort", {}));
+				break;
+			case "shutdown":
+				print(await client.request("shutdown", {}));
 				break;
 			case "history": {
 				const last = option("--last", 0);

@@ -30,6 +30,7 @@ node packages/pimate/src/host/cli.ts prompt <instanceId> '説明してくださ�
 node packages/pimate/src/host/cli.ts prompt <instanceId> '方針を変更' --steer
 node packages/pimate/src/host/cli.ts prompt <instanceId> '次に実行' --follow-up
 node packages/pimate/src/host/cli.ts abort <instanceId>
+node packages/pimate/src/host/cli.ts shutdown <instanceId>   # Piを終了（スマホからの終了と同じ）
 node packages/pimate/src/host/cli.ts history <instanceId>
 node packages/pimate/src/host/cli.ts watch <instanceId>
 node packages/pimate/src/host/cli.ts ui <instanceId> <requestId> '回答'
@@ -178,7 +179,7 @@ npm run test:e2e -w @pimate/pimate
 npx biome check packages
 ```
 
-E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
+E2Eは実Piをabduco内に起動し、WS spawn/初回messageの単発送信、未信頼project拡張の抑止、独自sessionDir、models/sessions/shutdown/attach一覧、shutdown後のabduco片付けに加え、discovery/hello、CLIのlist/prompt/abort/shutdown、text_delta/message_end/agent_settled、history、new/reload後の同一socket・instanceIdと重複しないイベントを検証します。Piまたはabducoがなければ自動skip。テスト用の設定・作業ディレクトリを一時作成し、Piとabducoサーバーも終了します（abducoはPi終了後も端末バッファを保持するため、両方の清掃が必要）。
 
 `test/fixtures/faux.ts` は pi-ai 1.3.0の `fauxProvider()` と `fauxAssistantMessage()` を使い、`pi.registerProvider(faux.provider)` で `pimate-faux/scripted` を登録します。このバージョンの公開APIは `registerFauxProvider()` ではありません。応答は固定文字列、2回目は中断確認用の長い低速応答です。RC E2Eでは `PIMATE_E2E_WRITE_DIFF=1` で途中にwrite/edit/read呼び出しを追加し、historyの両patch・tool画像とwrite差分のセッション保存も検証します。画像の複数送信、entry_image / file_image、実Piによる縮小、Host WS経由の画像RPCも検証します。**LLMネットワークアクセスも料金も発生しません**。テストは `--no-extensions` と明示したRC/fixtureだけをロードし、skills/context/templates/themesも無効化します。
 

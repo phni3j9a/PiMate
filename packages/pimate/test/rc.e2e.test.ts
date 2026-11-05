@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,7 +83,13 @@ it.skipIf(!pi || !abduco)(
 			const cliInput = (input: string | undefined, ...args: string[]) =>
 				JSON.parse(
 					execFileSync(process.execPath, [join(root, "packages/pimate/src/host/cli.ts"), ...args], {
-						env: { ...process.env, PIMATE_RUN_DIR: host.runDir, PIMATE_ABDUCO: abduco },
+						// Own config dir: `ui` writes answered-here markers, which must never reach the real ~/.config/pimate.
+						env: {
+							...process.env,
+							PIMATE_RUN_DIR: host.runDir,
+							PIMATE_CONFIG_DIR: join(dir, "config"),
+							PIMATE_ABDUCO: abduco,
+						},
 						encoding: "utf8",
 						timeout: 10000,
 						input,
@@ -243,6 +249,7 @@ it.skipIf(!pi || !abduco)(
 				client.request("ui_respond", { requestId, answers: [{ selected: ["Oracle"] }] }),
 			).rejects.toMatchObject({ code: "bad_request" });
 			expect(cli("ui", instanceId, requestId, "--answers", JSON.stringify([{ selected: ["SQLite"] }]))).toEqual({});
+			expect(readdirSync(join(dir, "config", "answered-here"))).toHaveLength(1);
 			// The answer starts the next model call, which may already have settled before `wait` connects.
 			const settled = cli("wait", instanceId, "--timeout", "8");
 			expect(settled).toMatchObject({ reply: "Thanks for answering." });
@@ -344,8 +351,8 @@ it.skipIf(!pi || !abduco)(
 				expect((await client.request("hello", {})).snapshot.instanceId).toBe(instanceId);
 			}
 			expect((await client.request("hello", {})).snapshot.session?.id).not.toBe(before.session?.id);
-			// Shutting down from the phone exits Pi; the Host then reaps the leftover abduco session.
-			await client.request("shutdown", {});
+			// `pimate shutdown` (the same RC request the phone sends) exits Pi; the Host then reaps the leftover abduco session.
+			expect(cli("shutdown", instanceId)).toEqual({});
 			client.close();
 			client = undefined;
 			const name = abducoSession;
