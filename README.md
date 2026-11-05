@@ -32,12 +32,12 @@ Android 0.1.8 / PCパッケージ0.1.10では、回答の**部分選択・コピ
 
 Android 0.1.9 / PCパッケージ0.1.11では、選択中の Pi のリポジトリの **GitHub Issue / PR** をスマホで読めるようにしました（[#88](https://github.com/phni3j9a/PiMate/issues/88)）。セッションメニューの「Issue と PR」から、Open の一覧と詳細（本文・コメント・PR のレビュー状態と CI）を見られます。「Piに依頼」で参照を入力欄に入れられます。PC の Host が PC の `gh` のログインを使って読み取り専用で取得するので、PC に GitHub CLI（`gh`）を入れて `gh auth login` を済ませ、更新後に **Host を再起動**してください。アプリ0.1.9とPCパッケージ0.1.11の両方が必要です。あわせて、メッセージ末尾の1回分のコスト表示を削除しました（[#87](https://github.com/phni3j9a/PiMate/pull/87)）。セッション全体のコストは引き続き表示します。
 
-PCパッケージ0.1.12では、**Grok Bot** から PC の Pi を動かせるようにしました（[#91](https://github.com/phni3j9a/PiMate/issues/91)）。`pimate` CLI の `prompt --wait` / `wait` / `history --last` / `ui --answers`、指定した Pi の質問と完了を Grok Bot の Routine に送る `pimate webhook`、Bot 用の Skill（パッケージの `grok-bot/skills/`）を追加しました。アプリの更新は不要です。設定方法は [packages/pimate/README.md](packages/pimate/README.md#grok-bot-skills任意) を参照してください。PCパッケージ0.1.13では、Bot が起動した Pi を終了させる `pimate shutdown` を追加しました。
+PCパッケージ0.1.12では、**Grok Bot** から PC の Pi を動かせるようにしました（[#91](https://github.com/phni3j9a/PiMate/issues/91)）。`pimate` CLI の `prompt --wait` / `wait` / `history --last` / `ui --answers`、指定した Pi の質問と完了を Grok Bot の Routine に送る `pimate webhook`、Bot 用の Skill（パッケージの `grok-bot/skills/`）を追加しました。アプリの更新は不要です。設定方法は [packages/pimate/README.md](packages/pimate/README.md#grok-bot-skills任意) を参照してください。PCパッケージ0.1.13では、Bot が起動した Pi を終了させる `pimate shutdown` を追加しました。PCパッケージ0.1.14では、新しい PC でも Bot が確認から PiMate のインストール・Skill の保存まで案内できるようにしました（[#100](https://github.com/phni3j9a/PiMate/issues/100)）。
 
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.9 / PCパッケージ0.1.13。Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.9 / PCパッケージ0.1.14。Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
