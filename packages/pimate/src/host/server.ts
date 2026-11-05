@@ -20,6 +20,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { PACKAGE_VERSION } from "../package.ts";
 import { validInstanceId } from "../runtime.ts";
 import { AlertTracker } from "./alerts.ts";
+import { AUTH_SESSION_METHODS, AuthSession } from "./auth-session.ts";
 import type { RcClient } from "./client.ts";
 import { atomicWrite, HostConfig, hash, PairingError } from "./config.ts";
 import { queryGitHub, validGitHubQuery } from "./github.ts";
@@ -117,6 +118,7 @@ export interface HostServerOptions {
 	listen?: string[];
 	pollMs?: number;
 	authTimeoutMs?: number;
+	authSession?: ConstructorParameters<typeof AuthSession>[1];
 }
 export class HostServer {
 	readonly core: HostCore;
@@ -141,9 +143,11 @@ export class HostServer {
 	private lastSpawn = 0;
 	private foldersPending?: ReturnType<typeof listFolders>;
 	private foldersCached?: { at: number; folders: Awaited<ReturnType<typeof listFolders>> };
+	private auth: AuthSession;
 	constructor(options: HostServerOptions = {}) {
 		this.options = options;
 		this.core = options.core ?? new HostCore();
+		this.auth = new AuthSession(this.core, options.authSession);
 		this.config = new HostConfig(options.configDir);
 		this.opened = timestamps(this.config.dir, "webhook-state.json");
 		this.delivery = new WebhookDelivery(() => this.webhookConfig);
@@ -262,6 +266,7 @@ export class HostServer {
 		ws.on("close", () => {
 			clearTimeout(peer.timer);
 			this.peers.delete(peer);
+			this.auth.release(peer);
 			for (const link of this.links.values()) {
 				link.subs.delete(peer);
 				this.idle(link);
@@ -309,6 +314,7 @@ export class HostServer {
 							platform: process.platform,
 							alerts: true,
 							providerAuth: true,
+							authSession: true,
 							dirs: true,
 							github: true,
 						},
@@ -323,6 +329,31 @@ export class HostServer {
 				}
 				if (message.type === "ping" && typeof message.t === "number") {
 					this.send(peer, { type: "pong", t: message.t });
+					return;
+				}
+				if (message.type === "auth_session_end") {
+					this.auth.release(peer);
+					return;
+				}
+				if (message.type === "auth_session") {
+					if (typeof message.requestId !== "string" || !message.requestId || message.requestId.length > 200)
+						throw new Error("Invalid requestId");
+					const requestId = message.requestId;
+					void this.auth.acquire(peer).then(
+						(instanceId) => {
+							// The connection may have closed meanwhile: do not keep holding for it.
+							if (!this.peers.has(peer)) this.auth.release(peer);
+							else this.send(peer, { type: "auth_session_result", requestId, ok: true, instanceId });
+						},
+						(e) =>
+							this.send(peer, {
+								type: "auth_session_result",
+								requestId,
+								ok: false,
+								code: "spawn_failed",
+								message: `${String(e)}; not retried`,
+							}),
+					);
 					return;
 				}
 				if (message.type === "folders" || message.type === "dirs" || message.type === "spawn") {
@@ -503,7 +534,9 @@ export class HostServer {
 			}
 			const list = await this.core.list();
 			if (this.stopped) return;
+			this.auth.observe(list);
 			const next = list
+				.filter((i) => !i.purpose)
 				.map(
 					({
 						instanceId,
@@ -531,7 +564,7 @@ export class HostServer {
 				)
 				.sort((a, b) => a.instanceId.localeCompare(b.instanceId));
 			for (const link of this.links.values())
-				if (!next.some((i) => i.instanceId === link.id)) {
+				if (!next.some((i) => i.instanceId === link.id) && !this.auth.owns(link.id)) {
 					for (const peer of link.subs.keys()) this.send(peer, { type: "instance_gone", instanceId: link.id });
 					this.drop(link);
 				}
@@ -886,11 +919,20 @@ export class HostServer {
 		}
 	}
 	private async forward(peer: Peer, id: string, request: Request): Promise<void> {
-		if (!this.instances.some((i) => i.instanceId === id)) {
+		const login = this.auth.owns(id);
+		if (!login && !this.instances.some((i) => i.instanceId === id)) {
 			this.send(peer, {
 				type: "rc_result",
 				instanceId: id,
 				response: { type: "response", id: request.id, ok: false, error: { code: "not_found" } },
+			});
+			return;
+		}
+		if (login && !AUTH_SESSION_METHODS.has(request.method)) {
+			this.send(peer, {
+				type: "rc_result",
+				instanceId: id,
+				response: { type: "response", id: request.id, ok: false, error: { code: "unsupported" } },
 			});
 			return;
 		}
@@ -933,6 +975,7 @@ export class HostServer {
 	async close(): Promise<void> {
 		this.stopped = true;
 		clearInterval(this.pollTimer);
+		await this.auth.close().catch(() => {});
 		this.delivery.close();
 		for (const peer of this.peers) {
 			clearTimeout(peer.timer);

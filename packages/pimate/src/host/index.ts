@@ -81,7 +81,8 @@ function isMeta(value: unknown, id: string): value is InstanceMeta {
 		(m.abducoSession === null || typeof m.abducoSession === "string") &&
 		typeof m.startedAt === "number" &&
 		["idle", "running", "waiting_input"].includes(m.status) &&
-		(m.session === null || (typeof m.session === "object" && typeof m.session.id === "string"))
+		(m.session === null || (typeof m.session === "object" && typeof m.session.id === "string")) &&
+		(m.purpose === undefined || m.purpose === "auth")
 	);
 }
 export interface DiscoveredInstance extends InstanceMeta {
@@ -191,7 +192,7 @@ export class HostCore {
 		}
 		return instances;
 	}
-	async spawn(options: { cwd: string; args?: string[]; trust?: boolean }): Promise<{
+	async spawn(options: { cwd: string; args?: string[]; trust?: boolean; purpose?: "auth" }): Promise<{
 		instanceId: string;
 		abducoSession: string;
 		attachCommand: string;
@@ -212,6 +213,7 @@ export class HostCore {
 			PIMATE_ORIGIN: "mobile",
 			PIMATE_TRUST: options.trust === true ? "yes" : "no",
 			PIMATE_ABDUCO_SESSION: name,
+			...(options.purpose ? { PIMATE_PURPOSE: options.purpose } : {}),
 		};
 		const command = [
 			this.abduco,
