@@ -7,7 +7,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronRightIcon, PlusIcon } from "@/components/icons";
 import { StatusMark } from "@/components/StatusMark";
 import { BrandMark, ScreenHeader, TextButton, styles as ui } from "@/components/ui";
-import { tildePath } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { hostConnectionLabel, hostSummary } from "@/lib/presentation";
 import { appStore, appVersion, notificationCenter } from "@/lib/runtime";
@@ -28,19 +27,6 @@ function confirmRemove(host: HostRuntime) {
 export default function SettingsScreen() {
 	const hosts = useAppState((s) => s.hosts);
 	const notifications = useSyncExternalStore(notificationCenter.subscribe, notificationCenter.getState);
-	const selection = useAppState((s) => s.selection);
-	// Auth targets the Pi open in the chat, captured when the screen opens.
-	const authHost = hosts.find((h) => h.hostId === selection?.hostId);
-	const authPi = authHost?.instances.find((i) => i.instanceId === selection?.instanceId);
-	const authSub =
-		!selection || !authHost
-			? "チャットで Pi を開くと設定できます"
-			: authHost.state !== "connected"
-				? `${authHost.hostName} に接続していません`
-				: !authPi
-					? "選択中の Pi は終了しています。起動中の Pi をチャットで開いてください"
-					: `${authHost.hostName} · ${tildePath(authPi.cwd)}${authPi.status === "running" ? " · 作業中（作業は止めません）" : ""}`;
-	const authEnabled = !!authPi && authHost?.state === "connected";
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
 			<ScreenHeader title="設定" onBack={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
@@ -90,30 +76,36 @@ export default function SettingsScreen() {
 				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
 					プロバイダー
 				</Text>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel={`プロバイダーのログイン、${authSub}`}
-					accessibilityState={{ disabled: !authEnabled }}
-					disabled={!authEnabled}
-					onPress={() =>
-						selection &&
-						router.push({
-							pathname: "/provider-auth",
-							params: { hostId: selection.hostId, instanceId: selection.instanceId },
-						})
-					}
-					style={({ pressed }) => [styles.machine, pressed && ui.pressed]}
-				>
-					<View style={styles.machineBody}>
-						<Text style={[styles.machineName, !authEnabled && { color: colors.textSecondary }]}>
-							プロバイダーのログイン
-						</Text>
-						<Text style={styles.machineSub} numberOfLines={2}>
-							{authSub}
-						</Text>
-					</View>
-					{authEnabled ? <ChevronRightIcon color={colors.textSecondary} /> : null}
-				</Pressable>
+				{hosts.map((host) => {
+					const enabled = host.state === "connected" && host.authSession === true;
+					const sub =
+						host.state !== "connected"
+							? `${host.hostName} に接続していません`
+							: !host.authSession
+								? `${host.hostName} · PC の PiMate を更新すると使えます`
+								: host.hostName;
+					return (
+						<Pressable
+							key={host.hostId}
+							accessibilityRole="button"
+							accessibilityLabel={`プロバイダーのログイン、${sub}`}
+							accessibilityState={{ disabled: !enabled }}
+							disabled={!enabled}
+							onPress={() => router.push({ pathname: "/provider-auth", params: { hostId: host.hostId } })}
+							style={({ pressed }) => [styles.machine, pressed && ui.pressed]}
+						>
+							<View style={styles.machineBody}>
+								<Text style={[styles.machineName, !enabled && { color: colors.textSecondary }]}>
+									プロバイダーのログイン
+								</Text>
+								<Text style={styles.machineSub} numberOfLines={2}>
+									{sub}
+								</Text>
+							</View>
+							{enabled ? <ChevronRightIcon color={colors.textSecondary} /> : null}
+						</Pressable>
+					);
+				})}
 				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
 					通知
 				</Text>

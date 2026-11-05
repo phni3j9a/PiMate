@@ -1,4 +1,4 @@
-/** Provider login / logout (OpenAI, Anthropic, OpenCode) for the Pi captured when opened from Settings. */
+/** Provider login / logout (OpenAI, Anthropic, OpenCode) for one machine. */
 import {
 	AUTH_MAX_INPUT_LENGTH,
 	type AuthFlow,
@@ -17,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckIcon, CopyIcon } from "@/components/icons";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
-import { tildePath } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { type AuthState, authBrowserUrl, flowActive, ProviderAuthController, providerGroups } from "@/lib/providerAuth";
 import { appStore } from "@/lib/runtime";
@@ -99,18 +98,17 @@ function confirmLogout(controller: ProviderAuthController, provider: AuthProvide
 }
 
 export default function ProviderAuthScreen() {
-	const { hostId, instanceId } = useLocalSearchParams<{ hostId?: string; instanceId?: string }>();
+	const { hostId } = useLocalSearchParams<{ hostId?: string }>();
 	const [controller, setController] = useState<ProviderAuthController | null>(null);
 	useEffect(() => {
-		if (!hostId || !instanceId) return;
-		const c = new ProviderAuthController(appStore, { hostId, instanceId }, () => Crypto.randomUUID());
+		if (!hostId) return;
+		const c = new ProviderAuthController(appStore, { hostId }, () => Crypto.randomUUID());
 		setController(c);
 		c.start();
 		return () => c.dispose();
-	}, [hostId, instanceId]);
+	}, [hostId]);
 	const state = useSyncExternalStore(controller?.subscribe ?? noopSubscribe, controller?.getState ?? idleGet);
 	const host = useAppState((s) => s.hosts.find((h) => h.hostId === hostId));
-	const cwd = host?.instances.find((i) => i.instanceId === instanceId)?.cwd;
 	const { phase, providers, flow, busy, waiting, notice } = state;
 
 	return (
@@ -120,16 +118,16 @@ export default function ProviderAuthScreen() {
 				<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 					<Text style={styles.target} numberOfLines={2}>
 						{host?.hostName ?? "マシン"}
-						{cwd ? ` · ${tildePath(cwd)}` : ""}
 					</Text>
 					<Text style={styles.explanation}>
-						この PC の Pi が使う認証情報（通常 ~/.pi/agent）を変更します。同じディレクトリを使うほかの Pi にも共通です。
+						この PC の Pi が使う認証情報（通常 ~/.pi/agent）を変更します。ログインは PC のログイン専用の Pi
+						で行い、会話中の Pi は止めません。
 					</Text>
 					{!controller ? <Text style={styles.message}>設定から開き直してください。</Text> : null}
 					{phase === "checking" ? (
 						<View style={styles.loading}>
 							<Spinner />
-							<Text style={styles.muted}>確認しています…</Text>
+							<Text style={styles.muted}>ログイン用の Pi を準備しています…</Text>
 						</View>
 					) : null}
 					{phase === "offline" ? (
@@ -137,15 +135,9 @@ export default function ProviderAuthScreen() {
 							PC に接続していません。再接続すると自動で確認します。
 						</Text>
 					) : null}
-					{phase === "gone" ? (
-						<Text style={styles.message} accessibilityRole="alert">
-							この Pi は終了しています。起動中の Pi をチャットで開いてから、設定から開き直してください。
-						</Text>
-					) : null}
 					{phase === "old" ? (
 						<Text style={styles.message} accessibilityRole="alert">
-							この Pi はプロバイダーのログインに対応していません。PC の PiMate パッケージを更新し、Host と Pi
-							を再起動してください。
+							プロバイダーのログインに対応していません。PC の PiMate パッケージを更新し、Host を再起動してください。
 						</Text>
 					) : null}
 					{notice ? (
@@ -363,9 +355,7 @@ function FlowPanel({
 			{flow.status === "succeeded" ? (
 				<Text style={styles.result}>
 					{flow.method === "api_key" ? "API キーを保存しました。" : "ログインしました。"}
-					{flow.refreshRequired
-						? "Pi への反映を確認できませんでした。Pi を再起動するか /reload してください。もう一度ログインする必要はありません。"
-						: ""}
+					起動中の Pi には /reload または再起動後に反映されます。もう一度ログインする必要はありません。
 				</Text>
 			) : null}
 			{flow.status === "failed" ? (

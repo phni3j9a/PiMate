@@ -104,7 +104,7 @@ async function main(): Promise<void> {
 			off(config.dir);
 			console.log("webhook off");
 		} else if ((action === "watch" || action === "unwatch") && rest.length === 1) {
-			const existing = new Set((await host.list()).map((i) => i.instanceId));
+			const existing = new Set((await host.list()).filter((i) => !i.purpose).map((i) => i.instanceId));
 			if (action === "watch" && !existing.has(rest[0])) throw new Error("NOT_FOUND");
 			setWatch(config.dir, rest[0], action === "watch");
 			print({ watched: watches(config.dir).filter((id) => existing.has(id)) });
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	if (command === "list") {
-		print(await host.list());
+		print((await host.list()).filter((i) => !i.purpose));
 		return;
 	}
 	if (command === "attach") {

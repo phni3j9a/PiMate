@@ -52,6 +52,26 @@ describe("HostConnection", () => {
 		expect(states).toContain("connected");
 	});
 
+	it("matches auth session replies and never retries a dropped request", async () => {
+		const c = connection();
+		c.start();
+		const s = FakeSocket.last();
+		authenticate(s, [], { authSession: true });
+		const first = c.authSession("one", "hold");
+		s.receive({ type: "auth_session_result", requestId: "one", ok: true, instanceId: "hidden" });
+		await expect(first).resolves.toMatchObject({ ok: true, instanceId: "hidden" });
+		c.endAuthSession("hold");
+		expect(s.sentOfType("auth_session_end")).toEqual([{ type: "auth_session_end", holdId: "hold" }]);
+		const pending = c.authSession("two", "hold");
+		s.drop();
+		await expect(pending).rejects.toMatchObject({ code: "outcome_unknown" });
+		c.endAuthSession("hold");
+		vi.advanceTimersByTime(1000);
+		authenticate(FakeSocket.last(), [], { authSession: true });
+		expect(FakeSocket.last().sentOfType("auth_session")).toHaveLength(0);
+		c.stop();
+	});
+
 	it("stops on auth_error and does not retry", () => {
 		const c = connection();
 		c.start();

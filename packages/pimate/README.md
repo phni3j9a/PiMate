@@ -81,7 +81,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 
 OpenAI・OpenAI Codex・Anthropic・OpenCode Zen（`opencode`）・OpenCode Go（`opencode-go`）のログイン／ログアウトを専用の `auth_*` RPC で扱います。OpenAI（`openai`）と OpenCode は API キーのみで、OpenAI の ChatGPT ログインは提供しません。Codex のデバイスコード認証と Anthropic の認証は引き続き対応します。実行中の Pi が知らないプロバイダーは `auth_list` に含めません。標準 CLI の agent directory を使う認証専用 `ModelRuntime` で保存・削除し、実行中の Pi は既存の通常 TUI のままです。入力やトークンは会話イベントへ流しません。保存先・別端末ブラウザ・共有範囲・制限は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
-Host の `auth_ok.host.providerAuth` と RC の `snapshot.providerAuth` の両方が必要です。RC だけ更新した古い Host は認証用 long-poll を正しく待てないため、Host も更新・再起動してください。`RcClient.send` は認証の list / wait / logout にだけ長い timeout を設定し、ほかのメソッドの既定5秒は変えません。
+認証は Host が起動するログイン専用の Pi（`auth_session`、[#105](https://github.com/phni3j9a/PiMate/issues/105)）で行います。`purpose: "auth"` の Pi は `instances`・`pimate list`・Webhook に出さず、`hello` と `auth_*` だけを転送し、最後の保持が外れてから60秒後（保存中は延期）に終了させます。実装は [`src/host/auth-session.ts`](src/host/auth-session.ts) です。Host の `auth_ok.host.providerAuth` / `authSession` と RC の `snapshot.providerAuth` が必要です。RC だけ更新した古い Host は認証用 long-poll を正しく待てないため、Host も更新・再起動してください。`RcClient.send` は認証の list / wait / logout にだけ長い timeout を設定し、ほかのメソッドの既定5秒は変えません。
 
 ## 親 Pi への画像プロンプト
 

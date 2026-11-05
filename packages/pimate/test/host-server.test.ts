@@ -15,9 +15,10 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { Hub } from "../src/extension/hub.ts";
+import { LOGIN_PI_ARGS } from "../src/host/auth-session.ts";
 import { HostConfig } from "../src/host/config.ts";
 import { HostCore } from "../src/host/index.ts";
-import { HostServer, listenAddresses } from "../src/host/server.ts";
+import { HostServer, type HostServerOptions, listenAddresses } from "../src/host/server.ts";
 import { setWatch, watches } from "../src/host/webhook.ts";
 import { PACKAGE_VERSION } from "../src/package.ts";
 
@@ -59,7 +60,11 @@ function inbox(ws: WebSocket) {
 		},
 	};
 }
-async function setup(fake = false, beforeStart?: (configDir: string) => void) {
+async function setup(
+	fake = false,
+	beforeStart?: (configDir: string) => void,
+	authSession?: HostServerOptions["authSession"],
+) {
 	const dir = temp();
 	const core = new HostCore({ runDir: join(dir, "run"), env: { PIMATE_ABDUCO: "/absent" }, probeTimeoutMs: 100 });
 	const snapshot: InstanceSnapshot = {
@@ -141,6 +146,7 @@ async function setup(fake = false, beforeStart?: (configDir: string) => void) {
 		port: 0,
 		pollMs: 60_000,
 		authTimeoutMs: 60,
+		authSession,
 	});
 	const [bound] = await server.start();
 	cleanup.push(() => server.close());
@@ -406,6 +412,50 @@ it("returns RC results on demand without a subscription", async () => {
 	client.send({ type: "rc", instanceId: "live", request: { id: "abort", method: "abort", params: {} } });
 	expect(await client.box.next("rc_result")).toMatchObject({ response: { id: "abort", ok: true } });
 	expect(t.requests.find((r) => r.id === "abort")?.expectInstanceId).toBe("live");
+});
+it("hides login Pis, stops ones it does not own, and holds its own only for auth RPCs", async () => {
+	const t = await setup(
+		true,
+		(config) => {
+			const meta = join(config, "../run/live.json");
+			writeFileSync(meta, JSON.stringify({ ...JSON.parse(readFileSync(meta, "utf8")), purpose: "auth" }));
+		},
+		{ graceMs: 20 },
+	);
+	const shutdowns = () => t.requests.filter((r) => r.method === "shutdown").length;
+	await vi.waitFor(() => expect(shutdowns()).toBe(1)); // left by an earlier Host
+	const spawn = vi.spyOn(t.core, "spawn").mockResolvedValue({
+		instanceId: "live",
+		abducoSession: "pimate-live",
+		attachCommand: "pimate attach pimate-live",
+		isolation: "detached",
+	});
+	const c = await t.authed();
+	expect(c.box.received.find((m) => m.type === "auth_ok")).toMatchObject({ host: { authSession: true } });
+	expect(c.box.received.find((m) => m.type === "instances")).toMatchObject({ instances: [] });
+	c.send({ type: "rc", instanceId: "live", request: { id: "early", method: "auth_list", params: {} } });
+	expect(await c.box.next("rc_result")).toMatchObject({ response: { id: "early", error: { code: "not_found" } } });
+	c.send({ type: "auth_session", requestId: "a1", holdId: "screen-1" });
+	c.send({ type: "auth_session", requestId: "a2", holdId: "screen-2" });
+	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
+	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
+	expect(spawn).toHaveBeenCalledExactlyOnceWith({ cwd: expect.any(String), args: LOGIN_PI_ARGS, purpose: "auth" });
+	// A screen closed before its reply still gets one (the app's pending request must settle).
+	c.send({ type: "auth_session", requestId: "a3", holdId: "screen-3" });
+	c.send({ type: "auth_session_end", holdId: "screen-3" });
+	expect(await c.box.next("auth_session_result")).toMatchObject({ requestId: "a3", ok: true });
+	c.send({ type: "rc", instanceId: "live", request: { id: "list", method: "auth_list", params: {} } });
+	expect(await c.box.next("rc_result")).toMatchObject({ response: { id: "list", ok: true } });
+	c.send({ type: "rc", instanceId: "live", request: { id: "prompt", method: "prompt", params: { text: "x" } } });
+	expect(await c.box.next("rc_result")).toMatchObject({ response: { id: "prompt", error: { code: "unsupported" } } });
+	expect(t.requests.some((r) => r.id === "prompt")).toBe(false);
+	await t.server.refresh(); // still owned: neither listed nor stopped
+	expect(shutdowns()).toBe(1);
+	c.send({ type: "auth_session_end", holdId: "screen-1" });
+	await new Promise((r) => setTimeout(r, 60)); // grace is 20 ms: screen-2 still holds it
+	expect(shutdowns()).toBe(1);
+	c.send({ type: "auth_session_end", holdId: "screen-2" });
+	await vi.waitFor(() => expect(shutdowns()).toBe(2));
 });
 it("tracks streaming text/thinking in snapshots and resets at message, settled and session boundaries", async () => {
 	const dir = temp();

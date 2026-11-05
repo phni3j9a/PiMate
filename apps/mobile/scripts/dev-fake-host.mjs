@@ -27,7 +27,7 @@
  *   drop                  cut all WebSocket connections (simulated network loss)
  *   offline?s=20          cut connections and refuse new ones for s seconds
  *   revoke                close with 4403 and forget all tokens (app must re-pair)
- *   auth?complete=1       finish fake Codex auth; also expire, fail=1|0, saving=ms, refresh=1|0, old=1|0, oldHost=1|0, badurl=1|0
+ *   auth?complete=1       finish fake Codex auth; also expire, fail=1|0, saving=ms, refresh=1|0, old=1|0, oldHost=1|0, sessionfail=1|0, badurl=1|0
  *   images?old=1&hold=1    synthetic image history; old hides image capabilities, hold queues prompts (defaults: 0)
  *   pair                  print a fresh pairing link
  *   quota?source=claude|codex&p=85[&reset=60]  a newer PC-wide quota reaches every Pi (5h window, reset in s)
@@ -165,6 +165,7 @@ const HOME = "/home/dev";
 const findModelInfo = (ref) => MODELS.find((m) => m.provider === ref?.provider && m.id === ref?.id);
 
 const instances = new Map();
+const LOGIN_INSTANCE_ID = "fake-login-pi";
 
 function addInstance(
 	id,
@@ -497,6 +498,7 @@ class Peer {
 					version: "0.0.0-fake",
 					platform: "linux",
 					providerAuth: !authOptions.oldHost,
+					authSession: !authOptions.oldHost,
 					dirs: !authOptions.oldHost,
 					github: !authOptions.oldHost,
 				},
@@ -511,6 +513,16 @@ class Peer {
 				return this.subscribe(msg.instanceId);
 			case "unsubscribe":
 				this.subs.delete(msg.instanceId);
+				return;
+			case "auth_session":
+				if (authOptions.oldHost) return this.close(4400);
+				return this.send(
+					authOptions.sessionfail
+						? { type: "auth_session_result", requestId: msg.requestId, ok: false, code: "spawn_failed" }
+						: { type: "auth_session_result", requestId: msg.requestId, ok: true, instanceId: LOGIN_INSTANCE_ID },
+				);
+			case "auth_session_end":
+				if (authOptions.oldHost) return this.close(4400);
 				return;
 			case "rc":
 				return this.rc(msg.instanceId, msg.request);
@@ -550,6 +562,29 @@ class Peer {
 		const inst = instances.get(id);
 		const reply = (response) => this.send({ type: "rc_result", instanceId: id, response });
 		const fail = (code, message) => reply({ type: "response", id: request.id, ok: false, error: { code, message } });
+		if (id === LOGIN_INSTANCE_ID) {
+			if (request.expectInstanceId && request.expectInstanceId !== id) return fail("instance_mismatch");
+			if (request.method === "hello")
+				return reply({
+					type: "response",
+					id: request.id,
+					ok: true,
+					result: {
+						snapshot: {
+							...(instances.size ? snapshot([...instances.keys()][0]) : {}),
+							instanceId: id,
+							providerAuth: !authOptions.old,
+						},
+					},
+				});
+			const handler = Object.hasOwn(AUTH_RC, request.method) ? AUTH_RC[request.method] : undefined;
+			if (!handler) return fail("unsupported");
+			Promise.resolve(handler(id, request.params ?? {})).then((out) => {
+				if (out?.error) fail(out.error, out.message);
+				else reply({ type: "response", id: request.id, ok: true, result: out?.result ?? {} });
+			});
+			return;
+		}
 		if (!inst) return fail("not_found");
 		if (request.expectInstanceId && request.expectInstanceId !== id) return fail("instance_mismatch");
 		if (request.expectSessionId && request.expectSessionId !== inst.summary.session?.id)
@@ -774,7 +809,15 @@ function fakeGitHub(msg) {
 	return { ok: true, data: { kind: "detail", item } };
 }
 
-const authOptions = { old: false, oldHost: false, fail: false, refresh: false, badurl: false, saving: 200 };
+const authOptions = {
+	old: false,
+	oldHost: false,
+	sessionfail: false,
+	fail: false,
+	refresh: false,
+	badurl: false,
+	saving: 200,
+};
 const authStored = new Map([["anthropic", "oauth"]]);
 const authFlows = new Map();
 const authWaiters = new Map();
@@ -2308,15 +2351,16 @@ const server = createServer((req, res) => {
 			}
 			case "auth": {
 				if (!inst) return reply(404, {});
-				for (const key of ["old", "oldHost", "fail", "refresh", "badurl"])
+				for (const key of ["old", "oldHost", "sessionfail", "fail", "refresh", "badurl"])
 					if (url.searchParams.has(key)) authOptions[key] = url.searchParams.get(key) === "1";
 				if (url.searchParams.has("saving"))
 					authOptions.saving = Math.max(0, Math.min(30000, Number(url.searchParams.get("saving")) || 0));
-				const flow = authFlows.get(id);
+				const authId = url.searchParams.get("i") ?? LOGIN_INSTANCE_ID;
+				const flow = authFlows.get(authId);
 				if (flow && authActive(flow) && flow.status !== "saving") {
 					if (url.searchParams.has("expire"))
-						changeAuth(id, { status: "expired", prompt: undefined, authorization: undefined });
-					else if (url.searchParams.has("complete")) saveAuth(id);
+						changeAuth(authId, { status: "expired", prompt: undefined, authorization: undefined });
+					else if (url.searchParams.has("complete")) saveAuth(authId);
 				}
 				return reply(200, { ok: true, options: authOptions });
 			}

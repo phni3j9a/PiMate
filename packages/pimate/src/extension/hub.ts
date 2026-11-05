@@ -55,12 +55,16 @@ export class Hub {
 	quotas = new Map<QuotaSource, SubscriptionQuota>();
 	quotaWatcher?: FSWatcher;
 	trust?: "yes" | "no";
+	/** The Host's login Pi (auth_session): hidden from lists, only hello / auth_* reach it. */
+	purpose?: "auth";
 	constructor() {
 		this.instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
 		this.origin = process.env.PIMATE_ORIGIN === "mobile" ? "mobile" : "pc";
 		this.abducoSession = process.env.PIMATE_ABDUCO_SESSION ?? null;
 		if (this.origin === "mobile" && ["yes", "no"].includes(process.env.PIMATE_TRUST ?? ""))
 			this.trust = process.env.PIMATE_TRUST as "yes" | "no";
+		if (this.origin === "mobile" && process.env.PIMATE_PURPOSE === "auth") this.purpose = "auth";
+		delete process.env.PIMATE_PURPOSE;
 		delete process.env.PIMATE_TRUST;
 		delete process.env.PIMATE_INSTANCE_ID;
 		delete process.env.PIMATE_ORIGIN;
@@ -166,6 +170,7 @@ export class Hub {
 			...snapshot,
 			updatedAt: Date.now(),
 			subagents: subagents ? countSubagents(subagents.runs) : undefined,
+			...(this.purpose ? { purpose: this.purpose } : {}),
 		};
 		const tmp = `${this.metaPath}.${randomUUID()}.tmp`;
 		// Best effort: a removed run dir or full disk must not break dialogs or status updates.

@@ -27,6 +27,7 @@ import {
 type FoldersResult = Extract<HostMessage, { type: "folders_result" }>;
 type DirsResult = Extract<HostMessage, { type: "dirs_result" }>;
 type SpawnResult = Extract<HostMessage, { type: "spawn_result" }>;
+type AuthSessionResult = Extract<HostMessage, { type: "auth_session_result" }>;
 
 export type ConnectionState = "idle" | "connecting" | "connected" | "offline" | "auth_failed";
 export type AuthFailure = "invalid_token" | "protocol_mismatch" | "bad_request" | "revoked";
@@ -219,6 +220,15 @@ export class HostConnection {
 		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
 	}
 
+	/** Caller must gate on info.authSession; requests are never retried. */
+	authSession(requestId: string, holdId: string): Promise<AuthSessionResult> {
+		return this.hostRequest<AuthSessionResult>({ type: "auth_session", requestId, holdId });
+	}
+
+	endAuthSession(holdId: string): void {
+		if (this.authed && this.info?.authSession === true) this.send({ type: "auth_session_end", holdId });
+	}
+
 	private hostRequest<T>(msg: Extract<AppMessage, { requestId: string }>): Promise<T> {
 		if (!this.authed || !this.socket || this.socket.readyState !== OPEN)
 			return Promise.reject(new RcError("not_connected"));
@@ -344,7 +354,8 @@ export class HostConnection {
 			case "folders_result":
 			case "dirs_result":
 			case "github_result":
-			case "spawn_result": {
+			case "spawn_result":
+			case "auth_session_result": {
 				const p = this.hostPending.get(msg.requestId);
 				if (p) {
 					this.hostPending.delete(msg.requestId);
