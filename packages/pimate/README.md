@@ -305,6 +305,8 @@ RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつな
 
 ## Grok Bot Skills（任意）
 
+いちばん簡単な始め方は、Grok Bot のテンプレート **[PiMate](https://x.ai/bot/EL8LzPmNquZTjEawTxAI1)** を追加することです。4つの Skill・Routine「Pi questions to chat」・記憶が入っていて、最初の会話で Bot が PC を確認し、承認のあとに PiMate のインストールまで進めます。PC には Grok Bot のデスクトップアプリが必要です。Webhook の URL とキーは自分の Routine のものを、PC の端末で `pimate webhook setup` に貼ります。
+
 Grok Bot が `pimate` CLI で Pi を操作し、質問・完了を会話へ届けるための4つの Skill を npm パッケージに同梱しています。Grok Bot はディスクから自動読込しません。Bot にサーバー上の `~/.pi/agent/npm/node_modules/@phni3j9a/pimate/grok-bot/skills/` の各フォルダー内 `SKILL.md` を読ませ、それぞれ同じ名前・説明のプライベート Skill として全文をそのまま保存するよう依頼してください。PiMate 更新後も全 Skill を読み直して保存し直します。新しい PC では、Bot が `pimate-getting-started` に従って確認し、承認のあとに PiMate のインストールと Skill の保存まで行います（Pi 本体のインストールとモデルのログイン、Host の `/pimate setup` は本人が行います）。テンプレートとして公開する Bot の構成（説明・記憶・Routine）は [`grok-bot/TEMPLATE.md`](grok-bot/TEMPLATE.md) にあります。
 
 Grok Bot デスクトップアプリの設定 →「コンピューター」にある「このコンピューターでの実行」（Execution on this computer）は、通常「毎回確認」（Ask every time）を推奨します。不在時のおまかせ（delegated mode）には「常に許可」（Always allow）が必要ですが、すべての Bot がサーバー上で任意のコマンドを確認なしで実行できるようになります。再起動後はデスクトップアプリが起動するまでローカル実行できません。Claude Code（`~/.claude/skills`）や Codex（`~/.agents/skills`）など他のエージェントでも各フォルダーをコピーして使えます。
