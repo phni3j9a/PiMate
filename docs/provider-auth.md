@@ -1,6 +1,6 @@
 # スマホからのプロバイダー認証
 
-**アプリ・PC パッケージの両方を更新し、Host を再起動してください。** ログイン専用の Pi（[#105](https://github.com/phni3j9a/PiMate/issues/105)）に対応していない古い Host では、設定の入口を無効にして更新を案内します。
+**Android 0.1.10 / PC 0.1.15 以上が必要です。アプリ・PC パッケージの両方を更新し、Host を再起動してください。** ログイン専用の Pi（[#105](https://github.com/phni3j9a/PiMate/issues/105)）に対応していない古い Host では、設定の入口を無効にして更新を案内します。
 
 ## 使い方
 
@@ -24,7 +24,7 @@ Pi とプロバイダーが提供する認証方式を使います。アカウ�
 
 ## 保存先とログアウトの範囲
 
-- 対象は **通常の Pi CLI/TUI 1.2.0**。`getAgentDir()` の `auth.json`（既定 `~/.pi/agent/auth.json`、`PI_CODING_AGENT_DIR` に対応）を公開 `ModelRuntime` API で更新します。SDK が独自の `credentials` / `authPath` を注入した実行は対象外です。
+- 対象は **通常の Pi CLI/TUI 1.2.0以上**。`getAgentDir()` の `auth.json`（既定 `~/.pi/agent/auth.json`、`PI_CODING_AGENT_DIR` に対応）を公開 `ModelRuntime` API で更新します。SDK が独自の `credentials` / `authPath` を注入した実行は対象外です。
 - 同じエージェントディレクトリを使う **PC の Pi・ほかの Pi にも共通**です。現在の会話だけの設定ではありません。ログインも、そのプロバイダーの既存の保存情報を置き換えます。
 - ログアウトは確認後に **保存されたそのプロバイダーの情報だけを削除**します。環境変数・`models.json`・起動時指定は変更せず、プロバイダー側のトークンも失効させません。そのため削除後も利用できる場合があります。
 - トークンや入力したキーをスマホへ返したり、チャット・outbox・アプリの永続ストレージへ保存したりしません。入力欄は一時メモリのみです。ただし、自分でコピーしたコード は OS のクリップボード・ブラウザ履歴に残る可能性があるため共有しないでください。
@@ -56,4 +56,4 @@ Pi とプロバイダーが提供する認証方式を使います。アカウ�
 - OpenAI OAuth の拒否・旧 PC が返す認証方式の除外・既存認証情報の保持とログアウト、Codex / Anthropic / API キーの継続動作を回帰テストします。
 - OpenAI・OpenCode の行のまとめ方、OpenCode Zen / Go の API キー保存、Pi が知らないプロバイダーの除外を単体テスト・fake Host の通信テストで確認します。
 - ChatGPT ログイン削除後に `npm run lint`・`npm run typecheck`・`npm test`（485件）が成功しました。
-- 初回実装時の Android エミュレーター・配布パッケージ検証は [PR #52](https://github.com/phni3j9a/PiMate/pull/52) に記録しています。ChatGPT ログイン削除後の実アカウント認証・Android / iOS の画面操作は未検証です。既存のユーザー認証情報・物理スマホは変更していません。
+- Android API 35 エミュレーター（幅360dp）+ fake Host で、PCごとの入口（会話中の Pi なしでも可）、OpenAI / OpenCode の行、Go の偽キー保存と個別ログアウト、ChatGPT のダミーのデバイスコード、起動失敗・旧 Host の案内、ライト / ダークを確認しました（[PR #107](https://github.com/phni3j9a/PiMate/pull/107)）。実アカウント認証・物理スマホ・iOS は未検証です。既存のユーザー認証情報・物理スマホは変更していません。初回実装時の検証は [PR #52](https://github.com/phni3j9a/PiMate/pull/52) に記録しています。

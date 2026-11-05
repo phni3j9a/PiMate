@@ -77,7 +77,7 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 - subscribe/reconnectでsnapshot（途中のassistant text/thinkingを含む）+historyを送り、同期中のイベントは順序を保って後送します。通常の連続deltaは約50msで結合するため、WSのseqは増加しますが連番ではありません。history/liveの重複はentryIdで除去してください。RC再接続はbackoff付き、操作要求は**再送しません**。
 - `RcClient.send(request)` はid/guardsを保持してRCの成功/エラーResponseを返します。rejectはtransport/timeoutのみ。同じ共有link上でin-flight idを再利用しないでください（アプリはUUIDを使う）。
 
-## プロバイダー認証（0.1.7以上）
+## プロバイダー認証（ログイン専用 Pi・OpenCode はPC 0.1.15 / アプリ0.1.10以上）
 
 OpenAI・OpenAI Codex・Anthropic・OpenCode Zen（`opencode`）・OpenCode Go（`opencode-go`）のログイン／ログアウトを専用の `auth_*` RPC で扱います。OpenAI（`openai`）と OpenCode は API キーのみで、OpenAI の ChatGPT ログインは提供しません。Codex のデバイスコード認証と Anthropic の認証は引き続き対応します。実行中の Pi が知らないプロバイダーは `auth_list` に含めません。標準 CLI の agent directory を使う認証専用 `ModelRuntime` で保存・削除し、実行中の Pi は既存の通常 TUI のままです。入力やトークンは会話イベントへ流しません。保存先・別端末ブラウザ・共有範囲・制限は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
