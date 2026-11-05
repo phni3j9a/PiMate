@@ -159,7 +159,7 @@ export class ProviderAuthController {
 		if (!this.live()) return this.set({ phase: "offline" });
 		const conn = this.store.connection(this.target.hostId)!;
 		if (conn.info?.providerAuth !== true || conn.info.authSession !== true) return this.set({ phase: "old" });
-		this.set({ busy: "check", phase: "checking" });
+		this.set({ busy: "check", ...(this.state.phase === "ready" ? {} : { phase: "checking" }) });
 		let session: Awaited<ReturnType<typeof conn.authSession>>;
 		try {
 			session = await conn.authSession(this.randomUUID());

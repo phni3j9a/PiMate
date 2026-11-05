@@ -103,6 +103,10 @@ export class AuthSession {
 		this.stopTimer = undefined;
 		const id = this.id;
 		if (!id || this.holders.size || this.stopping) return;
+		if (this.starting) {
+			this.schedule(this.options.retryMs ?? 5000);
+			return;
+		}
 		this.stopping = (async () => {
 			if (await this.shutdown(id)) {
 				if (this.id === id) this.id = undefined;
