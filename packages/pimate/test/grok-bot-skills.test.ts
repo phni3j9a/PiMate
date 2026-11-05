@@ -24,7 +24,8 @@ describe("Grok Bot skills", () => {
 			const frontmatter = text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "";
 			expect(frontmatter.match(/^name:\s*(\S+)\s*$/m)?.[1]).toBe(folder.name);
 			expect(frontmatter.match(/^description:\s*(\S.*)$/m)?.[1].trim()).toBeTruthy();
-			for (const match of text.matchAll(/\bpimate ([a-z][a-z-]*)\b/g)) expect(commands.has(match[1])).toBe(true);
+			// `/pimate setup` etc. are Pi's slash commands, not the CLI.
+			for (const match of text.matchAll(/(?<!\/)\bpimate ([a-z][a-z-]*)\b/g)) expect(commands.has(match[1])).toBe(true);
 			for (const match of text.matchAll(/\bpimate webhook ([a-z]+)/g)) expect(webhookActions.has(match[1])).toBe(true);
 		}
 	});
