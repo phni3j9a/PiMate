@@ -26,6 +26,14 @@ export const LOGIN_PI_ARGS = [
 ];
 
 type Core = Pick<HostCore, "spawn" | "client" | "env">;
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (e) {
+		return (e as NodeJS.ErrnoException).code === "EPERM";
+	}
+}
 
 /**
  * One Host-owned login Pi (Issue #105). Holders (app connections) keep it alive; it is shut down `graceMs`
@@ -34,8 +42,8 @@ type Core = Pick<HostCore, "spawn" | "client" | "env">;
  */
 export class AuthSession {
 	private id?: string;
-	/** When the current id was spawned: discovery started earlier may not list it yet. */
-	private idSince = 0;
+	/** The current login Pi's process, from its RC: discovery may lag behind it, the process does not. */
+	private pid?: number;
 	private holders = new Set<object>();
 	private starting?: Promise<string>;
 	private stopping?: Promise<void>;
@@ -63,7 +71,7 @@ export class AuthSession {
 		try {
 			// A shutdown that already began finishes first; it may keep a Pi that is saving.
 			await this.stopping;
-			if (this.id && (await this.reachable(this.id))) return this.id;
+			if (this.id && (await this.probe(this.id))) return this.id;
 			if (this.closed) throw new Error("Host is stopping");
 			this.starting ??= this.start().finally(() => {
 				this.starting = undefined;
@@ -79,10 +87,10 @@ export class AuthSession {
 		if (this.holders.delete(holder) && !this.holders.size && !this.closed) this.schedule(this.options.graceMs ?? 60000);
 	}
 
-	/** Discovery results (listing began at `listedAt`): forget an exited login Pi, shut down ones this Host does not own. */
-	observe(instances: { instanceId: string; purpose?: "auth" }[], listedAt: number): void {
+	/** Discovery results: forget an exited login Pi, shut down ones this Host does not own. */
+	observe(instances: { instanceId: string; purpose?: "auth" }[]): void {
 		if (this.starting || this.stopping || this.closed) return;
-		if (this.id && listedAt > this.idSince && !instances.some((i) => i.instanceId === this.id)) this.id = undefined;
+		if (this.id && this.pid && !alive(this.pid)) this.id = this.pid = undefined;
 		for (const { instanceId, purpose } of instances)
 			if (purpose === "auth" && instanceId !== this.id && !this.orphans.has(instanceId)) {
 				this.orphans.add(instanceId);
@@ -128,9 +136,9 @@ export class AuthSession {
 			purpose: "auth",
 		});
 		this.id = instanceId;
-		this.idSince = Date.now();
+		this.pid = undefined;
 		const end = Date.now() + (this.options.readyMs ?? 30000);
-		while (!(await this.reachable(instanceId))) {
+		while (!(await this.probe(instanceId))) {
 			if (Date.now() >= end) {
 				// shortcut: a login Pi stuck before its RC registers is left to exit by itself or be reaped on discovery.
 				if (this.id === instanceId) this.id = undefined;
@@ -141,10 +149,12 @@ export class AuthSession {
 		return instanceId;
 	}
 
-	private async reachable(id: string): Promise<boolean> {
+	/** Whether its RC answers; remembers the pid of the current login Pi. */
+	private async probe(id: string): Promise<boolean> {
 		const client = this.core.client(id);
 		try {
-			await client.connect();
+			const { pid } = await client.connect();
+			if (id === this.id) this.pid = pid;
 			return true;
 		} catch {
 			return false;

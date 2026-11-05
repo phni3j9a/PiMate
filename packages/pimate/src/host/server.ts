@@ -361,9 +361,9 @@ export class HostServer {
 					}
 					void this.auth.acquire(hold).then(
 						(instanceId) => {
-							// Released (screen closed / disconnected) meanwhile: do not keep holding for it.
+							// Released (screen closed / disconnected) meanwhile: do not keep holding, but still answer.
 							if (peer.holds.get(holdId) !== hold) this.auth.release(hold);
-							else this.send(peer, { type: "auth_session_result", requestId, ok: true, instanceId });
+							this.send(peer, { type: "auth_session_result", requestId, ok: true, instanceId });
 						},
 						(e) =>
 							this.send(peer, {
@@ -552,10 +552,9 @@ export class HostServer {
 				if (peer.deviceId && !devices.some((d) => d.deviceId === peer.deviceId)) peer.ws.close(HostCloseCode.revoked);
 				else if (peer.deviceId) this.config.touch(peer.deviceId);
 			}
-			const listedAt = Date.now();
 			const list = await this.core.list();
 			if (this.stopped) return;
-			this.auth.observe(list, listedAt);
+			this.auth.observe(list);
 			const next = list
 				.filter((i) => !i.purpose)
 				.map(

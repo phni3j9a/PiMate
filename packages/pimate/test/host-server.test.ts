@@ -440,6 +440,10 @@ it("hides login Pis, stops ones it does not own, and holds its own only for auth
 	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
 	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
 	expect(spawn).toHaveBeenCalledExactlyOnceWith({ cwd: expect.any(String), args: LOGIN_PI_ARGS, purpose: "auth" });
+	// A screen closed before its reply still gets one (the app's pending request must settle).
+	c.send({ type: "auth_session", requestId: "a3", holdId: "screen-3" });
+	c.send({ type: "auth_session_end", holdId: "screen-3" });
+	expect(await c.box.next("auth_session_result")).toMatchObject({ requestId: "a3", ok: true });
 	c.send({ type: "rc", instanceId: "live", request: { id: "list", method: "auth_list", params: {} } });
 	expect(await c.box.next("rc_result")).toMatchObject({ response: { id: "list", ok: true } });
 	c.send({ type: "rc", instanceId: "live", request: { id: "prompt", method: "prompt", params: { text: "x" } } });

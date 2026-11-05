@@ -11,6 +11,7 @@ function fakeCore() {
 		flow: undefined as { id: string; status: string } | undefined,
 		cancelBusy: false,
 		spawnGate: Promise.resolve(),
+		pid: process.pid,
 	};
 	const calls: string[] = [];
 	const core = {
@@ -24,7 +25,7 @@ function fakeCore() {
 		client: (id: string) => ({
 			connect: async () => {
 				if (!state.alive.has(id)) throw new Error("gone");
-				return {};
+				return { pid: state.pid };
 			},
 			request: async (method: string) => {
 				calls.push(`${method}:${id}`);
@@ -68,10 +69,13 @@ it("reports a login Pi that never answers and forgets one that exited", async ()
 	expect(auth.owns("login-1")).toBe(false);
 	state.ready = true;
 	expect(await auth.acquire({})).toBe("login-2");
-	auth.observe([], 0); // discovery that began before the spawn does not drop it
+	auth.observe([]); // discovery may not list it yet: its process is still alive
 	expect(auth.owns("login-2")).toBe(true);
-	auth.observe([], Date.now() + 1);
+	state.pid = 2 ** 30; // no such process: recorded on the next probe
+	expect(await auth.acquire({})).toBe("login-2");
+	auth.observe([]);
 	expect(auth.owns("login-2")).toBe(false);
+	expect(await auth.acquire({})).toBe("login-3");
 });
 
 it("cancels an interactive flow before shutting down, and defers if saving began meanwhile", async () => {
