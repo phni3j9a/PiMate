@@ -12,11 +12,11 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 ## プロバイダーへのログイン／ログアウト
 
-チャットで対象の Pi を開き、**設定 → プロバイダーのログイン**から OpenAI・Anthropic・OpenCode を操作できます。OpenAI の行では「API キーを入力」（`openai`）と「ChatGPT でログイン」（従来の `openai-codex` のデバイスコード）を、OpenCode の行では Zen（`opencode`）と Go（`opencode-go`）の API キー入力を並べ、ログアウトも保存先ごとに行います（[#104](https://github.com/phni3j9a/PiMate/issues/104)）。Anthropic は Claude ログイン（表示コードの貼り付け）と API キーに対応します。OpenCode には PC パッケージの更新が必要で、古い PC では表示しません。
+**設定 → プロバイダーのログイン**で PC を選び、Host が起動するログイン専用 Pi から OpenAI・Anthropic・OpenCode を操作できます。OpenAI の行では「API キーを入力」（`openai`）と「ChatGPT でログイン」（従来の `openai-codex` のデバイスコード）を、OpenCode の行では Zen（`opencode`）と Go（`opencode-go`）の API キー入力を並べ、ログアウトも保存先ごとに行います（[#104](https://github.com/phni3j9a/PiMate/issues/104)）。Anthropic は Claude ログイン（表示コードの貼り付け）と API キーに対応します。OpenCode には PC パッケージの更新が必要で、古い PC では表示しません。
 
-認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。Android 0.1.5 / PC 0.1.7 以上が必要で、アプリ・Host・対象 Pi の RC をすべて更新してください。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。対応する PC の PiMate パッケージに更新し Host を再起動してください。起動中の Pi には /reload または再起動後に反映されます。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
-開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`badurl=1|0` は不正 URL を再現します。対象は既存の `i=<instanceId>` で指定できます。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
+開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`sessionfail=1|0` はログイン Pi の起動失敗、`badurl=1|0` は不正 URL を再現します。認証フローは非表示のログイン専用 Pi を使います。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
 
 ## できること
 

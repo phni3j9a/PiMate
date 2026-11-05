@@ -59,9 +59,23 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 		connection.start();
 		await connected;
 		expect(connection.info?.providerAuth).toBe(true);
+		expect(connection.info?.authSession).toBe(true);
+		await control("sessionfail=1");
+		expect(await connection.authSession("failed")).toMatchObject({ ok: false, code: "spawn_failed" });
+		await control("sessionfail=0");
+		const acquired = await connection.authSession("start");
+		if (!acquired.ok) throw new Error("acquisition failed");
+		const instanceId = acquired.instanceId;
+		expect(connection.instances.some((i) => i.instanceId === instanceId)).toBe(false);
+		const unsupported = await connection.rc(instanceId, {
+			id: "unsupported",
+			method: "models",
+			params: {},
+			expectInstanceId: instanceId,
+		});
+		expect(unsupported).toMatchObject({ ok: false, error: { code: "unsupported" } });
 		let seq = 0;
 		async function request<M extends RcMethod>(method: M, params: ParamsOf<M>): Promise<ResultOf<M>> {
-			const instanceId = "6c1b2f0e-shout";
 			const response = await connection!.rc(instanceId, {
 				id: `test-${++seq}`,
 				method,
@@ -122,6 +136,21 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 		expect((await request("auth_cancel", { flowId: cancel.id })).flow.status).toBe("cancelled");
 		await control("old=1");
 		expect((await request("hello", {})).snapshot.providerAuth).toBe(false);
+		connection.endAuthSession();
+		await control("oldHost=1");
+		connection.stop();
+		const reconnected = new Promise<void>((resolve) => {
+			const off = connection!.onChange(() => {
+				if (connection!.state === "connected") {
+					off();
+					resolve();
+				}
+			});
+		});
+		connection.start();
+		await reconnected;
+		expect(connection.info?.providerAuth).toBe(false);
+		expect(connection.info?.authSession).toBe(false);
 		expect(output).not.toContain("FAKE_SECRET");
 	} finally {
 		connection?.stop();
