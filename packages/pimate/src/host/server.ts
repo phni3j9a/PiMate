@@ -80,7 +80,14 @@ export async function defaultListenAddresses(): Promise<string[]> {
 /** One-shot outcomes that a snapshot cannot reflect. */
 const RESULT_EVENTS: ReadonlySet<string> = new Set(["session_op_done", "compact_done", "compact_error", "notify"]);
 const MAX_BUFFER = 8 * 1024 * 1024;
-type Peer = { alerts?: boolean; ws: WebSocket; deviceId?: string; timer: NodeJS.Timeout };
+type Peer = {
+	alerts?: boolean;
+	ws: WebSocket;
+	deviceId?: string;
+	timer: NodeJS.Timeout;
+	/** auth_session holds by app holdId; all released on disconnect. */
+	holds: Map<string, object>;
+};
 type ClosedRequest = {
 	instanceId: string;
 	requestId: string;
@@ -260,13 +267,15 @@ export class HostServer {
 		const peer: Peer = {
 			ws,
 			timer: setTimeout(() => ws.close(HostCloseCode.authTimeout), this.options.authTimeoutMs ?? 5000),
+			holds: new Map(),
 		};
 		this.peers.add(peer);
 		ws.on("error", () => ws.terminate());
 		ws.on("close", () => {
 			clearTimeout(peer.timer);
 			this.peers.delete(peer);
-			this.auth.release(peer);
+			for (const hold of peer.holds.values()) this.auth.release(hold);
+			peer.holds.clear();
 			for (const link of this.links.values()) {
 				link.subs.delete(peer);
 				this.idle(link);
@@ -331,18 +340,29 @@ export class HostServer {
 					this.send(peer, { type: "pong", t: message.t });
 					return;
 				}
-				if (message.type === "auth_session_end") {
-					this.auth.release(peer);
-					return;
-				}
-				if (message.type === "auth_session") {
+				if (message.type === "auth_session" || message.type === "auth_session_end") {
+					if (typeof message.holdId !== "string" || !message.holdId || message.holdId.length > 200)
+						throw new Error("Invalid holdId");
+					const holdId = message.holdId;
+					if (message.type === "auth_session_end") {
+						const hold = peer.holds.get(holdId);
+						peer.holds.delete(holdId);
+						if (hold) this.auth.release(hold);
+						return;
+					}
 					if (typeof message.requestId !== "string" || !message.requestId || message.requestId.length > 200)
 						throw new Error("Invalid requestId");
 					const requestId = message.requestId;
-					void this.auth.acquire(peer).then(
+					let hold = peer.holds.get(holdId);
+					if (!hold) {
+						if (peer.holds.size >= 16) throw new Error("Too many auth holds");
+						hold = {};
+						peer.holds.set(holdId, hold);
+					}
+					void this.auth.acquire(hold).then(
 						(instanceId) => {
-							// The connection may have closed meanwhile: do not keep holding for it.
-							if (!this.peers.has(peer)) this.auth.release(peer);
+							// Released (screen closed / disconnected) meanwhile: do not keep holding for it.
+							if (peer.holds.get(holdId) !== hold) this.auth.release(hold);
 							else this.send(peer, { type: "auth_session_result", requestId, ok: true, instanceId });
 						},
 						(e) =>
@@ -532,9 +552,10 @@ export class HostServer {
 				if (peer.deviceId && !devices.some((d) => d.deviceId === peer.deviceId)) peer.ws.close(HostCloseCode.revoked);
 				else if (peer.deviceId) this.config.touch(peer.deviceId);
 			}
+			const listedAt = Date.now();
 			const list = await this.core.list();
 			if (this.stopped) return;
-			this.auth.observe(list);
+			this.auth.observe(list, listedAt);
 			const next = list
 				.filter((i) => !i.purpose)
 				.map(

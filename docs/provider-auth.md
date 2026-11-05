@@ -34,7 +34,7 @@ Pi とプロバイダーが提供する認証方式を使います。アカウ�
 
 - Host は `auth_session` を受けると、ログイン専用の Pi を1つだけ起動（起動済みなら再利用）し、RC が応答してから instanceId を返します。起動は `pi --no-session --no-extensions -e <PiMate 拡張> --no-skills --no-context-files --no-prompt-templates --no-themes --no-tools --no-mcp --no-approve` 相当で、会話を保存せず、ユーザーの拡張・スキル・ツール・プロジェクト設定を読み込みません（cwd は Host のホーム、エージェントディレクトリは **Host の環境**のもの）。拡張が登録するプロバイダーは対象外です。
 - この Pi は `purpose: "auth"` で登録され、アプリの Pi 一覧・`pimate list`・Webhook の監視対象には出ません。Host はこの Pi へ `hello` と `auth_*` だけを転送し、ほかの要求は `unsupported` で拒否します。
-- 画面を開いている接続がこの Pi を保持します。画面を閉じる（`auth_session_end`）か接続が切れると、最後の保持が外れてから60秒後に Host が終了させます。保存中（`saving`）は終了を延期します。再接続時、アプリは `auth_session` を送り直して保持し直します。
+- 開いている画面ごとに（`holdId`）この Pi を保持します。画面を閉じる（`auth_session_end`）か接続が切れると、最後の保持が外れてから60秒後に Host が終了させます。終了前に進行中の手続きを中止し、保存中（`saving`）なら終了を延期します。再接続時、アプリは `auth_session` を送り直して保持し直します。
 - Host を再起動すると、以前の Host が起動したログイン専用の Pi は見つけ次第終了させます。Host の停止時（`/pimate stop` など）にも終了を試みます。
 - 複数の端末で同時に開くと同じ Pi を共有し、進行できる手続きは1件だけです（ほかの端末には「別のログイン手続きが進行中」と表示）。
 

@@ -435,8 +435,8 @@ it("hides login Pis, stops ones it does not own, and holds its own only for auth
 	expect(c.box.received.find((m) => m.type === "instances")).toMatchObject({ instances: [] });
 	c.send({ type: "rc", instanceId: "live", request: { id: "early", method: "auth_list", params: {} } });
 	expect(await c.box.next("rc_result")).toMatchObject({ response: { id: "early", error: { code: "not_found" } } });
-	c.send({ type: "auth_session", requestId: "a1" });
-	c.send({ type: "auth_session", requestId: "a2" });
+	c.send({ type: "auth_session", requestId: "a1", holdId: "screen-1" });
+	c.send({ type: "auth_session", requestId: "a2", holdId: "screen-2" });
 	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
 	expect(await c.box.next("auth_session_result")).toMatchObject({ ok: true, instanceId: "live" });
 	expect(spawn).toHaveBeenCalledExactlyOnceWith({ cwd: expect.any(String), args: LOGIN_PI_ARGS, purpose: "auth" });
@@ -447,7 +447,10 @@ it("hides login Pis, stops ones it does not own, and holds its own only for auth
 	expect(t.requests.some((r) => r.id === "prompt")).toBe(false);
 	await t.server.refresh(); // still owned: neither listed nor stopped
 	expect(shutdowns()).toBe(1);
-	c.send({ type: "auth_session_end" });
+	c.send({ type: "auth_session_end", holdId: "screen-1" });
+	await new Promise((r) => setTimeout(r, 60)); // grace is 20 ms: screen-2 still holds it
+	expect(shutdowns()).toBe(1);
+	c.send({ type: "auth_session_end", holdId: "screen-2" });
 	await vi.waitFor(() => expect(shutdowns()).toBe(2));
 });
 it("tracks streaming text/thinking in snapshots and resets at message, settled and session boundaries", async () => {

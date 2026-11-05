@@ -221,12 +221,12 @@ export class HostConnection {
 	}
 
 	/** Caller must gate on info.authSession; requests are never retried. */
-	authSession(requestId: string): Promise<AuthSessionResult> {
-		return this.hostRequest<AuthSessionResult>({ type: "auth_session", requestId });
+	authSession(requestId: string, holdId: string): Promise<AuthSessionResult> {
+		return this.hostRequest<AuthSessionResult>({ type: "auth_session", requestId, holdId });
 	}
 
-	endAuthSession(): void {
-		if (this.authed && this.info?.authSession === true) this.send({ type: "auth_session_end" });
+	endAuthSession(holdId: string): void {
+		if (this.authed && this.info?.authSession === true) this.send({ type: "auth_session_end", holdId });
 	}
 
 	private hostRequest<T>(msg: Extract<AppMessage, { requestId: string }>): Promise<T> {

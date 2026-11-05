@@ -66,7 +66,7 @@ it.skipIf(!pi || !abduco)(
 			const send = (value: unknown) => ws!.send(JSON.stringify(value));
 			send({ type: "auth", token: pair.token, protocol: 1, app: { version: "e2e", platform: "test" } });
 			await wait((m): m is HostMessage => m.type === "auth_ok");
-			send({ type: "auth_session", requestId: "s" });
+			send({ type: "auth_session", requestId: "s", holdId: "screen" });
 			const session = await wait(
 				(m): m is Extract<HostMessage, { type: "auth_session_result"; ok: true }> =>
 					m.type === "auth_session_result" && m.ok,
@@ -98,7 +98,7 @@ it.skipIf(!pi || !abduco)(
 				key: "e2e-key",
 			});
 			expect(messages.some((m) => m.type === "instances" && m.instances.some((i) => i.instanceId === id))).toBe(false);
-			send({ type: "auth_session_end" });
+			send({ type: "auth_session_end", holdId: "screen" });
 			const end = Date.now() + 20000;
 			while ((await core.list()).some((i) => i.instanceId === id)) {
 				if (Date.now() > end) throw new Error("login Pi still running");

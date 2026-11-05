@@ -3,11 +3,20 @@ import { AuthSession } from "../src/host/auth-session.ts";
 import type { HostCore } from "../src/host/index.ts";
 
 function fakeCore() {
-	const state = { alive: new Set<string>(), saving: false, ready: true, spawned: 0 };
+	const state = {
+		alive: new Set<string>(),
+		saving: false,
+		ready: true,
+		spawned: 0,
+		flow: undefined as { id: string; status: string } | undefined,
+		cancelBusy: false,
+		spawnGate: Promise.resolve(),
+	};
 	const calls: string[] = [];
 	const core = {
 		env: { HOME: "/home/test" },
 		spawn: vi.fn(async () => {
+			await state.spawnGate;
 			const instanceId = `login-${++state.spawned}`;
 			if (state.ready) state.alive.add(instanceId);
 			return { instanceId, abducoSession: "pimate-x", attachCommand: "", isolation: "detached" as const };
@@ -20,7 +29,8 @@ function fakeCore() {
 			request: async (method: string) => {
 				calls.push(`${method}:${id}`);
 				if (method === "shutdown") state.alive.delete(id);
-				return method === "auth_list" ? { flow: state.saving ? { status: "saving" } : undefined } : {};
+				if (method === "auth_cancel" && state.cancelBusy) throw Object.assign(new Error("busy"), { code: "busy" });
+				return method === "auth_list" ? { flow: state.saving ? { id: "f", status: "saving" } : state.flow } : {};
 			},
 			close: () => {},
 		}),
@@ -58,6 +68,39 @@ it("reports a login Pi that never answers and forgets one that exited", async ()
 	expect(auth.owns("login-1")).toBe(false);
 	state.ready = true;
 	expect(await auth.acquire({})).toBe("login-2");
-	auth.observe([]);
+	auth.observe([], 0); // discovery that began before the spawn does not drop it
+	expect(auth.owns("login-2")).toBe(true);
+	auth.observe([], Date.now() + 1);
 	expect(auth.owns("login-2")).toBe(false);
+});
+
+it("cancels an interactive flow before shutting down, and defers if saving began meanwhile", async () => {
+	const { core, state, calls } = fakeCore();
+	const auth = new AuthSession(core, { graceMs: 5, retryMs: 5 });
+	const a = {};
+	await auth.acquire(a);
+	state.flow = { id: "f", status: "working" };
+	state.cancelBusy = true; // the device-code flow reached saving between auth_list and auth_cancel
+	auth.release(a);
+	await vi.waitFor(() => expect(calls.filter((c) => c === "auth_cancel:login-1").length).toBeGreaterThan(1));
+	expect(calls).not.toContain("shutdown:login-1");
+	state.cancelBusy = false;
+	await vi.waitFor(() => expect(calls).toContain("shutdown:login-1"));
+	expect(calls.lastIndexOf("auth_cancel:login-1")).toBeLessThan(calls.indexOf("shutdown:login-1"));
+});
+
+it("shuts down a login Pi that was still starting when the Host stops", async () => {
+	const { core, state, calls } = fakeCore();
+	let launch!: () => void;
+	state.spawnGate = new Promise((r) => {
+		launch = r;
+	});
+	const auth = new AuthSession(core);
+	const holding = auth.acquire({});
+	await vi.waitFor(() => expect(core.spawn).toHaveBeenCalled());
+	const closing = auth.close();
+	launch();
+	await holding;
+	await closing;
+	expect(calls).toContain("shutdown:login-1");
 });

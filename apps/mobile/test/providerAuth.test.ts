@@ -239,6 +239,21 @@ describe("ProviderAuthController", () => {
 		expect(end).toBeGreaterThan(cancel);
 	});
 
+	it("releases only its own hold, so a reopened screen keeps the login Pi", async () => {
+		const { store } = await setup();
+		const old = new ProviderAuthController(store, { hostId: "h1" }, () => `id-${++uuid}`);
+		old.start();
+		old.dispose();
+		const fresh = new ProviderAuthController(store, { hostId: "h1" }, () => `id-${++uuid}`);
+		fresh.start();
+		await acquire(); // late reply for the closed screen
+		const socket = FakeSocket.last();
+		const [oldHold, freshHold] = socket.sentOfType("auth_session").map((m) => m.holdId);
+		expect(oldHold).not.toBe(freshHold);
+		expect(new Set(socket.sentOfType("auth_session_end").map((m) => m.holdId))).toEqual(new Set([oldHold]));
+		fresh.dispose();
+	});
+
 	it("releases a pending acquisition after leaving", async () => {
 		const { store } = await setup();
 		const c = new ProviderAuthController(store, { hostId: "h1" }, () => `id-${++uuid}`);
@@ -443,11 +458,9 @@ describe("ProviderAuthController", () => {
 		c.dispose();
 		reply(begin, { flow: flow({ id: "late", provider: "anthropic", method: "oauth", status: "working" }) });
 		await flush();
+		// The hold ends at once; the Host keeps the login Pi for its grace period, so the late cancel still lands.
 		expect(last("auth_cancel").request.params).toEqual({ flowId: "late" });
-		const sent = FakeSocket.last().sent;
-		expect(sent.findIndex((m) => m.type === "rc" && m.request.method === "auth_cancel")).toBeLessThan(
-			sent.findIndex((m) => m.type === "auth_session_end"),
-		);
+		expect(FakeSocket.last().sentOfType("auth_session_end")).toHaveLength(1);
 		expect(c.state.flow).toBeNull();
 
 		const second = await ready();

@@ -121,11 +121,16 @@ export class ProviderAuthController {
 	private listedId: string | undefined;
 	private offStore: (() => void) | null = null;
 
+	/** This screen's hold on the Host's login Pi; ending it cannot release another screen's hold. */
+	private readonly holdId: string;
+
 	constructor(
 		private readonly store: AppStore,
 		readonly target: AuthTarget,
 		private readonly randomUUID: () => string,
-	) {}
+	) {
+		this.holdId = randomUUID();
+	}
 
 	getState = (): AuthState => this.state;
 	subscribe = (listener: () => void): (() => void) => {
@@ -148,8 +153,8 @@ export class ProviderAuthController {
 		const flow = this.state.flow;
 		if (flow && (flow.status === "working" || flow.status === "input"))
 			void this.rc("auth_cancel", { flowId: flow.id }).catch(() => {});
-		// A late begin receipt must be cancelled before releasing the hold.
-		if (this.state.busy !== "begin") this.store.connection(this.target.hostId)?.endAuthSession();
+		// A late begin receipt is still cancelled: the Host keeps the Pi for a grace period after the last hold.
+		this.store.connection(this.target.hostId)?.endAuthSession(this.holdId);
 		this.listeners.clear();
 	}
 
@@ -162,7 +167,7 @@ export class ProviderAuthController {
 		this.set({ busy: "check", ...(this.state.phase === "ready" ? {} : { phase: "checking" }) });
 		let session: Awaited<ReturnType<typeof conn.authSession>>;
 		try {
-			session = await conn.authSession(this.randomUUID());
+			session = await conn.authSession(this.randomUUID(), this.holdId);
 		} catch {
 			if (!this.disposed)
 				this.set({
@@ -173,7 +178,7 @@ export class ProviderAuthController {
 			return;
 		}
 		if (this.disposed) {
-			conn.endAuthSession();
+			conn.endAuthSession(this.holdId); // the hold may have been re-taken after a reconnect
 			return;
 		}
 		if (!session.ok)
@@ -217,7 +222,6 @@ export class ProviderAuthController {
 			const late = res.ok ? res.result.flow : null;
 			if (late && (late.status === "working" || late.status === "input"))
 				void this.rc("auth_cancel", { flowId: late.id }).catch(() => {});
-			this.store.connection(this.target.hostId)?.endAuthSession();
 			return;
 		}
 		this.set({ busy: null });

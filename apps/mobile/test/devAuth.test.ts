@@ -61,9 +61,9 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 		expect(connection.info?.providerAuth).toBe(true);
 		expect(connection.info?.authSession).toBe(true);
 		await control("sessionfail=1");
-		expect(await connection.authSession("failed")).toMatchObject({ ok: false, code: "spawn_failed" });
+		expect(await connection.authSession("failed", "hold")).toMatchObject({ ok: false, code: "spawn_failed" });
 		await control("sessionfail=0");
-		const acquired = await connection.authSession("start");
+		const acquired = await connection.authSession("start", "hold");
 		if (!acquired.ok) throw new Error("acquisition failed");
 		const instanceId = acquired.instanceId;
 		expect(connection.instances.some((i) => i.instanceId === instanceId)).toBe(false);
@@ -136,7 +136,7 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 		expect((await request("auth_cancel", { flowId: cancel.id })).flow.status).toBe("cancelled");
 		await control("old=1");
 		expect((await request("hello", {})).snapshot.providerAuth).toBe(false);
-		connection.endAuthSession();
+		connection.endAuthSession("hold");
 		await control("oldHost=1");
 		connection.stop();
 		const reconnected = new Promise<void>((resolve) => {
