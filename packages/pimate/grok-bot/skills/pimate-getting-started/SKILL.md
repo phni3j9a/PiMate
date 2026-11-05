@@ -24,4 +24,4 @@ Save the computer's ListMachines label and working CLI command to memory. Explai
 Offer optional phone answers (pimate-phone-answers "Setup").
 
 ## Updating
-After the user's yes, run `pi update npm:@phni3j9a/pimate`. With their OK, restart the Host with `systemctl --user restart pimate-host`: Pi sessions keep running and the phone reconnects. Running Pi sessions pick up the new version after `/reload` or a restart in Pi. Then, after a yes, re-read and re-save every pimate-* skill verbatim as above.
+After the user's yes, run `pi update npm:@phni3j9a/pimate`. Then restart the Host, which keeps Pi sessions running while the phone reconnects. If `systemctl --user is-active pimate-host` prints `active`, run `systemctl --user restart pimate-host` with their OK. Otherwise the Host runs without the registered service (or not at all): ask the user to run `/pimate restart` in Pi on that computer. Running Pi sessions pick up the new version after `/reload` or a restart in Pi. Then, after a yes, re-read and re-save every pimate-* skill verbatim as above.
