@@ -8,7 +8,7 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
-依存監査の警告も未解消です（high 18 / moderate 6、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
+依存監査の警告も未解消です（0.1.10リリース時の `npm audit`: high 7 / moderate 10 / low 1、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
 
 ## プロバイダーへのログイン／ログアウト（Android 0.1.10 / PC 0.1.15 以上）
 
