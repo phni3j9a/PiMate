@@ -1,4 +1,4 @@
-/** Provider login / logout (OpenAI, OpenAI Codex, Anthropic) for the Pi captured when opened from Settings. */
+/** Provider login / logout (OpenAI, Anthropic, OpenCode) for the Pi captured when opened from Settings. */
 import {
 	AUTH_MAX_INPUT_LENGTH,
 	type AuthFlow,
@@ -19,18 +19,31 @@ import { Spinner } from "@/components/StatusMark";
 import { IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { tildePath } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
-import { type AuthState, authBrowserUrl, flowActive, ProviderAuthController } from "@/lib/providerAuth";
+import { type AuthState, authBrowserUrl, flowActive, ProviderAuthController, providerGroups } from "@/lib/providerAuth";
 import { appStore } from "@/lib/runtime";
 import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
 
 const PROVIDERS: Record<AuthProviderId, string> = {
 	openai: "OpenAI",
-	"openai-codex": "OpenAI Codex",
+	"openai-codex": "OpenAI（ChatGPT）",
 	anthropic: "Anthropic",
+	opencode: "OpenCode Zen",
+	"opencode-go": "OpenCode Go",
 };
 
-const methodLabel = (provider: AuthProviderId, method: ProviderAuthType) =>
-	method === "api_key" ? "API キーを入力" : provider === "anthropic" ? "Claude でログイン" : "ChatGPT でログイン";
+function methodLabel(provider: AuthProviderId, method: ProviderAuthType): string {
+	if (method === "oauth")
+		return provider === "anthropic"
+			? "Claude でログイン"
+			: provider === "openai-codex"
+				? "ChatGPT でログイン"
+				: "ログイン";
+	return provider === "opencode"
+		? "Zen のキーを入力"
+		: provider === "opencode-go"
+			? "Go のキーを入力"
+			: "API キーを入力";
+}
 
 const SOURCES: Record<string, string> = {
 	environment: "環境変数で設定済み",
@@ -40,11 +53,18 @@ const SOURCES: Record<string, string> = {
 	fallback: "別の設定で利用可能",
 };
 
-function statusText(p: AuthProviderInfo): string {
-	if (p.stored === "oauth") return "ログイン情報を保存済み";
-	if (p.stored === "api_key") return "API キーを保存済み";
-	if (p.configured) return SOURCES[p.source ?? ""] ?? "設定済み";
-	return "未設定";
+function statusText(p: AuthProviderInfo, label: string): string {
+	const text =
+		p.stored && label
+			? "保存済み"
+			: p.stored === "oauth"
+				? "ログイン情報を保存済み"
+				: p.stored === "api_key"
+					? "API キーを保存済み"
+					: p.configured
+						? (SOURCES[p.source ?? ""] ?? "設定済み")
+						: "未設定";
+	return label ? `${label}: ${text}` : text;
 }
 
 const idleState: AuthState = {
@@ -69,7 +89,7 @@ function openBrowser(url: string, onError: () => void) {
 
 function confirmLogout(controller: ProviderAuthController, provider: AuthProviderId) {
 	Alert.alert(
-		`${PROVIDERS[provider]} からログアウトしますか？`,
+		`${PROVIDERS[provider] ?? provider} からログアウトしますか？`,
 		"PC に保存された認証情報だけを削除します。同じエージェントディレクトリ（通常 ~/.pi/agent）を使うほかの Pi にも影響します。環境変数や models.json の設定は変わらず、プロバイダー側でのトークンの取り消しも行いません。",
 		[
 			{ text: "キャンセル", style: "cancel" },
@@ -147,29 +167,38 @@ export default function ProviderAuthScreen() {
 					) : null}
 					{controller && !flow && phase === "ready" && providers ? (
 						<>
-							{providers.map((p) => (
-								<View key={p.id} style={styles.provider}>
-									<Text style={styles.providerName}>{PROVIDERS[p.id] ?? p.id}</Text>
-									<Text style={styles.muted}>{statusText(p)}</Text>
+							{providerGroups(providers).map((g) => (
+								<View key={g.name} style={styles.provider}>
+									<Text style={styles.providerName}>{g.name}</Text>
+									{g.members.map(({ info, label }) => (
+										<Text key={info.id} style={styles.muted}>
+											{statusText(info, label)}
+										</Text>
+									))}
 									<View style={styles.actions}>
-										{p.methods.map((m) => (
-											<TextButton
-												key={m}
-												label={methodLabel(p.id, m)}
-												size={14}
-												disabled={!!busy}
-												onPress={() => void controller.begin(p.id, m)}
-											/>
-										))}
-										{p.stored ? (
-											<TextButton
-												label="ログアウト"
-												tone="destructive"
-												size={14}
-												disabled={!!busy}
-												onPress={() => confirmLogout(controller, p.id)}
-											/>
-										) : null}
+										{g.members.flatMap(({ info }) =>
+											info.methods.map((m) => (
+												<TextButton
+													key={`${info.id}/${m}`}
+													label={methodLabel(info.id, m)}
+													size={14}
+													disabled={!!busy}
+													onPress={() => void controller.begin(info.id, m)}
+												/>
+											)),
+										)}
+										{g.members.map(({ info, label }) =>
+											info.stored ? (
+												<TextButton
+													key={`${info.id}/logout`}
+													label={label ? `ログアウト（${label}）` : "ログアウト"}
+													tone="destructive"
+													size={14}
+													disabled={!!busy}
+													onPress={() => confirmLogout(controller, info.id)}
+												/>
+											) : null,
+										)}
 									</View>
 								</View>
 							))}
@@ -226,7 +255,7 @@ function FlowPanel({
 		setValue("");
 		void controller.respond(trimmed);
 	};
-	const title = `${PROVIDERS[flow.provider]} · ${flow.method === "api_key" ? "API キー" : "ログイン"}`;
+	const title = `${PROVIDERS[flow.provider] ?? flow.provider} · ${flow.method === "api_key" ? "API キー" : "ログイン"}`;
 	const done = !flowActive(flow);
 	const open = url
 		? () => {

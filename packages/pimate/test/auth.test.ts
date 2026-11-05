@@ -27,7 +27,10 @@ afterEach(() => {
 const tick = async () => {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 };
-function setup(login?: (i: ProviderAuthInteraction, options?: LoginOptions) => Promise<Credential>) {
+function setup(
+	login?: (i: ProviderAuthInteraction, options?: LoginOptions) => Promise<Credential>,
+	missing: string[] = [],
+) {
 	const credentials = new Map<string, Credential>();
 	let registered: Provider;
 	const provider = (id: string) =>
@@ -36,7 +39,7 @@ function setup(login?: (i: ProviderAuthInteraction, options?: LoginOptions) => P
 			name: id,
 			models: [],
 			auth: {
-				oauth: { name: "OAuth", login: login ?? (async () => oauth) },
+				...(!id.startsWith("opencode") ? { oauth: { name: "OAuth", login: login ?? (async () => oauth) } } : {}),
 				...(id !== "openai-codex"
 					? {
 							apiKey: {
@@ -51,7 +54,7 @@ function setup(login?: (i: ProviderAuthInteraction, options?: LoginOptions) => P
 			},
 		}) as unknown as Provider;
 	const registry = {
-		getProvider: vi.fn(provider),
+		getProvider: vi.fn((id: string) => (missing.includes(id) ? undefined : provider(id))),
 		getProviderAuthStatus: vi.fn(() => ({ configured: true, source: "environment" as const, label: "SECRET_LABEL" })),
 		refresh: vi.fn(async () => ({ aborted: false, errors: new Map() })),
 	};
@@ -82,7 +85,7 @@ function setup(login?: (i: ProviderAuthInteraction, options?: LoginOptions) => P
 }
 const uuid = "00000000-0000-4000-8000-000000000001";
 it("validates auth RPC provider, method, IDs and bounded inputs/waits", () => {
-	for (const provider of ["openai", "openai-codex", "anthropic"])
+	for (const provider of ["openai", "openai-codex", "anthropic", "opencode", "opencode-go"])
 		expect(validateRequest({ id: "a", method: "auth_begin", params: { provider, method: "oauth" } }).method).toBe(
 			"auth_begin",
 		);
@@ -109,15 +112,27 @@ it("lists only safe metadata, methods and registry sources without resolving sto
 	credentials.set("anthropic", { type: "api_key", key: "!SECRET_COMMAND" });
 	credentials.set("google", oauth);
 	const result = await auth.list();
-	expect(result.providers.map((p) => p.id)).toEqual(["openai", "openai-codex", "anthropic"]);
-	expect(result.providers.map((p) => p.methods)).toEqual([["api_key"], ["oauth"], ["oauth", "api_key"]]);
-	expect(result.providers.map((p) => p.stored)).toEqual(["oauth", null, "api_key"]);
+	expect(result.providers.map((p) => p.id)).toEqual(["openai", "openai-codex", "anthropic", "opencode", "opencode-go"]);
+	expect(result.providers.map((p) => p.methods)).toEqual([
+		["api_key"],
+		["oauth"],
+		["oauth", "api_key"],
+		["api_key"],
+		["api_key"],
+	]);
+	expect(result.providers.map((p) => p.stored)).toEqual(["oauth", null, "api_key", null, null]);
 	expect(JSON.stringify(result)).not.toContain("SECRET");
 	expect(registry.refresh).not.toHaveBeenCalled();
 	expect(() => auth.begin("google" as AuthProviderId, "oauth")).toThrow("Invalid auth input");
 	expect(() => auth.begin("openai-codex", "api_key")).toThrow("unavailable");
+	expect(() => auth.begin("opencode", "oauth")).toThrow("unavailable");
 });
-it.each(["openai", "anthropic"] as const)(
+it("omits providers this Pi does not know", async () => {
+	const { auth } = setup(undefined, ["opencode-go"]);
+	expect((await auth.list()).providers.map((p) => p.id)).toEqual(["openai", "openai-codex", "anthropic", "opencode"]);
+	expect(() => auth.begin("opencode-go", "api_key")).toThrow("Provider unavailable");
+});
+it.each(["openai", "anthropic", "opencode", "opencode-go"] as const)(
 	"uses standard API-key login for %s, stores literal input only on PC, and refreshes",
 	async (id) => {
 		const { auth, credentials, state, registry } = setup();

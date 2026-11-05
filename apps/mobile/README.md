@@ -12,7 +12,7 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 ## プロバイダーへのログイン／ログアウト
 
-チャットで対象の Pi を開き、**設定 → プロバイダーのログイン**から OpenAI・OpenAI Codex・Anthropic を操作できます。OpenAI は API キー入力のみ、Anthropic は API キーにも対応します。スマホのブラウザを使い、Codex はデバイスコード、Anthropic は表示コードの貼り付けで完了します。OpenAI（`openai`）の ChatGPT ログインは削除しましたが、Codex のログインは引き続き利用できます。
+チャットで対象の Pi を開き、**設定 → プロバイダーのログイン**から OpenAI・Anthropic・OpenCode を操作できます。OpenAI の行では「API キーを入力」（`openai`）と「ChatGPT でログイン」（従来の `openai-codex` のデバイスコード）を、OpenCode の行では Zen（`opencode`）と Go（`opencode-go`）の API キー入力を並べ、ログアウトも保存先ごとに行います（[#104](https://github.com/phni3j9a/PiMate/issues/104)）。Anthropic は Claude ログイン（表示コードの貼り付け）と API キーに対応します。OpenCode には PC パッケージの更新が必要で、古い PC では表示しません。
 
 認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。Android 0.1.5 / PC 0.1.7 以上が必要で、アプリ・Host・対象 Pi の RC をすべて更新してください。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 

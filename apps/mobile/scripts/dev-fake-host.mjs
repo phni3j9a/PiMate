@@ -798,13 +798,15 @@ function saveAuth(id) {
 		}
 	}, authOptions.saving).unref();
 }
+const AUTH_PROVIDERS = ["openai", "openai-codex", "anthropic", "opencode", "opencode-go"];
 const AUTH_RC = {
 	auth_list(id) {
 		return {
 			result: {
-				providers: ["openai", "openai-codex", "anthropic"].map((provider) => ({
+				providers: AUTH_PROVIDERS.map((provider) => ({
 					id: provider,
-					methods: provider === "openai" ? ["api_key"] : provider === "openai-codex" ? ["oauth"] : ["oauth", "api_key"],
+					methods:
+						provider === "openai-codex" ? ["oauth"] : provider === "anthropic" ? ["oauth", "api_key"] : ["api_key"],
 					stored: authStored.get(provider) ?? null,
 					configured: authStored.has(provider),
 				})),
@@ -815,10 +817,10 @@ const AUTH_RC = {
 	auth_begin(id, { provider, method }) {
 		if (
 			authOptions.old ||
-			!["openai", "openai-codex", "anthropic"].includes(provider) ||
+			!AUTH_PROVIDERS.includes(provider) ||
 			!["oauth", "api_key"].includes(method) ||
 			(provider === "openai-codex" && method !== "oauth") ||
-			(provider === "openai" && method === "oauth")
+			(provider !== "openai-codex" && provider !== "anthropic" && method === "oauth")
 		)
 			return { error: "unsupported" };
 		if (authActive(authFlows.get(id))) return { error: "busy" };

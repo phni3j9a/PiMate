@@ -1,7 +1,7 @@
 import type { AuthFlow, InstanceSummary } from "@pimate/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HostRegistry, MemoryStorage } from "../src/lib/hostRegistry";
-import { authBrowserUrl, ProviderAuthController } from "../src/lib/providerAuth";
+import { authBrowserUrl, ProviderAuthController, providerGroups } from "../src/lib/providerAuth";
 import { AppStore } from "../src/lib/store";
 import { authenticate, FakeSocket } from "./fakes";
 
@@ -124,6 +124,26 @@ describe("authBrowserUrl", () => {
 			expect(ok(p, u, "ABCD")).toBeNull();
 		expect(ok("openai-codex", "https://auth.openai.com/codex/device", "bad code")).toBeNull();
 		expect(ok("openai-codex", "https://auth.openai.com/codex/device")).toBeNull();
+	});
+});
+
+describe("providerGroups", () => {
+	const info = (id: string) => ({ id, methods: ["api_key"], stored: null, configured: false }) as never;
+	const rows = (ids: string[]) =>
+		providerGroups(ids.map(info)).map((g) => [g.name, g.members.map((m) => `${m.info.id}:${m.label}`)]);
+	it("puts OpenAI API key with ChatGPT (Codex) and OpenCode Zen with Go on one row each", () => {
+		expect(rows(["opencode-go", "openai", "openai-codex", "anthropic", "opencode"])).toEqual([
+			["OpenAI", ["openai:API キー", "openai-codex:ChatGPT"]],
+			["Anthropic", ["anthropic:"]],
+			["OpenCode", ["opencode:Zen", "opencode-go:Go"]],
+		]);
+	});
+	it("drops rows an older PC does not list and keeps unknown providers", () => {
+		expect(rows(["openai", "anthropic", "future"])).toEqual([
+			["OpenAI", ["openai:API キー"]],
+			["Anthropic", ["anthropic:"]],
+			["future", ["future:"]],
+		]);
 	});
 });
 

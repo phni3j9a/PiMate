@@ -72,7 +72,8 @@ export class ProviderAuth {
 			});
 			return {
 				...(this.operation ? this.result(this.find(this.operation.state.id)) : {}),
-				providers: AUTH_PROVIDER_IDS.map((id) => {
+				// An older Pi may not know every provider (e.g. OpenCode Go): omit it instead of showing a dead row.
+				providers: AUTH_PROVIDER_IDS.filter((id) => this.registry.getProvider(id)).map((id) => {
 					const provider = this.registry.getProvider(id);
 					const status = this.registry.getProviderAuthStatus(id);
 					const type = stored.find((s) => s.providerId === id)?.type;

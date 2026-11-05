@@ -8,13 +8,16 @@
 2. 対象のマシン・フォルダを確認し、プロバイダーと認証方法を選びます。会話や選択中の Pi は切り替えません。
 3. ブラウザを開く場合は自分でボタンを押します。認証情報の取得・保存は PC の Pi 側で行います。
 
-| プロバイダー | スマホでの操作 |
-| --- | --- |
-| OpenAI (`openai`) | API キー入力のみ |
-| OpenAI Codex (`openai-codex`) | デバイスコードをスマホのブラウザへ入力して承認。PC 側が完了を受け取る |
-| Anthropic (`anthropic`) | API キー入力、または Claude 認証後に表示されたコードを貼り付け |
+| 行 | ボタン（保存先） | スマホでの操作 |
+| --- | --- | --- |
+| OpenAI | API キーを入力（`openai`） | API キー入力 |
+| | ChatGPT でログイン（`openai-codex`） | デバイスコードをスマホのブラウザへ入力して承認。PC 側が完了を受け取る |
+| Anthropic | Claude でログイン / API キーを入力（`anthropic`） | Claude 認証後に表示されたコードを貼り付け、または API キー入力 |
+| OpenCode | Zen のキーを入力（`opencode`）/ Go のキーを入力（`opencode-go`） | API キー入力 |
 
-OpenAI（`openai`）の ChatGPT ログインは削除しました（[#57](https://github.com/phni3j9a/PiMate/issues/57)）。OpenAI Codex（`openai-codex`）のログインは引き続き利用できます。既存の認証情報は自動削除せず、必要なら「ログアウト」で削除できます。古い PC が OpenAI の OAuth を返してもアプリには表示しません。
+1つの行に保存先が複数ある場合は、保存先ごとに状態を表示し、ログアウトも「ログアウト（ChatGPT）」のように個別に行います（[#104](https://github.com/phni3j9a/PiMate/issues/104)）。OpenCode の Zen と Go は Pi では別のプロバイダーなので、両方使う場合はそれぞれ保存してください（環境変数 `OPENCODE_API_KEY` は両方に効きます）。PC の Pi が知らないプロバイダー（古い Pi の OpenCode Go など）は一覧に出しません。OpenCode は PC パッケージの更新が必要で、古い PC では表示しません。
+
+ChatGPT でのログインは、Pi で「OpenAI Codex (legacy)」と表示される `openai-codex` のデバイスコード方式を引き続き使います。`openai` の ChatGPT ログインは削除したままです（[#57](https://github.com/phni3j9a/PiMate/issues/57)）。既存の認証情報は自動削除せず、必要なら「ログアウト」で削除できます。古い PC が OpenAI の OAuth を返してもアプリには表示しません。将来の Pi で `openai-codex` が削除された場合、ChatGPT でのログインは使えなくなります。
 
 Pi とプロバイダーが提供する認証方式を使います。アカウント・組織側で機能が制限されている場合や、Pi 更新で手順が変わった場合は利用できないことがあります。API キーを保存しただけではキーの有効性は検証しません。
 
@@ -42,5 +45,6 @@ Pi とプロバイダーが提供する認証方式を使います。アカウ�
 - 一時ファイル・fake provider による公開 `ModelRuntime` の保存・削除、入力検証、キャンセル・期限・保存競合・秘密情報の非配信を自動テストします。OAuth の開始直後のキャンセルでも後処理へ到達する回帰テストを含みます。
 - アプリの宛先固定、旧 Host/RC、状態回復、結果不明時の非再送、複数フローの遅延応答と非永続化を単体テストします。開発用 fake Host の3プロバイダーのフローも通信テストします。
 - OpenAI OAuth の拒否・旧 PC が返す認証方式の除外・既存認証情報の保持とログアウト、Codex / Anthropic / API キーの継続動作を回帰テストします。
+- OpenAI・OpenCode の行のまとめ方、OpenCode Zen / Go の API キー保存、Pi が知らないプロバイダーの除外を単体テスト・fake Host の通信テストで確認します。
 - ChatGPT ログイン削除後に `npm run lint`・`npm run typecheck`・`npm test`（485件）が成功しました。
 - 初回実装時の Android エミュレーター・配布パッケージ検証は [PR #52](https://github.com/phni3j9a/PiMate/pull/52) に記録しています。ChatGPT ログイン削除後の実アカウント認証・Android / iOS の画面操作は未検証です。既存のユーザー認証情報・物理スマホは変更していません。

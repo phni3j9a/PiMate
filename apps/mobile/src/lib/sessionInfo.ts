@@ -100,6 +100,8 @@ const PROVIDER_NAMES: Record<string, string> = {
 	openai: "OpenAI",
 	google: "Google",
 	"openai-codex": "OpenAI Codex",
+	opencode: "OpenCode Zen",
+	"opencode-go": "OpenCode Go",
 	openrouter: "OpenRouter",
 	xai: "xAI",
 	mistral: "Mistral",
