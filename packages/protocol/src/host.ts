@@ -18,6 +18,10 @@
  *   instance appears in `instances` once its RC has registered (the app waits for that instanceId).
  * - The Host forwards `rc` requests unchanged (incl. expectInstanceId / expectSessionId guards) and never
  *   retries them.
+ * - `auth_session` (when `HostInfo.authSession`) starts or reuses one Host-owned login Pi for provider auth and
+ *   holds it for this connection until `auth_session_end` or disconnect. Its instanceId is not in `instances`;
+ *   the Host forwards only `hello` and `auth_*` to it, and stops it after the last holder leaves (never while
+ *   a credential is being saved). See docs/provider-auth.md.
  */
 import type {
 	EventMessage,
@@ -77,6 +81,8 @@ export interface HostInfo {
 	alerts?: boolean;
 	/** Auth RPC timeout/long-poll support; RC providerAuth capability is also required. */
 	providerAuth?: boolean;
+	/** Optional capability: only send `auth_session` / `auth_session_end` when true (older Hosts close on unknown messages). */
+	authSession?: boolean;
 	/** Optional capability: only send `dirs` (folder completion) when true; older Hosts close on unknown messages. */
 	dirs?: boolean;
 	hostId: string;
@@ -187,7 +193,11 @@ export type AppMessage =
 	| { type: "github"; requestId: string; instanceId: string; query: GitHubQuery }
 	/** Subfolder names of `path` (absolute or `~/...`) for completing the new Pi folder. */
 	| { type: "dirs"; requestId: string; path: string }
-	| { type: "spawn"; requestId: string; params: SpawnParams };
+	| { type: "spawn"; requestId: string; params: SpawnParams }
+	/** Start or reuse the Host's login Pi and hold it for this connection. Repeat after a reconnect to hold it again. */
+	| { type: "auth_session"; requestId: string }
+	/** Release this connection's hold on the login Pi (no reply). */
+	| { type: "auth_session_end" };
 
 // ---------------------------------------------------------------- Host -> app
 
@@ -222,7 +232,10 @@ export type HostMessage =
 			/** The Pi started but the first message could not be confirmed as sent. It is never resent. */
 			messageError?: string;
 	  }
-	| { type: "spawn_result"; requestId: string; ok: false; code: SpawnErrorCode; message?: string };
+	| { type: "spawn_result"; requestId: string; ok: false; code: SpawnErrorCode; message?: string }
+	/** Sent once the login Pi's RC answers (same instanceId while it stays alive). Send `rc` auth_* to it. */
+	| { type: "auth_session_result"; requestId: string; ok: true; instanceId: string }
+	| { type: "auth_session_result"; requestId: string; ok: false; code: "spawn_failed"; message?: string };
 
 /** WebSocket close codes used by the Host. */
 export const HostCloseCode = {

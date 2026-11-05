@@ -288,6 +288,8 @@ export interface InstanceMeta {
 	status: InstanceStatus;
 	updatedAt: number;
 	subagents?: SubagentCounts;
+	/** Host-owned login Pi (`auth_session`): never listed to apps / `pimate list`; Host forwards only hello and auth_*. */
+	purpose?: "auth";
 }
 
 // ---------------------------------------------------------------- events (RC -> client)
