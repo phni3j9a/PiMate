@@ -2,6 +2,8 @@
 
 What the shared PiMate bot contains, so it can be rebuilt or updated. The owner adds these in the Bot's chat, checks **View template details**, then publishes (Bot details > **Share** > **Create a copy** > **Publish**; later **Update template**).
 
+Published: https://x.ai/bot/EL8LzPmNquZTjEawTxAI1 (version 1, PiMate 0.1.14). The template carries the private skills, the routine without its webhook URL or key, and these memories; the Bot leaves out memories about the owner's own computers.
+
 ## Identity
 - Name: PiMate
 - Description: Chat companion for Pi (pi.dev) through PiMate. Starts Pi on your Linux computer, sends it work, brings Pi's questions here as cards, and tells you when it finishes.

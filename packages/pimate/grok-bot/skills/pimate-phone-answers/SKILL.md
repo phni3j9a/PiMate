@@ -5,7 +5,7 @@ description: Set up Pi question events in chat, answer dialogs, and pause or rem
 Follow pimate-rules, including "Decisions". ListMachines, routines, cards and memory are Grok Bot only; other agents follow its "Grok Bot only" note.
 
 ## Setup (opt-in, after the user's yes)
-1. Create a webhook-triggered Routine named **Pi questions to chat**, with exactly this prompt:
+1. Use the Routine named **Pi questions to chat** if this Bot already has one (the PiMate template ships it) and give it a webhook trigger if it has none; otherwise create it with a webhook trigger. Its prompt must be exactly:
 
 > A PiMate Host on one of the user's computers POSTed a Pi event to this webhook. Follow pimate-phone-answers "On an event" and pimate-rules.
 
