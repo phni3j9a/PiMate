@@ -34,10 +34,12 @@ Android 0.1.9 / PCパッケージ0.1.11では、選択中の Pi のリポジト�
 
 PCパッケージ0.1.12では、**Grok Bot** から PC の Pi を動かせるようにしました（[#91](https://github.com/phni3j9a/PiMate/issues/91)）。`pimate` CLI の `prompt --wait` / `wait` / `history --last` / `ui --answers`、指定した Pi の質問と完了を Grok Bot の Routine に送る `pimate webhook`、Bot 用の Skill（パッケージの `grok-bot/skills/`）を追加しました。アプリの更新は不要です。設定方法は [packages/pimate/README.md](packages/pimate/README.md#grok-bot-skills任意) を参照してください。Grok Bot のテンプレート **[PiMate](https://x.ai/bot/EL8LzPmNquZTjEawTxAI1)** を追加すると、すぐに始められます。PCパッケージ0.1.13では、Bot が起動した Pi を終了させる `pimate shutdown` を追加しました。PCパッケージ0.1.14では、新しい PC でも Bot が確認から PiMate のインストール・Skill の保存まで案内できるようにしました（[#100](https://github.com/phni3j9a/PiMate/issues/100)）。
 
+Android 0.1.10 / PCパッケージ0.1.15では、**プロバイダーのログインを専用の Pi に分離**しました（[#104](https://github.com/phni3j9a/PiMate/issues/104)・[#105](https://github.com/phni3j9a/PiMate/issues/105)）。設定の「プロバイダー」で PC を選ぶと Host がログイン用の Pi を起動するため、チャットで Pi を開いておく必要はありません。OpenAI は API キーと ChatGPT ログイン（従来の Codex デバイスコード方式）を1行にまとめ、OpenCode は Zen / Go のキー入力を横に並べました。ログアウトは保存先ごとに別々です。**アプリと PC の両方を更新し、Host を再起動**してください。起動中のほかの Pi に新しい認証を反映するには `/reload` または再起動が必要です（[プロバイダー認証](docs/provider-auth.md)）。
+
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.9 / PCパッケージ0.1.14。Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.10 / PCパッケージ0.1.15。ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate

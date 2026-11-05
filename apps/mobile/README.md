@@ -4,17 +4,17 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.9 / PCパッケージ0.1.14 です（PC 0.1.12〜0.1.14 の追加は Grok Bot 連携のみで、アプリの変更はありません）。GitHub の Issue / PR の表示（下記）を追加し、メッセージ末尾の1回分のコスト表示を削除しました。GitHub の表示には PC 0.1.11 以上と PC の `gh` ログイン、Host の再起動が必要です。Android 0.1.8 で回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
+現在の配布版は Android 0.1.10 / PCパッケージ0.1.15 です。プロバイダー認証を Host が起動するログイン専用の Pi に分離し、OpenAI の行の統合と OpenCode Zen / Go の API キー認証を追加しました（下記）。新しい認証画面にはアプリ0.1.10・PC 0.1.15以上の両方と Host の再起動が必要です。GitHub の Issue / PR の表示（下記）を追加し、メッセージ末尾の1回分のコスト表示を削除しました。GitHub の表示には PC 0.1.11 以上と PC の `gh` ログイン、Host の再起動が必要です。Android 0.1.8 で回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。更新後は Pi を再起動または `/reload` し、`/pimate status` から必要に応じて Host を再起動してください。
 
 既知の問題: ライトテーマで Android のナビゲーションバーのアイコンが見えない場合があります（[#46](https://github.com/phni3j9a/PiMate/issues/46)）。
 
 依存監査の警告も未解消です（high 18 / moderate 6、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
 
-## プロバイダーへのログイン／ログアウト
+## プロバイダーへのログイン／ログアウト（Android 0.1.10 / PC 0.1.15 以上）
 
 **設定 → プロバイダーのログイン**で PC を選び、Host が起動するログイン専用 Pi から OpenAI・Anthropic・OpenCode を操作できます。OpenAI の行では「API キーを入力」（`openai`）と「ChatGPT でログイン」（従来の `openai-codex` のデバイスコード）を、OpenCode の行では Zen（`opencode`）と Go（`opencode-go`）の API キー入力を並べ、ログアウトも保存先ごとに行います（[#104](https://github.com/phni3j9a/PiMate/issues/104)）。Anthropic は Claude ログイン（表示コードの貼り付け）と API キーに対応します。OpenCode には PC パッケージの更新が必要で、古い PC では表示しません。
 
-認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。対応する PC の PiMate パッケージに更新し Host を再起動してください。起動中の Pi には /reload または再起動後に反映されます。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
+認証は PC の Pi と共有です。ログアウトは確認後に保存済み情報だけを削除し、環境変数やプロバイダー側での失効操作は変更しません。PC の PiMate パッケージを0.1.15以上に更新し Host を再起動してください。古い Host では入口を無効にして更新を案内します。起動中の Pi には /reload または再起動後に反映されます。手順・保存先・切断時の扱い・検証範囲は [プロバイダー認証](../../docs/provider-auth.md) を参照してください。
 
 開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`sessionfail=1|0` はログイン Pi の起動失敗、`badurl=1|0` は不正 URL を再現します。認証フローは非表示のログイン専用 Pi を使います。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
 
@@ -147,7 +147,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.9.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.10.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -167,14 +167,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.9.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.10.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.9 apps/mobile/dist/pimate-0.1.9.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.9' --notes-file <リリースノート>
+gh release create app-v0.1.10 apps/mobile/dist/pimate-0.1.10.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.10' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
