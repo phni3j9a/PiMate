@@ -44,6 +44,46 @@ export interface AuthState {
 export const flowActive = (flow: AuthFlow | null | undefined): boolean =>
 	!!flow && (flow.status === "working" || flow.status === "input" || flow.status === "saving");
 
+export interface ProviderGroup {
+	name: string;
+	/** `label` tells members of one row apart ("" for a single-member row). */
+	members: { info: AuthProviderInfo; label: string }[];
+}
+
+// One row per vendor; ChatGPT login stays the legacy `openai-codex` device-code flow (Issue #104).
+const GROUPS: { name: string; members: [AuthProviderId, string][] }[] = [
+	{
+		name: "OpenAI",
+		members: [
+			["openai", "API キー"],
+			["openai-codex", "ChatGPT"],
+		],
+	},
+	{ name: "Anthropic", members: [["anthropic", ""]] },
+	{
+		name: "OpenCode",
+		members: [
+			["opencode", "Zen"],
+			["opencode-go", "Go"],
+		],
+	},
+];
+
+/** Rows for the providers the PC listed; a provider this app does not know gets its own row. */
+export function providerGroups(providers: AuthProviderInfo[]): ProviderGroup[] {
+	const known = new Set(GROUPS.flatMap((g) => g.members.map(([id]) => id as string)));
+	return [
+		...GROUPS.map((g) => ({
+			name: g.name,
+			members: g.members.flatMap(([id, label]) => {
+				const info = providers.find((p) => p.id === id);
+				return info ? [{ info, label }] : [];
+			}),
+		})),
+		...providers.filter((p) => !known.has(p.id)).map((info) => ({ name: info.id, members: [{ info, label: "" }] })),
+	].filter((g) => g.members.length);
+}
+
 const BROWSER_URL: Partial<Record<AuthProviderId, RegExp>> = {
 	anthropic: /^https:\/\/claude\.ai\/oauth\/authorize\?[^\s#\\]*$/,
 	"openai-codex": /^https:\/\/auth\.openai\.com\/codex\/device$/,

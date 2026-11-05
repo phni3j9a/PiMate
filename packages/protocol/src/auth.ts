@@ -1,5 +1,5 @@
 /** Auth is scoped to a running standard Pi CLI and its shared agent directory, not a chat session. */
-export const AUTH_PROVIDER_IDS = ["openai", "openai-codex", "anthropic"] as const;
+export const AUTH_PROVIDER_IDS = ["openai", "openai-codex", "anthropic", "opencode", "opencode-go"] as const;
 export type AuthProviderId = (typeof AUTH_PROVIDER_IDS)[number];
 export type ProviderAuthType = "oauth" | "api_key";
 export const AUTH_MAX_WAIT_MS = 25000;
@@ -8,7 +8,7 @@ export const AUTH_MAX_INPUT_LENGTH = 8192;
 
 export interface AuthProviderInfo {
 	id: AuthProviderId;
-	/** OpenAI supports API keys only; OAuth is available for Codex and Anthropic. */
+	/** OpenAI and OpenCode (Zen / Go) support API keys only; OAuth is available for Codex and Anthropic. */
 	methods: ProviderAuthType[];
 	/** Stored credential metadata only; not proof that it is valid. */
 	stored: ProviderAuthType | null;

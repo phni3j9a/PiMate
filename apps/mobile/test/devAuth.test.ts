@@ -81,8 +81,11 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 			["openai", ["api_key"]],
 			["openai-codex", ["oauth"]],
 			["anthropic", ["oauth", "api_key"]],
+			["opencode", ["api_key"]],
+			["opencode-go", ["api_key"]],
 		]);
 		await expect(request("auth_begin", { provider: "openai", method: "oauth" })).rejects.toThrow("unsupported");
+		await expect(request("auth_begin", { provider: "opencode-go", method: "oauth" })).rejects.toThrow("unsupported");
 		const { flow } = await request("auth_begin", { provider: "anthropic", method: "oauth" });
 		expect(flow.prompt?.kind).toBe("code");
 		const receipt = await request("auth_respond", {
@@ -91,20 +94,23 @@ it("exercises all fake auth flows, long polls, logout and old capabilities witho
 			value: "FAKE_SECRET_CODE",
 		});
 		expect((await finish(receipt.flow)).status).toBe("succeeded");
-		const key = (await request("auth_begin", { provider: "openai", method: "api_key" })).flow;
-		expect(
-			(
-				await finish(
-					(
-						await request("auth_respond", {
-							flowId: key.id,
-							promptId: key.prompt!.id,
-							value: "FAKE_SECRET_KEY",
-						})
-					).flow,
-				)
-			).status,
-		).toBe("succeeded");
+		for (const provider of ["openai", "opencode-go"] as const) {
+			const key = (await request("auth_begin", { provider, method: "api_key" })).flow;
+			expect(
+				(
+					await finish(
+						(
+							await request("auth_respond", {
+								flowId: key.id,
+								promptId: key.prompt!.id,
+								value: "FAKE_SECRET_KEY",
+							})
+						).flow,
+					)
+				).status,
+			).toBe("succeeded");
+		}
+		expect((await request("auth_list", {})).providers.find((p) => p.id === "opencode-go")?.stored).toBe("api_key");
 		const codex = (await request("auth_begin", { provider: "openai-codex", method: "oauth" })).flow;
 		expect(codex.authorization?.userCode).toContain("FAKE");
 		const wait = request("auth_wait", { flowId: codex.id, afterRevision: codex.revision });
