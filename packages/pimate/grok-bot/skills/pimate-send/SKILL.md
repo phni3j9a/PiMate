@@ -12,4 +12,7 @@ Read recent history first. If phone answers are on and `pimate webhook status` d
 
 For `done`, relay the reply; `failed`, report the error; `aborted`, report the stop; `waiting_input`, follow pimate-phone-answers "Answering" for each pending request; `timeout`, wait again, never resend; `idle`, report the last reply if present; `closed`, check list and report loss of connection. Abort only with the user's OK: `pimate abort <id>`.
 
+## Finish
+When the user no longer needs a Pi you started, offer to end it. After their OK, run `pimate webhook unwatch <id>` if it is watched, then `pimate shutdown <id>`, and check that it is gone from `pimate list`. Shut down any other Pi only when the user names it.
+
 Reply in one or two lines: instance id, folder, reply or "running", and how it was delivered.
