@@ -64,6 +64,7 @@ export interface HostRuntime {
 	platform: string | null;
 	alerts: boolean;
 	github?: boolean;
+	authSession?: boolean;
 	instances: InstanceSummary[];
 	nextRetryAt: number | null;
 }
@@ -429,6 +430,7 @@ export class AppStore {
 			platform: c?.info?.platform ?? null,
 			alerts: c?.info?.alerts === true,
 			github: c?.info?.github === true,
+			authSession: c?.info?.authSession === true,
 			instances: c?.instances ?? [],
 			nextRetryAt: c?.nextRetryAt ?? null,
 		};

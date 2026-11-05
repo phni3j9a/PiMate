@@ -1,5 +1,5 @@
 /**
- * Provider login / logout for one captured Pi (packages/protocol/src/auth.ts). Pure TS, owned by one screen.
+ * Provider login / logout for one machine (packages/protocol/src/auth.ts). Pure TS, owned by one screen.
  *
  * - Every request goes to the target instance (expectInstanceId); the chat selection is never changed.
  * - At most one `auth_wait` at a time, sent again only after the previous answer. A lost wait resumes after
@@ -21,7 +21,6 @@ import type { AppStore } from "./store";
 
 export interface AuthTarget {
 	hostId: string;
-	instanceId: string;
 }
 
 export interface AuthNotice {
@@ -31,7 +30,7 @@ export interface AuthNotice {
 }
 
 export interface AuthState {
-	phase: "checking" | "offline" | "gone" | "old" | "ready";
+	phase: "checking" | "offline" | "old" | "ready";
 	providers: AuthProviderInfo[] | null;
 	/** The flow shown on screen (active, or the terminal result of one this screen followed). */
 	flow: AuthFlow | null;
@@ -110,6 +109,9 @@ export class ProviderAuthController {
 	private readonly listeners = new Set<() => void>();
 	private disposed = false;
 	private connected = false;
+	private instanceId: string | null = null;
+	private lastInstanceId: string | null = null;
+	private reconnectCheck = false;
 	/** An answer to respond was lost: if the flow then vanishes, whether it was saved is unknown. */
 	private uncertain = false;
 	private sawSaving = false;
@@ -146,15 +148,50 @@ export class ProviderAuthController {
 		const flow = this.state.flow;
 		if (flow && (flow.status === "working" || flow.status === "input"))
 			void this.rc("auth_cancel", { flowId: flow.id }).catch(() => {});
+		// A late begin receipt must be cancelled before releasing the hold.
+		if (this.state.busy !== "begin") this.store.connection(this.target.hostId)?.endAuthSession();
 		this.listeners.clear();
 	}
 
 	/** Fresh capability check + metadata; recovers an active flow (also one whose begin reply was lost). */
 	async check(): Promise<void> {
 		if (this.disposed || this.state.busy) return;
-		if (!this.live()) return this.set({ phase: this.gone() ? "gone" : "offline" });
-		if (this.store.connection(this.target.hostId)?.info?.providerAuth !== true) return this.set({ phase: "old" });
-		this.set({ busy: "check", ...(this.state.phase === "ready" ? {} : { phase: "checking" }) });
+		if (!this.live()) return this.set({ phase: "offline" });
+		const conn = this.store.connection(this.target.hostId)!;
+		if (conn.info?.providerAuth !== true || conn.info.authSession !== true) return this.set({ phase: "old" });
+		this.set({ busy: "check", phase: "checking" });
+		let session: Awaited<ReturnType<typeof conn.authSession>>;
+		try {
+			session = await conn.authSession(this.randomUUID());
+		} catch {
+			if (!this.disposed)
+				this.set({
+					busy: null,
+					phase: this.live() ? "ready" : "offline",
+					notice: notice("ログイン用の Pi を起動できませんでした", "PC を確認し、「状態を確認」を押してください。"),
+				});
+			return;
+		}
+		if (this.disposed) {
+			conn.endAuthSession();
+			return;
+		}
+		if (!session.ok)
+			return this.set({
+				busy: null,
+				phase: "ready",
+				notice: notice("ログイン用の Pi を起動できませんでした", "PC を確認し、「状態を確認」を押してください。"),
+			});
+		if (
+			this.lastInstanceId &&
+			this.lastInstanceId !== session.instanceId &&
+			(flowActive(this.state.flow) || this.lostBegin)
+		) {
+			this.lostBegin = null;
+			this.lost();
+		}
+		this.instanceId = session.instanceId;
+		this.lastInstanceId = session.instanceId;
 		const hello = await this.rc("hello", {});
 		if (this.disposed) return;
 		if (!hello.ok) return this.set({ busy: null, ...this.failurePhase(), ...this.checkFailed(hello.code) });
@@ -180,6 +217,7 @@ export class ProviderAuthController {
 			const late = res.ok ? res.result.flow : null;
 			if (late && (late.status === "working" || late.status === "input"))
 				void this.rc("auth_cancel", { flowId: late.id }).catch(() => {});
+			this.store.connection(this.target.hostId)?.endAuthSession();
 			return;
 		}
 		this.set({ busy: null });
@@ -249,7 +287,8 @@ export class ProviderAuthController {
 		await this.refreshAfterChange();
 		const info = this.state.providers?.find((p) => p.id === provider);
 		const text = [
-			res.result.refreshRequired ? "Pi への反映を確認できませんでした。Pi を再起動するか /reload してください。" : "",
+			"起動中の Pi には /reload または再起動後に反映されます。",
+			this.state.notice?.text ?? "",
 			info?.configured ? "環境変数など別の設定が残っているため、まだ使える場合があります。" : "",
 		]
 			.filter(Boolean)
@@ -266,15 +305,7 @@ export class ProviderAuthController {
 	// ------------------------------------------------------------ internals
 
 	private live(): boolean {
-		const conn = this.store.connection(this.target.hostId);
-		return conn?.state === "connected" && conn.instances.some((i) => i.instanceId === this.target.instanceId);
-	}
-
-	private gone(): boolean {
-		const conn = this.store.connection(this.target.hostId);
-		return (
-			!conn || (conn.state === "connected" && !conn.instances.some((i) => i.instanceId === this.target.instanceId))
-		);
+		return this.store.connection(this.target.hostId)?.state === "connected";
 	}
 
 	private onStore(): void {
@@ -282,12 +313,17 @@ export class ProviderAuthController {
 		const live = this.live();
 		if (live === this.connected) return;
 		this.connected = live;
-		if (live) void this.check();
-		else this.set({ phase: this.gone() ? "gone" : "offline" });
+		if (live) {
+			if (this.state.busy) this.reconnectCheck = true;
+			else {
+				this.reconnectCheck = false;
+				void this.check();
+			}
+		} else this.set({ phase: "offline" });
 	}
 
 	private failurePhase(): Partial<AuthState> {
-		return this.live() ? {} : { phase: this.gone() ? "gone" : "offline" };
+		return this.live() ? {} : { phase: "offline" };
 	}
 
 	private checkFailed(code: string): Partial<AuthState> {
@@ -298,7 +334,7 @@ export class ProviderAuthController {
 	private errorNotice(code: string, title: string): AuthNotice {
 		switch (code) {
 			case "not_found":
-				return notice(title, "この Pi は終了しています。");
+				return notice(title, "ログイン用の Pi が終了しました。「状態を確認」で再起動できます。");
 			case "not_connected":
 				return notice(title, "PC に接続していません。再接続してからお試しください。");
 			case "not_ready":
@@ -355,14 +391,20 @@ export class ProviderAuthController {
 	}
 
 	/** The followed flow vanished (Pi reloaded / runtime recreated). */
-	private lost(): void {
+	private lost(piEnded = false): void {
 		const saving = this.sawSaving || this.state.flow?.status === "saving" || this.uncertain;
 		this.uncertain = false;
 		this.set({
 			flow: null,
 			notice: saving
-				? notice("保存されたか確認できません", UNKNOWN)
-				: notice("ログインの手続きが終了しました", "Pi の再読み込みなどで中断されました。もう一度始めてください。"),
+				? notice(
+						"保存されたか確認できません",
+						`${piEnded ? "ログイン用の Pi が終了しました。「状態を確認」で再起動できます。" : ""}${UNKNOWN}`,
+					)
+				: notice(
+						"ログインの手続きが終了しました",
+						"ログイン用の Pi が終了したか手続きが中断されました。「状態を確認」で再起動できます。",
+					),
 		});
 	}
 
@@ -386,7 +428,7 @@ export class ProviderAuthController {
 					this.apply(res.result.flow);
 					continue;
 				}
-				if (res.code === "not_found" || res.code === "not_ready") return this.lost();
+				if (res.code === "not_found" || res.code === "not_ready") return this.lost(res.code === "not_found");
 				// Lost connection: resumed by the reconnect check. Anything else: the user checks explicitly.
 				if (res.code !== "not_connected" && res.code !== "outcome_unknown" && this.live())
 					this.set({ notice: notice("進み具合を取得できませんでした", "「状態を確認」を押してください。") });
@@ -404,24 +446,29 @@ export class ProviderAuthController {
 
 	private async refreshAfterChange(): Promise<void> {
 		const list = await this.rc("auth_list", {});
-		if (this.disposed || !list.ok) return;
+		if (this.disposed) return;
+		if (!list.ok) {
+			if (list.code === "not_found") this.set({ notice: this.errorNotice(list.code, "状態を取得できませんでした") });
+			return;
+		}
 		this.set({ providers: list.result.providers ?? [] });
-		const sel = this.store.getState().selection;
-		if (sel?.hostId === this.target.hostId && sel.instanceId === this.target.instanceId) void this.store.loadModels();
 	}
 
 	private async rc<M extends RcMethod>(method: M, params: ParamsOf<M>): Promise<RcOutcome<M>> {
 		const conn = this.store.connection(this.target.hostId);
 		if (conn?.state !== "connected") return { ok: false, code: "not_connected", unknown: false };
+		const instanceId = this.instanceId;
+		if (!instanceId) return { ok: false, code: "not_found", unknown: false };
 		try {
-			const res = await conn.rc(this.target.instanceId, {
+			const res = await conn.rc(instanceId, {
 				id: this.randomUUID(),
 				method,
 				params,
-				expectInstanceId: this.target.instanceId,
+				expectInstanceId: instanceId,
 			});
 			if (res.ok) return { ok: true, result: res.result as ResultOf<M> };
 			const code = res.error.code;
+			if (code === "not_found" && this.instanceId === instanceId) this.instanceId = null;
 			// Host transport failures / RC timeouts come back as internal / timeout: the request may have run.
 			return { ok: false, code, unknown: code === "internal" || code === "timeout" };
 		} catch (error) {
@@ -439,5 +486,9 @@ export class ProviderAuthController {
 			);
 		this.state = { ...this.state, ...patch };
 		for (const l of this.listeners) l();
+		if (patch.busy === null && this.reconnectCheck && this.live()) {
+			this.reconnectCheck = false;
+			queueMicrotask(() => void this.check());
+		}
 	}
 }
