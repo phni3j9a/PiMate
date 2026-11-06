@@ -119,10 +119,6 @@ export default function ProviderAuthScreen() {
 					<Text style={styles.target} numberOfLines={2}>
 						{host?.hostName ?? "マシン"}
 					</Text>
-					<Text style={styles.explanation}>
-						この PC の Pi が使う認証情報（通常 ~/.pi/agent）を変更します。ログインは PC のログイン専用の Pi
-						で行い、会話中の Pi は止めません。
-					</Text>
 					{!controller ? <Text style={styles.message}>設定から開き直してください。</Text> : null}
 					{phase === "checking" ? (
 						<View style={styles.loading}>
@@ -157,9 +153,8 @@ export default function ProviderAuthScreen() {
 							offline={phase !== "ready"}
 						/>
 					) : null}
-					{controller && !flow && phase === "ready" && providers ? (
-						<>
-							{providerGroups(providers).map((g) => (
+					{controller && !flow && phase === "ready" && providers
+						? providerGroups(providers).map((g) => (
 								<View key={g.name} style={styles.provider}>
 									<Text style={styles.providerName}>{g.name}</Text>
 									{g.members.map(({ info, label }) => (
@@ -193,13 +188,10 @@ export default function ProviderAuthScreen() {
 										)}
 									</View>
 								</View>
-							))}
-							<Text style={styles.explanation}>
-								「保存済み」は認証情報があることを示すだけで、有効かどうかは確認していません。
-							</Text>
-						</>
-					) : null}
-					{controller && phase !== "checking" && !waiting ? (
+							))
+						: null}
+					{/* Only a recovery action: the error notices point to it. */}
+					{controller && phase !== "checking" && !waiting && (phase !== "ready" || notice?.tone === "error") ? (
 						<TextButton
 							label="状態を確認"
 							size={14}
@@ -402,7 +394,6 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	content: { flexGrow: 1, paddingTop: 4, paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
 	target: { ...typography.mono, color: colors.text },
-	explanation: { ...typography.caption, color: colors.textSecondary, marginVertical: 8 },
 	muted: { ...typography.caption, color: colors.textSecondary, flexShrink: 1 },
 	message: { ...typography.caption, color: colors.statusFailedText, marginVertical: 8 },
 	loading: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 },

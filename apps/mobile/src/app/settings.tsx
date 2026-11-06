@@ -133,10 +133,6 @@ export default function SettingsScreen() {
 						/>
 					</View>
 				))}
-				<Text style={styles.explanation}>
-					PC に接続し、アプリが動いている間に受信した変化だけを通知します。アプリの終了・OS
-					による休止・切断中は届きません。子の完了は個別に通知しません。
-				</Text>
 				{notifications.settings.enabled && notifications.permission !== "granted" ? (
 					<View>
 						<Text style={styles.explanation}>OS の通知が許可されていません。許可後にアプリへ戻ってください。</Text>

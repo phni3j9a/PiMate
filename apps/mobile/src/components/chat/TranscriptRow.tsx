@@ -91,8 +91,6 @@ export const TranscriptRow = memo(function TranscriptRow({
 			return <ToolRow row={row} expanded={expanded} onToggle={onToggle} margin={row.marginTop} />;
 		case "turnSummary":
 			return <TurnSummaryRow row={row} expanded={expanded} onToggle={onToggle} onOpenReview={onOpenReview} />;
-		case "meta":
-			return <Text style={[styles.meta, margin]}>{row.text}</Text>;
 		case "error":
 			return <Text style={[styles.error, margin]}>エラー: {row.text}</Text>;
 		case "note":
@@ -384,7 +382,6 @@ const styles = StyleSheet.create({
 	summaryButton: { minHeight: 32, flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
 	summaryChanges: { paddingLeft: 10, gap: 2 },
 	summaryText: { ...typography.caption, color: colors.textSecondary },
-	meta: { ...typography.meta, color: colors.textSecondary },
 	caption: { marginTop: 4, fontSize: 11, lineHeight: 15, color: colors.textSecondary, textAlign: "right" },
 	error: { ...typography.caption, color: colors.statusFailedText },
 	note: { ...typography.caption, color: colors.textSecondary },

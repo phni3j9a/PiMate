@@ -1,5 +1,5 @@
 /** Pure display helpers shared by the drawer, chat and settings. No React Native imports. */
-import type { InstanceSummary, ModelRef, Usage } from "@pimate/protocol";
+import type { InstanceSummary } from "@pimate/protocol";
 
 /** `/home/me/code/demo` -> `~/code/demo` (the PC's home dir is unknown to the phone, so match common layouts). */
 export function tildePath(path: string): string {
@@ -57,19 +57,6 @@ export function tokens(n: number): string {
 	if (n < 10_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
 	if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
 	return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-}
-
-/** `gpt-6-luna · 6.2k in · 210 out` — the meta line under a finished assistant message. */
-export function usageLine(model: ModelRef | undefined, usage: Usage | undefined): string | null {
-	// All-zero usage (an aborted or failed request) is not a measurement; the model name alone says nothing.
-	if (usage && !(usage.input || usage.output || usage.cacheRead || usage.cacheWrite)) return null;
-	const parts: string[] = [];
-	if (model) parts.push(model.id);
-	if (usage) {
-		const input = usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
-		parts.push(`${tokens(input)} in`, `${tokens(usage.output)} out`);
-	}
-	return parts.length ? parts.join(" · ") : null;
 }
 
 export function platformLabel(platform: string | undefined): string | null {

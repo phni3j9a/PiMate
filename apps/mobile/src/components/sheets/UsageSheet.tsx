@@ -103,10 +103,6 @@ function UsageSheetBody() {
 					)}
 				</View>
 			))}
-			<Text style={styles.footnote}>
-				この PC の
-				Pi（バックグラウンドのサブエージェントを含む）の最新の応答から取得します。他の端末での利用は、次の応答まで反映されません
-			</Text>
 		</ScrollView>
 	);
 }
@@ -147,5 +143,4 @@ const styles = StyleSheet.create({
 	compacting: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
 	group: { marginTop: 24 },
 	window: { marginBottom: 12 },
-	footnote: { ...typography.caption, color: colors.textTertiary, marginTop: 8, marginBottom: 8 },
 });
