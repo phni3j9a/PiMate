@@ -305,6 +305,8 @@ RC 0.1.0 のイベントとも互換です。Host 0.1.0 に新アプリをつな
 
 ## Grok Bot Skills（任意）
 
+開発版では、CLI の `pimate spawn` で起動した Pi は `origin: "grok-bot"` となり、対応アプリの各 PC 内の「Grok Bot」区画に分かれます（端末から手動実行した CLI も対象）。スマホからの起動は `mobile` のままです。Bot が既存 Pi に指示を送っても所属は変えず、過去に起動した Pi の自動移行もしません。PC とアプリの両方の更新・Host 再起動が必要です。旧 Host は新起動元の Pi を一覧から除外します。Webhook の明示的な watch / unwatch と信頼・権限の扱いは変更しません。
+
 いちばん簡単な始め方は、Grok Bot のテンプレート **[PiMate](https://x.ai/bot/EL8LzPmNquZTjEawTxAI1)** を追加することです。4つの Skill・Routine「Pi questions to chat」・記憶が入っていて、最初の会話で Bot が PC を確認し、承認のあとに PiMate のインストールまで進めます。PC には Grok Bot のデスクトップアプリが必要です。Webhook の URL とキーは自分の Routine のものを、PC の端末で `pimate webhook setup` に貼ります。
 
 Grok Bot が `pimate` CLI で Pi を操作し、質問・完了を会話へ届けるための4つの Skill を npm パッケージに同梱しています。Grok Bot はディスクから自動読込しません。Bot にサーバー上の `~/.pi/agent/npm/node_modules/@phni3j9a/pimate/grok-bot/skills/` の各フォルダー内 `SKILL.md` を読ませ、それぞれ同じ名前・説明のプライベート Skill として全文をそのまま保存するよう依頼してください。PiMate 更新後も全 Skill を読み直して保存し直します。新しい PC では、Bot が `pimate-getting-started` に従って確認し、承認のあとに PiMate のインストールと Skill の保存まで行います（Pi 本体のインストールとモデルのログイン、Host の `/pimate setup` は本人が行います）。テンプレートとして公開する Bot の構成（説明・記憶・Routine）は [`grok-bot/TEMPLATE.md`](grok-bot/TEMPLATE.md) にあります。

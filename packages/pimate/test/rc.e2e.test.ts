@@ -47,6 +47,7 @@ it.skipIf(!pi || !abduco)(
 		try {
 			const launched = await host.spawn({
 				cwd: dir,
+				origin: "grok-bot",
 				args: [
 					"--no-extensions",
 					"-e",
@@ -77,7 +78,7 @@ it.skipIf(!pi || !abduco)(
 			client.onEvent((e) => events.push(e));
 			expect(await client.connect()).toMatchObject({
 				instanceId,
-				origin: "mobile",
+				origin: "grok-bot",
 				model: { provider: "pimate-faux", id: "scripted" },
 			});
 			const cliInput = (input: string | undefined, ...args: string[]) =>

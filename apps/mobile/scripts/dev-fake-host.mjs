@@ -5,7 +5,7 @@
  *   node apps/mobile/scripts/dev-fake-host.mjs [--port 47800] [--listen 127.0.0.1] [--address 127.0.0.1:47800]
  *
  * Implements POST /pair and the Host WebSocket protocol (packages/protocol/src/host.ts) with canned instances
- * (idle / running / waiting_input / phone-started) and a scripted turn: thinking, tool rows with live output,
+ * (idle / running / waiting_input / phone-started / Grok Bot-started) and a scripted turn: thinking, tool rows with live output,
  * streamed text, follow-ups, abort. No dependencies: a minimal RFC 6455 server is included.
  *
  * M2: folders/spawn, RC models/sessions/session_op/compact/set_model/set_thinking/ui_respond/shutdown,
@@ -210,8 +210,9 @@ function addInstance(
 			instanceId: id,
 			cwd,
 			origin,
-			abducoSession: origin === "mobile" ? `pimate-${id.slice(0, 8)}` : null,
-			pcAttached: origin === "mobile" ? false : null,
+			// Phone- and Grok Bot-started Pi run under abduco on the PC (HostCore.spawn).
+			abducoSession: origin === "pc" ? null : `pimate-${id.slice(0, 8)}`,
+			pcAttached: origin === "pc" ? null : false,
 			session: { id: sessionId, name },
 			status,
 			startedAt: now - 3 * 3600_000,
@@ -372,6 +373,12 @@ addInstance("7b2c9d10-readme", {
 	name: "README の整理",
 	origin: "mobile",
 	updatedAgo: 62 * MIN,
+});
+addInstance("c4d2b8e3-grokbot", {
+	cwd: "/home/dev/work/reports",
+	name: "週次レポートの作成",
+	origin: "grok-bot",
+	updatedAgo: 18 * MIN,
 });
 addInstance("1f5e6a77-poc", { cwd: "/home/dev/projects/PiMate", name: undefined, updatedAgo: 26 * 3600_000 });
 

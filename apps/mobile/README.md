@@ -18,6 +18,16 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 開発用 fake Host でも認証フローを確認できます。`POST /_dev/auth?complete=1` は Codex の完了、`expire=1` は期限切れ、`fail=1|0` は保存時の成功／失敗、`saving=ms` は保存待ち、`refresh=1|0` はモデルへの反映失敗、`old=1|0` は旧 RC、`oldHost=1|0` は旧 Host（再接続後に反映）、`sessionfail=1|0` はログイン Pi の起動失敗、`badurl=1|0` は不正 URL を再現します。認証フローは非表示のログイン専用 Pi を使います。入力を保存・ログ出力せず、ブラウザ用 URL とコードもダミーなので**実際のアカウント認証には使わないでください**。
 
+## Grok Bot の Pi を分けて表示（開発版、[#110](https://github.com/phni3j9a/PiMate/issues/110)）
+
+一覧では各 PC の通常の Pi の下に「Grok Bot」の区画を表示します。対象は新しい PC パッケージの CLI `pimate spawn` で起動した Pi です（端末から手動実行した場合も含みます）。スマホからの起動は従来どおり「スマホ」で、Bot が既存の Pi に指示を送っただけでは所属を変えません。セッションメニューの「起動元」でも確認でき、検索に `Grok Bot` と入れると絞り込めます。
+
+質問待ち・子の確認待ちは、全起動元を最上段の「要対応」にまとめます。Bot の行には「Grok Bot」も表示し、ホスト内には重複させません。区画が空なら見出しを出しません。
+
+この機能は未リリースです。公開後は PC パッケージとアプリの両方を更新し、Host を再起動してください。旧 Host は新しい `grok-bot` 起動元の Pi を一覧に出せず、旧アプリも区分表示に対応しません。すでに起動中の Pi は自動で振り替えず、更新後の CLI から新しく起動した Pi が対象です。Webhook の watch / unwatch や操作権限は起動元と別で、変更しません。
+
+開発用 fake Host には「週次レポートの作成」（`c4d2b8e3-grokbot`）を追加しています。`POST /_dev/ask?i=c4d2b8e3-grokbot` と `POST /_dev/answered?i=c4d2b8e3-grokbot` で要対応への移動と復帰を確認できます。[Android の確認範囲と限界](../../docs/grokbot-sessions-android-verification.md)も参照してください。
+
 ## できること
 
 M1:

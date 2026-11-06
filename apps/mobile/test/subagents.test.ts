@@ -8,7 +8,7 @@ import type {
 } from "@pimate/protocol";
 import { describe, expect, it } from "vitest";
 import { createView, type InstanceView, reduceView } from "../src/lib/instanceView";
-import { buildDrawerGroups, drawerSubagentText } from "../src/lib/presentation";
+import { buildDrawerGroups, drawerSubagentText, originLabel } from "../src/lib/presentation";
 import type { HostRuntime } from "../src/lib/store";
 import { mergeTranscript, subagentRows } from "../src/lib/subagentRows";
 import {
@@ -540,6 +540,66 @@ describe("drawer", () => {
 		expect(g.hosts[0]?.rows.map((r) => [r.instanceId, drawerSubagentText(r.subagents)])).toEqual([
 			["a", "サブエージェント 2 実行中"],
 			["c", null],
+		]);
+		expect(g.hosts[0]?.bots).toEqual([]);
+	});
+
+	it("splits Grok Bot Pi per host and keeps every origin's attention on top", () => {
+		const at = (h: string, state: string, instances: InstanceSummary[]) =>
+			({ hostId: h, hostName: h, state, instances }) as unknown as HostRuntime;
+		const hosts = [
+			at("mac", "connected", [
+				summary("pc1", { updatedAt: 1 }),
+				summary("named", { updatedAt: 5, session: { id: "s", name: "Grok Bot の設定" } }),
+				summary("phone", { origin: "mobile", updatedAt: 3 }),
+				summary("bot1", { origin: "grok-bot", updatedAt: 2 }),
+				summary("bot2", { origin: "grok-bot", updatedAt: 4 }),
+				summary("botAsk", { origin: "grok-bot", status: "waiting_input", updatedAt: 6 }),
+				summary("botSub", {
+					origin: "grok-bot",
+					updatedAt: 9,
+					subagents: { active: 1, waiting: 1, paused: 0, failed: 0 },
+				}),
+			]),
+			at("linux", "connected", [
+				summary("bot1", { origin: "grok-bot", updatedAt: 7 }),
+				summary("pcAsk", { status: "waiting_input", updatedAt: 8 }),
+			]),
+			at("off", "offline", [summary("gone", { origin: "grok-bot" })]),
+		];
+		const keys = (rows: { key: string }[] | undefined) => rows?.map((r) => r.key);
+		const g = buildDrawerGroups(hosts);
+		expect(keys(g.attention)).toEqual(["mac/botSub", "linux/pcAsk", "mac/botAsk"]);
+		expect(g.attention.map((r) => r.origin)).toEqual(["grok-bot", "pc", "grok-bot"]);
+		expect(keys(g.hosts[0]?.rows)).toEqual(["mac/named", "mac/phone", "mac/pc1"]);
+		expect(keys(g.hosts[0]?.bots)).toEqual(["mac/bot2", "mac/bot1"]);
+		expect(keys(g.hosts[1]?.rows)).toEqual([]);
+		expect(keys(g.hosts[1]?.bots)).toEqual(["linux/bot1"]);
+		expect(g.hosts[2]).toMatchObject({ rows: [], bots: [] });
+
+		// Search by origin finds bot rows only; a session name mentioning Grok Bot matches by title, not ownership.
+		const s = buildDrawerGroups(hosts, "grok bot");
+		expect(keys(s.attention)).toEqual(["mac/botSub", "mac/botAsk"]);
+		expect(keys(s.hosts[0]?.rows)).toEqual(["mac/named"]);
+		expect(keys(s.hosts[0]?.bots)).toEqual(["mac/bot2", "mac/bot1"]);
+		expect(keys(s.hosts[1]?.bots)).toEqual(["linux/bot1"]);
+		const none = buildDrawerGroups(hosts, "nothing");
+		expect(none.hosts.every((h) => h.rows.length + h.bots.length === 0)).toBe(true);
+	});
+
+	it("does not show an empty search when the matching Pi is under 要対応", () => {
+		const hosts = [host([summary("bot", { origin: "grok-bot", status: "waiting_input" })]), host([])];
+		const groups = buildDrawerGroups(hosts, "Grok Bot");
+		expect(groups.attention).toHaveLength(1);
+		expect(groups.hosts.map((h) => h.empty)).toEqual([false, true]);
+	});
+
+	it("labels the origin", () => {
+		expect([originLabel("grok-bot"), originLabel("mobile"), originLabel("pc"), originLabel(undefined)]).toEqual([
+			"Grok Bot",
+			"スマホ",
+			"PC",
+			null,
 		]);
 	});
 });
