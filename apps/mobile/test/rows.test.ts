@@ -9,7 +9,6 @@ import {
 	tildePath,
 	tokens,
 	toolSubject,
-	usageLine,
 } from "../src/lib/format";
 import { createView, type InstanceView, reduceView } from "../src/lib/instanceView";
 import { buildRows, spaceRows, visibleRows } from "../src/lib/transcriptRows";
@@ -35,12 +34,6 @@ describe("format", () => {
 		expect(tokens(950)).toBe("950");
 		expect(tokens(6200)).toBe("6.2k");
 		expect(tokens(18_400)).toBe("18k");
-		expect(usageLine({ provider: "a", id: "m" }, { input: 6000, output: 210, cacheRead: 200, cost: 0.04 })).toBe(
-			"m · 6.2k in · 210 out",
-		);
-		expect(usageLine({ provider: "a", id: "m" }, { input: 10, output: 5, cost: 0.0002 })).toBe("m · 10 in · 5 out");
-		expect(usageLine({ provider: "a", id: "m" }, { input: 0, output: 0, cost: 0 })).toBeNull();
-		expect(usageLine(undefined, undefined)).toBeNull();
 	});
 
 	it("derives tool subjects and output text", () => {
@@ -109,7 +102,7 @@ describe("transcript rows", () => {
 		{ kind: "other", entryId: "o1", label: "compaction", text: "summary\nmore" },
 	];
 
-	it("joins tool calls with results and adds meta lines", () => {
+	it("joins tool calls with results without a usage line", () => {
 		const rows = visibleRows(buildRows(viewWith(items)), () => true);
 		expect(rows.map((r) => r.kind)).toEqual([
 			"user",
@@ -118,15 +111,13 @@ describe("transcript rows", () => {
 			"tool",
 			"tool",
 			"text",
-			"meta",
 			"tool",
 			"note",
 		]);
 		expect(rows[3]).toMatchObject({ name: "read", subject: "a.ts", state: "done", meta: "3 行", output: "1\n2\n3\n" });
 		expect(rows[4]).toMatchObject({ name: "bash", state: "error", meta: "エラー" });
-		expect(rows[6]).toMatchObject({ text: "m · 10 in · 5 out" });
-		expect(rows[7]).toMatchObject({ toolCallId: "orphan", name: "ls" });
-		expect(rows[8]).toMatchObject({ text: "compaction: summary" });
+		expect(rows[6]).toMatchObject({ toolCallId: "orphan", name: "ls" });
+		expect(rows[7]).toMatchObject({ text: "compaction: summary" });
 	});
 
 	it("shows a stop as 中断しました, also when Pi records it as an error", () => {
@@ -181,13 +172,12 @@ describe("transcript rows", () => {
 	it("spaces turns by 32 and packs tool rows", () => {
 		const rows = buildRows(viewWith([...items, { kind: "user", entryId: "u2", text: "again" }]));
 		const open = spaceRows(visibleRows(rows, () => true));
-		expect(open.map((r) => r.marginTop)).toEqual([0, 10, 4, 0, 0, 8, 6, 8, 12, 32]);
+		expect(open.map((r) => r.marginTop)).toEqual([0, 10, 4, 0, 0, 8, 8, 12, 32]);
 		const closed = spaceRows(visibleRows(rows, () => false));
 		expect(closed.map((r) => [r.kind, r.marginTop])).toEqual([
 			["user", 0],
 			["turnSummary", 10],
 			["text", 6],
-			["meta", 6],
 			["note", 12],
 			["user", 32],
 		]);

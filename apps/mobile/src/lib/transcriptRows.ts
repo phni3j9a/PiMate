@@ -4,11 +4,11 @@
  *
  * Completed turns are folded (docs/SPEC.md「UIの方向性」): their thinking, tool rows and intermediate texts carry
  * `fold` and are hidden behind one "18秒 作業 · ツール 4 回" summary row until the user opens it. The final answer,
- * its usage line, errors and notes stay visible. The turn in progress is never folded.
+ * errors and notes stay visible. The turn in progress is never folded.
  */
 import type { TranscriptImages, TranscriptItem, UIRequest } from "@pimate/protocol";
 import { type ChangePiece, changeOf, changeSummary, toolResults } from "./changes";
-import { lineCount, seconds, toolSubject, usageLine } from "./format";
+import { lineCount, seconds, toolSubject } from "./format";
 import type { InstanceView, SessionNotice, ToolState } from "./instanceView";
 
 export type ToolRowState = "running" | "done" | "error";
@@ -57,7 +57,6 @@ type BaseRow =
 			/** Whether add/del come from real diffs (written-content-only changes have no counts). */
 			counted: boolean;
 	  }
-	| { kind: "meta"; key: string; text: string }
 	| { kind: "error"; key: string; text: string }
 	| { kind: "note"; key: string; text: string }
 	/** A question from Pi, answered inline (docs/design Chat-Waiting). */
@@ -275,11 +274,6 @@ export function buildRows(view: InstanceView, opts: { fold?: boolean } = {}): Ro
 				if (item.stopReason === "aborted" || /\b(operation|request) was aborted\b/i.test(item.errorMessage ?? ""))
 					rows.push({ kind: "note", key: `${item.entryId}:aborted`, text: "中断しました" });
 				else if (item.errorMessage) rows.push({ kind: "error", key: `${item.entryId}:error`, text: item.errorMessage });
-				// An aborted message's usage is all zero; a line with only the model name says nothing.
-				if (item.text.trim() && item.stopReason !== "toolUse" && item.stopReason !== "aborted") {
-					const line = usageLine(item.model, item.usage);
-					if (line) rows.push({ kind: "meta", key: `${item.entryId}:meta`, text: line });
-				}
 				break;
 			}
 			case "tool_result":
@@ -342,7 +336,6 @@ function gap(prev: Row | undefined, row: Row): number {
 	if (row.kind === "turnSummary") return prev.kind === "user" ? 10 : 8;
 	if (prev.kind === "turnSummary") return row.kind === "text" ? 6 : 4;
 	if (prev.kind === "user") return row.kind === "text" ? 10 : 12;
-	if (row.kind === "meta") return 6;
 	if (row.kind === "dialog" || row.kind === "pcPrompt") return 24;
 	if (prev.kind === "dialog" || prev.kind === "pcPrompt") return 16;
 	const compact = (r: Row) => r.kind === "tool" || r.kind === "thinking";
