@@ -1,6 +1,8 @@
 /** Settings (docs/design/html/Settings.html): paired machines and the app version. */
+
+import type { PackageUpdateCheck } from "@pimate/protocol";
 import { router } from "expo-router";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -21,6 +23,106 @@ function confirmRemove(host: HostRuntime) {
 			{ text: "キャンセル", style: "cancel" },
 			{ text: "削除", style: "destructive", onPress: () => void appStore.removeHost(host.hostId) },
 		],
+	);
+}
+
+function newer(latest: string, current: string): boolean {
+	if (!/^\d+\.\d+\.\d+$/.test(latest) || !/^\d+\.\d+\.\d+$/.test(current)) return false;
+	const a = latest.split(".").map((n) => n.replace(/^0+/, "") || "0");
+	const b = current.split(".").map((n) => n.replace(/^0+/, "") || "0");
+	for (let i = 0; i < 3; i++)
+		if (a[i] !== b[i]) return a[i].length !== b[i].length ? a[i].length > b[i].length : a[i] > b[i];
+	return false;
+}
+
+function PackageRow({ host }: { host: HostRuntime }) {
+	const [check, setCheck] = useState<PackageUpdateCheck | null>(null);
+	const [message, setMessage] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [notice, setNotice] = useState("");
+	useEffect(() => {
+		let active = true;
+		setCheck(null);
+		setMessage("");
+		if (host.state === "connected" && host.packageUpdate) {
+			setMessage("確認中…");
+			void appStore.updateCheck(host.hostId).then((result) => {
+				if (!active) return;
+				if (result.ok) {
+					setCheck(result.value);
+					setMessage("");
+				} else setMessage("確認できませんでした");
+			});
+		}
+		return () => {
+			active = false;
+		};
+	}, [host.hostId, host.state, host.packageUpdate]);
+	const available = !!check?.latest && newer(check.latest, check.current);
+	const status =
+		host.state !== "connected"
+			? "接続していません"
+			: !host.packageUpdate
+				? "PC の PiMate を更新すると使えます"
+				: busy
+					? "更新中…"
+					: message ||
+						(!check
+							? "確認中…"
+							: check.reason === "not_service"
+								? `${check.latest ? (available ? `${check.latest} に更新できます。` : "最新です。") : "最新版を確認できませんでした。"}常駐登録されていないため、PC で pi update npm:@phni3j9a/pimate と /pimate restart を実行してください。`
+								: check.reason === "not_package"
+									? `${check.latest ? (available ? `${check.latest} に更新できます。` : "最新です。") : "最新版を確認できませんでした。"}公開パッケージではないため、PC で更新してください。`
+									: !check.latest
+										? "確認できませんでした"
+										: available
+											? `${check.latest} に更新できます`
+											: "最新です");
+	const confirm = () =>
+		Alert.alert(
+			"PC の PiMate を更新しますか？",
+			"Host が再起動し、スマホは一時的に切断されます。実行中の Pi は /reload または再起動まで旧版のままです。",
+			[
+				{ text: "キャンセル", style: "cancel" },
+				{
+					text: "更新",
+					onPress: () => {
+						setBusy(true);
+						setMessage("");
+						setNotice("");
+						void appStore
+							.update(host.hostId)
+							.then((result) => {
+								if (!result.ok) setMessage(`${result.title}: ${result.text}`);
+								else if (!result.value.ok)
+									setMessage(`更新できませんでした: ${result.value.message ?? result.value.code}`);
+								else if (result.value.restarting) {
+									setMessage("Host を再起動します。");
+									setNotice("実行中の各 Pi で /reload を実行してください。");
+								} else
+									setMessage(
+										available ? "更新されませんでした。バージョンが固定されている可能性があります。" : "最新です",
+									);
+							})
+							.finally(() => setBusy(false));
+					},
+				},
+			],
+		);
+	return (
+		<View style={styles.machine}>
+			<View style={styles.machineBody}>
+				<Text style={styles.machineName}>{host.hostName}</Text>
+				<Text style={styles.machineSub}>
+					{host.version ? `現在 ${host.version} · ` : ""}
+					{status}
+				</Text>
+				{notice ? <Text style={styles.machineSub}>{notice}</Text> : null}
+			</View>
+			{host.state === "connected" && check?.canUpdate && available && !busy && !notice ? (
+				<TextButton label="更新" onPress={confirm} />
+			) : null}
+		</View>
 	);
 }
 
@@ -73,6 +175,12 @@ export default function SettingsScreen() {
 						style={styles.add}
 					/>
 				</View>
+				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
+					PC の PiMate
+				</Text>
+				{hosts.map((host) => (
+					<PackageRow key={host.hostId} host={host} />
+				))}
 				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
 					プロバイダー
 				</Text>

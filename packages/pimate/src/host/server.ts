@@ -26,6 +26,7 @@ import { atomicWrite, HostConfig, hash, PairingError } from "./config.ts";
 import { queryGitHub, validGitHubQuery } from "./github.ts";
 import { HostCore } from "./index.ts";
 import { hostHome, listDirs, listFolders, SpawnError, validateSpawn } from "./operations.ts";
+import { PackageUpdater } from "./update.ts";
 import {
 	answeredHere,
 	payload,
@@ -151,10 +152,12 @@ export class HostServer {
 	private foldersPending?: ReturnType<typeof listFolders>;
 	private foldersCached?: { at: number; folders: Awaited<ReturnType<typeof listFolders>> };
 	private auth: AuthSession;
+	private updater: PackageUpdater;
 	constructor(options: HostServerOptions = {}) {
 		this.options = options;
 		this.core = options.core ?? new HostCore();
 		this.auth = new AuthSession(this.core, options.authSession);
+		this.updater = new PackageUpdater(this.core.env);
 		this.config = new HostConfig(options.configDir);
 		this.opened = timestamps(this.config.dir, "webhook-state.json");
 		this.delivery = new WebhookDelivery(() => this.webhookConfig);
@@ -326,6 +329,7 @@ export class HostServer {
 							authSession: true,
 							dirs: true,
 							github: true,
+							packageUpdate: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });
@@ -387,6 +391,25 @@ export class HostServer {
 							this.send(peer, { type: "dirs_result", requestId, dirs }),
 						);
 					} else void this.spawn(peer, message.requestId, message.params);
+					return;
+				}
+				if (message.type === "update_check" || message.type === "update") {
+					if (
+						typeof message.requestId !== "string" ||
+						!message.requestId ||
+						message.requestId.length > 200 ||
+						Object.keys(message).some((key) => !["type", "requestId"].includes(key))
+					)
+						throw new Error("Invalid update request");
+					const requestId = message.requestId;
+					if (message.type === "update_check")
+						void this.updater
+							.check()
+							.then((result) => this.send(peer, { type: "update_check_result", requestId, ...result }));
+					else
+						void this.updater
+							.update()
+							.then((result) => this.send(peer, { type: "update_result", requestId, ...result }));
 					return;
 				}
 				if (typeof message.instanceId !== "string" || !validInstanceId(message.instanceId))

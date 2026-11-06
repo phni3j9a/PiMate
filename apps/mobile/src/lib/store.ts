@@ -15,6 +15,8 @@ import type {
 	ModelDefault,
 	ModelInfo,
 	ModelRef,
+	PackageUpdateCheck,
+	PackageUpdateResult,
 	PairingLink,
 	PairResponse,
 	ParamsOf,
@@ -64,6 +66,8 @@ export interface HostRuntime {
 	platform: string | null;
 	alerts: boolean;
 	github?: boolean;
+	packageUpdate?: boolean;
+	version: string | null;
 	authSession?: boolean;
 	instances: InstanceSummary[];
 	nextRetryAt: number | null;
@@ -430,6 +434,8 @@ export class AppStore {
 			platform: c?.info?.platform ?? null,
 			alerts: c?.info?.alerts === true,
 			github: c?.info?.github === true,
+			packageUpdate: c?.info?.packageUpdate === true,
+			version: c?.info?.version ?? null,
 			authSession: c?.info?.authSession === true,
 			instances: c?.instances ?? [],
 			nextRetryAt: c?.nextRetryAt ?? null,
@@ -711,6 +717,10 @@ export class AppStore {
 				}
 				return patch;
 			}
+			// RC emits this from inside ctx.reload() but session_op_done only after it returns, so the resync
+			// snapshot of the unchanged session can arrive first; the reload's own session_start is the proof.
+			case "session_changed":
+				return op?.kind === "reload" && event.reason === "reload" ? this.sessionOpDone(op, key) : {};
 			case "compact_done":
 				return op?.kind === "compact"
 					? { op: null, notice: { kind: "info" as const, text: "コンテキストを圧縮しました" } }
@@ -871,12 +881,16 @@ export class AppStore {
 				refuse("分岐できるメッセージがありません。");
 				return;
 			}
-			if (intent.name === "new" || intent.name === "compact") {
-				const result = await (intent.name === "new" ? this.sessionOp("new") : this.compact());
+			if (intent.name === "new" || intent.name === "compact" || intent.name === "reload") {
+				if (intent.name === "reload" && (view.agentActive || view.status !== "idle")) {
+					refuse("Pi の処理中は再読み込みできません。完了までお待ちください。");
+					return;
+				}
+				const result = await (intent.name === "compact" ? this.compact() : this.sessionOp(intent.name));
 				if (!result.ok) return;
 			} else this.set({ notice: null });
 			if (sameText(this.state.drafts[key], text)) this.set({ drafts: { ...this.state.drafts, [key]: "" } });
-			return intent.name === "new" || intent.name === "compact" ? undefined : intent.name;
+			return intent.name === "new" || intent.name === "compact" || intent.name === "reload" ? undefined : intent.name;
 		}
 		if (intent.kind === "remote" && intent.command.source === "extension" && images.length) {
 			refuse("Extension コマンドには画像を添付できません。");
@@ -1287,6 +1301,34 @@ export class AppStore {
 		}
 	}
 
+	async updateCheck(hostId: string): Promise<Result<PackageUpdateCheck>> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
+		if (conn.info?.packageUpdate !== true)
+			return { ok: false, title: "PC の更新が必要です", text: "PC の PiMate を更新してください。" };
+		try {
+			return { ok: true, value: await conn.updateCheck(this.deps.randomUUID()) };
+		} catch {
+			return { ok: false, title: "確認できませんでした", text: "接続を確認してください。" };
+		}
+	}
+
+	async update(hostId: string): Promise<Result<PackageUpdateResult>> {
+		const conn = this.connections.get(hostId);
+		if (conn?.state !== "connected") return { ok: false, ...offlineText() };
+		if (conn.info?.packageUpdate !== true)
+			return { ok: false, title: "PC の更新が必要です", text: "PC の PiMate を更新してください。" };
+		try {
+			return { ok: true, value: await conn.update(this.deps.randomUUID()) };
+		} catch {
+			return {
+				ok: false,
+				title: "更新結果を確認できません",
+				text: "接続が切れました。PC で結果を確認してください。自動再送はしません。",
+			};
+		}
+	}
+
 	/** Never send unknown messages to older Hosts. This target is captured when opening the screen. */
 	async github(target: Selection, query: GitHubQuery): Promise<Result<GitHubData>> {
 		const conn = this.connections.get(target.hostId);
@@ -1542,7 +1584,7 @@ export class AppStore {
 	}
 
 	/** Session operations (new / switch / fork); the result arrives as `session_op_done`. */
-	async sessionOp(op: "new" | "switch" | "fork", arg?: string, forkText?: string): Promise<Result<null>> {
+	async sessionOp(op: "new" | "switch" | "fork" | "reload", arg?: string, forkText?: string): Promise<Result<null>> {
 		const fromSessionId = this.state.view?.session?.id;
 		return this.startOp({ kind: op, forkText, fromSessionId }, "session_op", { op, ...(arg ? { arg } : {}) });
 	}

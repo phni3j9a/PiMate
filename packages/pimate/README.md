@@ -97,13 +97,17 @@ RC は `hello` snapshot の `promptImages: true` と `promptImageLimit: 4` で�
 
 両 RPC の全画面用取得は `{ image: ViewImage }`（`mimeType`, base64 `data`, 任意の `width` / `height`）を返します。decoded 2 MiB 以下は原本、それ以上は Pi の `resizeImage` で最大2048px・2 MiB 以下へ縮小します。縮小 API / codec が使えない場合は原本が5 MiB以下なら返し、それを超える場合は `unsupported`。5 MiB は base64 化後も Host の8 MiB送信制限に余裕を残すためです。GIF は縮小時に静止画になる場合があります。存在しない entry / index / ファイルは `not_found`、形式・サイズ・読み取り不可は `unsupported`。`expectInstanceId` / `expectSessionId` で取得先を固定してください。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
+### アプリからの PC パッケージ更新（開発中）
+
+対応 Host・アプリでは設定から最新版を確認できます。公開パッケージと systemd の `pimate-host.service` 上でのみ、確認後に固定コマンド `pi update npm:@phni3j9a/pimate` を実行し、版が変わったときだけ Host を再起動します。旧 Host は最初に PC で更新・再起動してください。実行中の Pi は自動再読み込みせず、各 Pi で `/reload` または再起動が必要です。registry は npmjs.org 固定で npm の registry 設定を参照しません。
+
 ## コマンド一覧と実行（#37）
 
 RC は `snapshot.slashCommands:true` で、`commands` による一覧取得と明示的なコマンド受付を通知します。一覧は Pi の Extension / prompt / skill を名前・説明・source 付きで返し、PiMate 管理用の `pimate` / 内部 `pimate-session`（重複名の `:1` 等も含む）を除外します。これらの管理用コマンドは remote prompt でも拒否し、セッション操作には専用の `session_op` を使います。
 
 先頭トークンが `/[\w:.-]+` に一致する `prompt` を `expandTemplates:true` で送る場合、RC は現在の `pi.getCommands()` で正確な名前を確認します。削除済み・未知の名前は `unsupported` で拒否し、LLM へ流しません。Extension なら作業中も Pi が即実行するため、結果は `deliveredAs:"command"`（受付確認。操作の成功そのものではない）を返し、クライアントは履歴への user 項目を待ってはいけません。Extension の画像添付も拒否します。テンプレート / Skill は展開後に通常送信または steer / followUp のキューに入ります。明示しない送信は従来どおり展開なしです。要求は再送しません。
 
-Pi 組み込みコマンドはこの一覧には含まれません。対応するモバイル画面がある `/model` / `/new` / `/resume` / `/fork` / `/compact` / `/tree`（`sessionTree` 対応 RC のみ）はアプリ側が既存操作へ割り当てます。
+Pi 組み込みコマンドはこの一覧には含まれません。対応するモバイル画面がある `/model` / `/new` / `/resume` / `/fork` / `/compact` / `/reload` / `/tree`（`sessionTree` 対応 RC のみ）はアプリ側が既存操作へ割り当てます。
 
 ## 日常操作とスマホからの起動（M2）
 
