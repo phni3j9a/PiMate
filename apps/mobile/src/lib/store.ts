@@ -717,6 +717,10 @@ export class AppStore {
 				}
 				return patch;
 			}
+			// RC emits this from inside ctx.reload() but session_op_done only after it returns, so the resync
+			// snapshot of the unchanged session can arrive first; the reload's own session_start is the proof.
+			case "session_changed":
+				return op?.kind === "reload" && event.reason === "reload" ? this.sessionOpDone(op, key) : {};
 			case "compact_done":
 				return op?.kind === "compact"
 					? { op: null, notice: { kind: "info" as const, text: "コンテキストを圧縮しました" } }

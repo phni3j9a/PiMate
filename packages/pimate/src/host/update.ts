@@ -12,13 +12,6 @@ const exec = promisify(execFile);
 const NAME = "@phni3j9a/pimate";
 const VERSION = /^\d+\.\d+\.\d+$/;
 
-export function compareVersions(a: string, b: string): number {
-	const aa = a.split(".").map(BigInt);
-	const bb = b.split(".").map(BigInt);
-	for (let i = 0; i < 3; i++) if (aa[i] !== bb[i]) return aa[i] > bb[i] ? 1 : -1;
-	return 0;
-}
-
 export interface UpdateOptions {
 	root?: string;
 	platform?: string;
@@ -85,8 +78,8 @@ export class PackageUpdater {
 		this.busy = true;
 		let restarting = false;
 		try {
-			const from = this.metadata().version;
-			if (typeof from !== "string" || !VERSION.test(from)) throw new Error("Invalid installed version");
+			// The running version, not the disk one: after a failed restart a retry must still restart.
+			const from = this.options.current ?? PACKAGE_VERSION;
 			const pi = findExecutable(this.env.PIMATE_PI || "pi", this.env.PATH);
 			if (!pi) throw new Error("pi not found on PATH");
 			await (

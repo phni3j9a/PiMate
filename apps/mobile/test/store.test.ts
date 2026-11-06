@@ -630,6 +630,20 @@ describe("AppStore M2", () => {
 		expect(store.getState().view?.sessionNotice).toMatchObject({ reason: "fork", byPhone: true });
 	});
 
+	it("ends a phone reload from its session_changed even when the resync snapshot beats session_op_done", async () => {
+		const { store } = await setup();
+		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);
+		const reload = store.sessionOp("reload");
+		rcReply(s, opRcs(s)[0].request.id, true);
+		await reload;
+		s.receive(event(6, { type: "session_changed", reason: "reload", session: { id: "s1" } }));
+		expect(store.getState().op).toBeNull();
+		s.receive(subscribedMsg([], "s1", "idle", { seq: 6 }));
+		s.receive(event(7, { type: "session_op_done", op: "reload", cancelled: false }));
+		expect(store.getState().op).toBeNull();
+		expect(store.getState().notice).toBeNull();
+	});
+
 	it("does not take a snapshot of another session as the fork's arrival", async () => {
 		const { store } = await setup();
 		const s = connect([{ kind: "user", entryId: "u1", text: "最初の質問" }]);

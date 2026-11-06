@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { compareVersions, PackageUpdater, type UpdateOptions } from "../src/host/update.ts";
+import { PackageUpdater, type UpdateOptions } from "../src/host/update.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -27,11 +27,6 @@ function fixture(options: UpdateOptions = {}) {
 	);
 	return { updater, write };
 }
-it("compares numeric versions", () => {
-	expect(compareVersions("0.10.0", "0.9.20")).toBe(1);
-	expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
-	expect(compareVersions("1.0.0", "2.0.0")).toBe(-1);
-});
 it("checks service, transient, non-linux, and package name", async () => {
 	expect(await fixture().updater.check()).toMatchObject({ canUpdate: true, latest: "0.2.0" });
 	expect(await fixture({ cgroup: () => "0::/pimate-host-11-22.service" }).updater.check()).toMatchObject({
@@ -98,6 +93,13 @@ it("unchanged and failed updates do not restart", async () => {
 	).toMatchObject({ ok: false, code: "failed", message: "x".repeat(2048) });
 	expect(restart).not.toHaveBeenCalled();
 });
+it("retries the restart when the disk is already newer than the running Host", async () => {
+	const restart = vi.fn(async () => {});
+	const f = fixture({ execute: async () => {}, restart, schedule: (fn) => fn() });
+	f.write(undefined, "0.2.0");
+	expect(await f.updater.update()).toEqual({ ok: true, from: "0.1.2", to: "0.2.0", restarting: true });
+	expect(restart).toHaveBeenCalledOnce();
+});
 
 it("executes the fixed command against a test-only fake pi", async () => {
 	const root = mkdtempSync(join(tmpdir(), "pimate-update-fake-"));
@@ -110,6 +112,7 @@ it("executes the fixed command against a test-only fake pi", async () => {
 		{ PIMATE_PI: pi, PATH: "/usr/bin:/bin", HOME: root },
 		{
 			root,
+			current: "1.0.0",
 			platform: "linux",
 			cgroup: () => "0::/pimate-host.service",
 			restart: async () => {
