@@ -148,7 +148,9 @@ async function main(): Promise<void> {
 		const separator = args.indexOf("--");
 		const flags = separator < 0 ? args : args.slice(0, separator);
 		if (flags.length !== 2 || flags[0] !== "--cwd") throw new Error(usage);
-		print(await host.spawn({ cwd: flags[1], args: separator < 0 ? [] : args.slice(separator + 1) }));
+		print(
+			await host.spawn({ cwd: flags[1], args: separator < 0 ? [] : args.slice(separator + 1), origin: "grok-bot" }),
+		);
 		return;
 	}
 	if (!["prompt", "wait", "abort", "shutdown", "history", "watch", "ui"].includes(command) || !args[0])

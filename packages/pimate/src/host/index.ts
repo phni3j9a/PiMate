@@ -77,7 +77,7 @@ function isMeta(value: unknown, id: string): value is InstanceMeta {
 		Number.isInteger(m.pid) &&
 		m.pid > 0 &&
 		typeof m.cwd === "string" &&
-		["pc", "mobile"].includes(m.origin) &&
+		["pc", "mobile", "grok-bot"].includes(m.origin) &&
 		(m.abducoSession === null || typeof m.abducoSession === "string") &&
 		typeof m.startedAt === "number" &&
 		["idle", "running", "waiting_input"].includes(m.status) &&
@@ -192,7 +192,13 @@ export class HostCore {
 		}
 		return instances;
 	}
-	async spawn(options: { cwd: string; args?: string[]; trust?: boolean; purpose?: "auth" }): Promise<{
+	async spawn(options: {
+		cwd: string;
+		args?: string[];
+		trust?: boolean;
+		purpose?: "auth";
+		origin?: "mobile" | "grok-bot";
+	}): Promise<{
 		instanceId: string;
 		abducoSession: string;
 		attachCommand: string;
@@ -210,10 +216,10 @@ export class HostCore {
 			...this.env,
 			PIMATE_RUN_DIR: this.runDir,
 			PIMATE_INSTANCE_ID: instanceId,
-			PIMATE_ORIGIN: "mobile",
+			PIMATE_ORIGIN: options.purpose === "auth" ? "mobile" : (options.origin ?? "mobile"),
 			PIMATE_TRUST: options.trust === true ? "yes" : "no",
 			PIMATE_ABDUCO_SESSION: name,
-			...(options.purpose ? { PIMATE_PURPOSE: options.purpose } : {}),
+			PIMATE_PURPOSE: options.purpose,
 		};
 		const command = [
 			this.abduco,

@@ -59,9 +59,10 @@ export class Hub {
 	purpose?: "auth";
 	constructor() {
 		this.instanceId = process.env.PIMATE_INSTANCE_ID || randomUUID();
-		this.origin = process.env.PIMATE_ORIGIN === "mobile" ? "mobile" : "pc";
+		const origin = process.env.PIMATE_ORIGIN;
+		this.origin = origin === "mobile" || origin === "grok-bot" ? origin : "pc";
 		this.abducoSession = process.env.PIMATE_ABDUCO_SESSION ?? null;
-		if (this.origin === "mobile" && ["yes", "no"].includes(process.env.PIMATE_TRUST ?? ""))
+		if (this.origin !== "pc" && ["yes", "no"].includes(process.env.PIMATE_TRUST ?? ""))
 			this.trust = process.env.PIMATE_TRUST as "yes" | "no";
 		if (this.origin === "mobile" && process.env.PIMATE_PURPOSE === "auth") this.purpose = "auth";
 		delete process.env.PIMATE_PURPOSE;

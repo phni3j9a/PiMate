@@ -15,7 +15,7 @@ import { IconButton, TextButton } from "@/components/ui";
 import { collectChanges, groupByFile, totals } from "@/lib/changes";
 import { ago, tildePath, tokens } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
-import { chatTitle } from "@/lib/presentation";
+import { chatTitle, originLabel } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { formatCost, sessionStats } from "@/lib/sessionInfo";
 import type { Result } from "@/lib/store";
@@ -90,7 +90,7 @@ function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () 
 	const stats = sessionStats(view?.items ?? []);
 	const disabled = !ready || !!op;
 	const abduco = summary?.abducoSession ?? null;
-	const origin = summary?.origin === "mobile" ? "スマホ" : summary?.origin === "pc" ? "PC" : null;
+	const origin = originLabel(summary?.origin);
 	const attached =
 		summary?.pcAttached === true ? "PC から接続中" : summary?.pcAttached === false ? "PC から未接続" : null;
 	const hasUser = view?.items.some((i) => i.kind === "user") ?? false;

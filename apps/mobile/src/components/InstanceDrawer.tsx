@@ -93,21 +93,35 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 					</View>
 				) : null}
 
-				{groups.hosts.map(({ host, rows }) => (
-					<View key={host.hostId}>
-						<HostHeader host={host} />
-						{rows.map((row) => (
-							<InstanceRow
-								key={row.key}
-								row={row}
-								selected={row.key === selectedKey}
-								right={row.status === "running" ? "作業中" : relativeTime(row.updatedAt, now)}
-								onPress={() => open(row)}
-							/>
-						))}
-						<HostEmpty host={host} filtered={!!query.trim()} empty={rows.length === 0} />
-					</View>
-				))}
+				{groups.hosts.map(({ host, rows, bots, empty }) => {
+					const renderRow = (row: DrawerRow) => (
+						<InstanceRow
+							key={row.key}
+							row={row}
+							selected={row.key === selectedKey}
+							right={row.status === "running" ? "作業中" : relativeTime(row.updatedAt, now)}
+							onPress={() => open(row)}
+						/>
+					);
+					return (
+						<View key={host.hostId}>
+							<HostHeader host={host} />
+							{rows.map(renderRow)}
+							{bots.length > 0 ? (
+								<Text
+									style={styles.subTitle}
+									accessibilityRole="header"
+									accessibilityLabel={`${host.hostName}: Grok Bot`}
+									numberOfLines={1}
+								>
+									Grok Bot
+								</Text>
+							) : null}
+							{bots.map(renderRow)}
+							<HostEmpty host={host} filtered={!!query.trim()} empty={empty} />
+						</View>
+					);
+				})}
 			</ScrollView>
 
 			<Pressable
@@ -178,16 +192,18 @@ function InstanceRow({
 	const mark = row.status === "running" ? "running" : row.status === "waiting_input" || asking ? "waiting" : "idle";
 	const statusText = row.status === "running" ? "作業中" : row.status === "waiting_input" ? "入力待ち" : "待機";
 	const subagents = drawerSubagentText(row.subagents);
+	const bot = row.origin === "grok-bot";
 	return (
 		<Pressable
 			accessibilityRole="button"
 			accessibilityState={{ selected }}
 			accessibilityLabel={[
 				row.title,
+				bot ? "Grok Bot" : null,
 				statusText,
 				attention,
 				row.path,
-				row.mobile ? "スマホで起動" : null,
+				row.origin === "mobile" ? "スマホで起動" : null,
 				attention ? null : subagents,
 			]
 				.filter(Boolean)
@@ -204,14 +220,14 @@ function InstanceRow({
 				</Text>
 				{attention ? (
 					<Text style={styles.rowAttention} numberOfLines={1}>
-						{attention}
+						{bot ? `Grok Bot · ${attention}` : attention}
 					</Text>
 				) : (
 					<View style={styles.rowSub}>
 						<Text style={styles.rowPath} numberOfLines={1} ellipsizeMode="head">
 							{row.path}
 						</Text>
-						{row.mobile ? <Text style={styles.rowExtra}>· スマホで起動</Text> : null}
+						{row.origin === "mobile" ? <Text style={styles.rowExtra}>· スマホで起動</Text> : null}
 						{subagents ? <Text style={styles.rowExtra}>· {subagents}</Text> : null}
 					</View>
 				)}
@@ -247,6 +263,16 @@ const styles = StyleSheet.create({
 		gap: 6,
 	},
 	groupTitle: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.textSecondary },
+	// Subsection under a host: same type as the host title, aligned with the row text (12 + mark 14 + gap 10).
+	subTitle: {
+		marginTop: 12,
+		paddingLeft: 36,
+		paddingRight: 12,
+		fontSize: 12,
+		lineHeight: 28,
+		fontWeight: "600",
+		color: colors.textSecondary,
+	},
 	connection: { flexDirection: "row", alignItems: "center", gap: 5 },
 	connectionText: { fontSize: 11, color: colors.textSecondary },
 	row: {

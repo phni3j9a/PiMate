@@ -9,8 +9,8 @@ afterEach(() => {
 	delete globalHub.__pimateV1Hub;
 	vi.unstubAllEnvs();
 });
-function setup(mobile = false, trust?: string) {
-	vi.stubEnv("PIMATE_ORIGIN", mobile ? "mobile" : "pc");
+function setup(mobile = false, trust?: string, origin = mobile ? "mobile" : "pc") {
+	vi.stubEnv("PIMATE_ORIGIN", origin);
 	vi.stubEnv("PIMATE_TRUST", trust);
 	const hooks = new Map<string, (...args: any[]) => any>();
 	const pi = {
@@ -34,6 +34,25 @@ it.each(["yes", "no"])("only consumes explicit Host-origin trust decision %s", (
 	expect(process.env.PIMATE_TRUST).toBeUndefined();
 	expect(process.env.PIMATE_ORIGIN).toBeUndefined();
 	expect(h.trust).toBe(trust);
+});
+it.each(["yes", "no"])("preserves the Grok Bot trust decision %s", (trust) => {
+	const { hooks, h } = setup(false, trust, "grok-bot");
+	expect(h.snapshot().origin).toBe("grok-bot");
+	expect(hooks.get("project_trust")?.()).toEqual(
+		trust === "yes" ? { trusted: "yes", remember: true } : { trusted: "no" },
+	);
+});
+it.each(["pc", "unknown", ""])("treats origin %s as PC without trusting environment", (origin) => {
+	const { hooks, h } = setup(false, "yes", origin);
+	expect(h.snapshot().origin).toBe("pc");
+	expect(hooks.has("project_trust")).toBe(false);
+});
+it("retains the auth purpose for mobile login Pi", () => {
+	vi.stubEnv("PIMATE_PURPOSE", "auth");
+	const { h } = setup(true);
+	expect(h.purpose).toBe("auth");
+	expect(h.origin).toBe("mobile");
+	expect(process.env.PIMATE_PURPOSE).toBeUndefined();
 });
 it.each([
 	[false, "yes"],

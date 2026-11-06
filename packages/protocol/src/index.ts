@@ -24,8 +24,8 @@ export const PROTOCOL_VERSION = 1;
 // ---------------------------------------------------------------- domain
 
 export type InstanceStatus = "idle" | "running" | "waiting_input";
-/** Where the Pi process was started: by the user in a terminal, or by the Host on request from the phone. */
-export type Origin = "pc" | "mobile";
+/** Where the Pi process was started: terminal, phone, or Host CLI (including Grok Bot). */
+export type Origin = "pc" | "mobile" | "grok-bot";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface SessionRef {

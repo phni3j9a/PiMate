@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server, Socket } from "node:net";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -62,7 +62,13 @@ describe("HostCore", () => {
 	it("keeps the standalone CLI alive until the detached launcher exits", () => {
 		const dir = temp();
 		const launcher = join(dir, "launcher");
-		writeFileSync(launcher, "#!/bin/sh\n/bin/sleep 0.1\nexit 0\n", { mode: 0o700 });
+		writeFileSync(
+			launcher,
+			'#!/bin/sh\n/bin/sleep 0.1\nprintf "%s %s" "$PIMATE_ORIGIN" "$PIMATE_TRUST" > "$CAPTURE"\n',
+			{
+				mode: 0o700,
+			},
+		);
 		const result = spawnSync(process.execPath, ["src/host/cli.ts", "spawn", "--cwd", dir], {
 			encoding: "utf8",
 			timeout: 10_000,
@@ -72,10 +78,42 @@ describe("HostCore", () => {
 				PIMATE_RUN_DIR: join(dir, "run"),
 				PIMATE_ABDUCO: launcher,
 				PIMATE_PI: launcher,
+				CAPTURE: join(dir, "capture"),
 			},
 		});
 		expect(result.status, result.stderr).toBe(0);
 		expect(JSON.parse(result.stdout)).toMatchObject({ isolation: "detached" });
+		expect(readFileSync(join(dir, "capture"), "utf8")).toBe("grok-bot no");
+	});
+	it("defaults to mobile and reserves auth launches for mobile even with an explicit bot origin", async () => {
+		const dir = temp();
+		const launcher = join(dir, "launcher");
+		const capture = join(dir, "capture");
+		writeFileSync(
+			launcher,
+			'#!/bin/sh\nprintf "%s %s %s" "$PIMATE_ORIGIN" "$PIMATE_TRUST" "$PIMATE_PURPOSE" > "$CAPTURE"\n',
+			{ mode: 0o700 },
+		);
+		const host = new HostCore({
+			runDir: join(dir, "run"),
+			env: { PATH: dir, PIMATE_ABDUCO: launcher, PIMATE_PI: launcher, CAPTURE: capture, PIMATE_PURPOSE: "auth" },
+		});
+		await host.spawn({ cwd: dir });
+		expect(readFileSync(capture, "utf8")).toBe("mobile no ");
+		await host.spawn({ cwd: dir, origin: "grok-bot", trust: true });
+		expect(readFileSync(capture, "utf8")).toBe("grok-bot yes ");
+		await host.spawn({ cwd: dir, purpose: "auth", origin: "grok-bot" });
+		expect(readFileSync(capture, "utf8")).toBe("mobile no auth");
+	});
+	it("discovers Grok Bot metadata and rejects unknown origins", async () => {
+		const dir = temp();
+		for (const [id, origin] of [
+			["bot", "grok-bot"],
+			["unknown", "other"],
+		])
+			writeFileSync(join(dir, `${id}.json`), JSON.stringify({ ...snapshot, instanceId: id, origin }));
+		const host = new HostCore({ runDir: dir, env: { PIMATE_ABDUCO: "/absent" }, probeTimeoutMs: 100 });
+		expect(await host.list()).toMatchObject([{ instanceId: "bot", origin: "grok-bot" }]);
 	});
 	it("discovers reachable instances, skips malformed entries, and safely cleans stale paths", async () => {
 		const dir = temp();

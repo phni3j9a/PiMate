@@ -1,5 +1,5 @@
 /** Pure view-model helpers for the drawer, chat header and settings (no React Native imports). */
-import type { InstanceSummary, SubagentCounts } from "@pimate/protocol";
+import type { InstanceSummary, Origin, SubagentCounts } from "@pimate/protocol";
 import { elapsed, instanceTitle, platformLabel, tildePath } from "./format";
 import type { InstanceView } from "./instanceView";
 import type { HostRuntime } from "./store";
@@ -22,7 +22,7 @@ export interface DrawerRow {
 	title: string;
 	/** `~/code/demo` */
 	path: string;
-	mobile: boolean;
+	origin: Origin;
 	status: InstanceSummary["status"];
 	updatedAt: number;
 	/** Subagent counts from the host list (shown even when the parent is idle); null when none / unsupported. */
@@ -31,7 +31,17 @@ export interface DrawerRow {
 
 export interface DrawerHostGroup {
 	host: HostRuntime;
+	/** No matches, including instances displayed in 要対応. */
+	empty: boolean;
+	/** Pi started from the terminal or the phone. */
 	rows: DrawerRow[];
+	/** Pi started by Grok Bot (Host CLI), shown in their own subsection. */
+	bots: DrawerRow[];
+}
+
+/** Who started the Pi (セッション sheet 起動元, drawer row tag); null for an origin this app does not know. */
+export function originLabel(origin: Origin | undefined): string | null {
+	return origin === "grok-bot" ? "Grok Bot" : origin === "mobile" ? "スマホ" : origin === "pc" ? "PC" : null;
 }
 
 export interface DrawerGroups {
@@ -47,7 +57,7 @@ function toRow(hostId: string, i: InstanceSummary): DrawerRow {
 		instanceId: i.instanceId,
 		title: instanceTitle(i),
 		path: tildePath(i.cwd),
-		mobile: i.origin === "mobile",
+		origin: i.origin,
 		status: i.status,
 		updatedAt: i.updatedAt,
 		subagents: i.subagents ?? null,
@@ -76,7 +86,10 @@ export function drawerSubagentText(c: SubagentCounts | null): string | null {
 export function buildDrawerGroups(hosts: readonly HostRuntime[], query = ""): DrawerGroups {
 	const q = query.trim().toLowerCase();
 	const match = (row: DrawerRow, host: HostRuntime) =>
-		!q || [row.title, row.path, host.hostName].some((s) => s.toLowerCase().includes(q));
+		!q ||
+		[row.title, row.path, host.hostName, row.origin === "grok-bot" ? "Grok Bot" : ""].some((s) =>
+			s.toLowerCase().includes(q),
+		);
 	const attention: DrawerRow[] = [];
 	const groups: DrawerHostGroup[] = [];
 	for (const host of hosts) {
@@ -88,7 +101,13 @@ export function buildDrawerGroups(hosts: readonly HostRuntime[], query = ""): Dr
 					.sort((a, b) => b.updatedAt - a.updatedAt)
 			: [];
 		attention.push(...rows.filter(needsAttention));
-		groups.push({ host, rows: rows.filter((r) => !needsAttention(r)) });
+		const rest = rows.filter((r) => !needsAttention(r));
+		groups.push({
+			host,
+			empty: rows.length === 0,
+			rows: rest.filter((r) => r.origin !== "grok-bot"),
+			bots: rest.filter((r) => r.origin === "grok-bot"),
+		});
 	}
 	attention.sort((a, b) => b.updatedAt - a.updatedAt);
 	return { attention, hosts: groups };
