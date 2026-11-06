@@ -41,7 +41,7 @@ Android 0.1.11 / PCパッケージ0.1.16では、CLI の `pimate spawn`（Grok B
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.11 / PCパッケージ0.1.16。Grok Bot が起動した Pi の区分表示はPCパッケージ0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.12 / PCパッケージ0.1.17。Grok Bot が起動した Pi の区分表示はPCパッケージ0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
@@ -70,7 +70,7 @@ APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.m
 - `/pimate devices` — 接続済み端末一覧・失効
 - `/pimate status` — Host/Extensionのバージョン、互換性、公開先、常駐状態、abduco
 - `/pimate start` / `stop` / `restart` — Host制御（Piセッションは終了しません）
-- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。開発中の次版では、対応するアプリと Host の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。初回は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されず、各 Pi で `/reload` または再起動してください。
+- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。初回は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されず、各 Pi で `/reload` または再起動してください。
 
 ### 削除
 

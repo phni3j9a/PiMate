@@ -19,7 +19,7 @@ PATHに無ければ追記する行を表示します。シェル設定・既存�
 
 表示されるQRまたは `pimate://` リンクをPiMate Androidアプリで開いてペアリングします。
 コードは10分・1回限りです。ペアリング済み端末はPiの操作権限を持つため、リンクを公開しないでください。
-Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j9a/PiMate/releases) から取得できます。PCパッケージ0.1.16はアプリ0.1.11に対応します（Grok Bot が起動した Pi の区分表示はPC 0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPC 0.1.15以上、新しい認証画面にはアプリ0.1.10以上も必要。Grok Bot 連携はPC 0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPC 0.1.11以上・アプリ0.1.9以上と、PC に GitHub CLI（`gh`）を入れて `gh auth login` 済みであることが必要。モデル／Thinkingの既定保存・フォルダ補完・質問ツール・信頼判断の保存はPC 0.1.10以上、画像の閲覧・複数画像送信はPC 0.1.9以上、利用枠の同じ PC 内での共有はPC 0.1.8以上、プロバイダーのログイン・サブスク利用枠の表示はPC 0.1.7以上、スラッシュコマンド・セッションツリーはPC 0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要。古いアプリでも通常のチャットは使えますが、`pimate_ask` の質問カードにはアプリ0.1.8以上が必要です）。新機能を使うには、更新後に対象のPiを再起動または `/reload` してください。Hostの再起動だけでは既存PiのRCは更新されません。プロバイダーのログインと GitHub の表示にはHostの再起動も必要です（`/pimate status` で確認）。
+Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j9a/PiMate/releases) から取得できます。PCパッケージ0.1.17はアプリ0.1.12に対応します（設定からの PC 更新は両方の更新が必要。初回は PC で `pi update npm:@phni3j9a/pimate` と Host 再起動が必要。Grok Bot が起動した Pi の区分表示はPC 0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPC 0.1.15以上、新しい認証画面にはアプリ0.1.10以上も必要。Grok Bot 連携はPC 0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPC 0.1.11以上・アプリ0.1.9以上と、PC に GitHub CLI（`gh`）を入れて `gh auth login` 済みであることが必要。モデル／Thinkingの既定保存・フォルダ補完・質問ツール・信頼判断の保存はPC 0.1.10以上、画像の閲覧・複数画像送信はPC 0.1.9以上、利用枠の同じ PC 内での共有はPC 0.1.8以上、プロバイダーのログイン・サブスク利用枠の表示はPC 0.1.7以上、スラッシュコマンド・セッションツリーはPC 0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要。古いアプリでも通常のチャットは使えますが、`pimate_ask` の質問カードにはアプリ0.1.8以上が必要です）。新機能を使うには、更新後に対象のPiを再起動または `/reload` してください。Hostの再起動だけでは既存PiのRCは更新されません。プロバイダーのログインと GitHub の表示にはHostの再起動も必要です（`/pimate status` で確認）。
 
 プロバイダー認証: アプリの設定の「プロバイダー」で PC を選ぶと Host がログイン専用の Pi を起動します。会話中の Pi を開いておく必要はありません。OpenAI の API キー / ChatGPT（従来の Codex デバイスコード方式）と OpenCode Zen / Go を保存先ごとに設定・ログアウトできます。PC 更新後は Host を再起動し、起動中の Pi に新しい認証を反映するには `/reload` または再起動してください。
 
@@ -37,7 +37,7 @@ Androidアプリは [GitHub Releases の app-v タグ](https://github.com/phni3j
 Grok Bot 用の Skill を `grok-bot/skills/` に同梱しています。PC 0.1.16以上では、`pimate spawn` で起動した Pi がアプリ0.1.11以上の一覧で「Grok Bot」区画に分かれます（更新後に起動した Pi が対象。Host の再起動が必要）。設定と安全上の注意は下記の詳細ドキュメントを参照してください。
 
 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
-旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
+アプリ0.1.12 / PC 0.1.17以上では systemd 常駐 Host をアプリの設定から更新できます。旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
 
 削除: `/pimate uninstall` の後、ターミナルで `pi remove npm:@phni3j9a/pimate`。
 ペアリングも忘れる場合は `~/.config/pimate`（`PIMATE_CONFIG_DIR`を指定した場合はその場所）を削除します。
