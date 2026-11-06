@@ -75,6 +75,8 @@ export interface PiAlert {
 }
 
 export interface HostInfo {
+	/** Only send update_check / update when true; older Hosts close on unknown messages. */
+	packageUpdate?: boolean;
 	/** Read-only GitHub queries via the PC's gh login; never send to older Hosts. */
 	github?: boolean;
 	/** Optional capability: only send watch_alerts when true. */
@@ -179,6 +181,17 @@ export type GitHubData =
 export type GitHubErrorCode = "gh_missing" | "gh_auth" | "not_github" | "not_found" | "failed";
 export type GitHubResult = { ok: true; data: GitHubData } | { ok: false; code: GitHubErrorCode; message: string };
 
+export interface PackageUpdateCheck {
+	current: string;
+	latest?: string;
+	error?: string;
+	canUpdate: boolean;
+	reason?: "not_service" | "not_package";
+}
+export type PackageUpdateResult =
+	| { ok: true; from: string; to: string; restarting: boolean }
+	| { ok: false; code: "unsupported" | "busy" | "failed"; message?: string };
+
 // ---------------------------------------------------------------- app -> Host
 
 export type AppMessage =
@@ -190,6 +203,7 @@ export type AppMessage =
 	| { type: "rc"; instanceId: string; request: Request }
 	| { type: "ping"; t: number }
 	| { type: "folders"; requestId: string }
+	| { type: "update_check" | "update"; requestId: string }
 	| { type: "github"; requestId: string; instanceId: string; query: GitHubQuery }
 	/** Subfolder names of `path` (absolute or `~/...`) for completing the new Pi folder. */
 	| { type: "dirs"; requestId: string; path: string }
@@ -223,6 +237,8 @@ export type HostMessage =
 	| { type: "instance_gone"; instanceId: string }
 	| { type: "pong"; t: number }
 	| { type: "folders_result"; requestId: string; home: string; folders: FolderInfo[] }
+	| ({ type: "update_check_result"; requestId: string } & PackageUpdateCheck)
+	| ({ type: "update_result"; requestId: string } & PackageUpdateResult)
 	| ({ type: "github_result"; requestId: string } & GitHubResult)
 	/** Directory names only (no files), sorted; empty when the path is missing or unreadable. */
 	| { type: "dirs_result"; requestId: string; dirs: string[] }

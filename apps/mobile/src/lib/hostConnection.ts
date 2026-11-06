@@ -19,6 +19,8 @@ import {
 	type HostInfo,
 	type HostMessage,
 	type InstanceSummary,
+	type PackageUpdateCheck,
+	type PackageUpdateResult,
 	type Request,
 	type Response,
 	type SpawnParams,
@@ -215,6 +217,14 @@ export class HostConnection {
 		return this.hostRequest<GitHubResult>({ type: "github", requestId, instanceId, query });
 	}
 
+	/** Caller must gate on info.packageUpdate; never retried. */
+	updateCheck(requestId: string): Promise<PackageUpdateCheck> {
+		return this.hostRequest({ type: "update_check", requestId });
+	}
+	update(requestId: string): Promise<PackageUpdateResult> {
+		return this.hostRequest({ type: "update", requestId });
+	}
+
 	/** Starts a new Pi on this Host. Never retried: a dropped socket rejects with `outcome_unknown`. */
 	spawn(requestId: string, params: SpawnParams): Promise<SpawnResult> {
 		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
@@ -354,6 +364,8 @@ export class HostConnection {
 			case "folders_result":
 			case "dirs_result":
 			case "github_result":
+			case "update_check_result":
+			case "update_result":
 			case "spawn_result":
 			case "auth_session_result": {
 				const p = this.hostPending.get(msg.requestId);

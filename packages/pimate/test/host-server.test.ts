@@ -170,7 +170,9 @@ async function setup(
 	async function authed() {
 		const credentials = (await (await pair()).json()) as PairResponse;
 		const client = await connect(credentials.token);
-		expect(await client.box.next("auth_ok")).toMatchObject({ host: { providerAuth: true, dirs: true, github: true } });
+		expect(await client.box.next("auth_ok")).toMatchObject({
+			host: { providerAuth: true, dirs: true, github: true, packageUpdate: true },
+		});
 		await client.box.next("instances");
 		return { ...client, credentials };
 	}
@@ -999,3 +1001,16 @@ it.each([false, true])(
 		}
 	},
 );
+
+it.each(["update_check", "update"])("rejects extra fields and invalid IDs on %s", async (type) => {
+	const t = await setup();
+	for (const extra of [
+		{ requestId: "valid", command: "anything" },
+		{ requestId: "" },
+		{ requestId: "x".repeat(201) },
+	]) {
+		const c = await t.authed();
+		c.send({ type, ...extra });
+		expect(await c.closed).toBe(4400);
+	}
+});

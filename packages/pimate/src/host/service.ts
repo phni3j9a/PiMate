@@ -77,6 +77,9 @@ export function serviceUnit(env = process.env, cwd = process.cwd()): string {
 async function systemctl(...args: string[]): Promise<string> {
 	return (await exec("systemctl", ["--user", ...args], { timeout: 15000 })).stdout.trim();
 }
+export async function restartManagedService(): Promise<void> {
+	await systemctl("restart", "--no-block", SERVICE);
+}
 export async function hasUserSystemd(): Promise<boolean> {
 	if (process.platform !== "linux") return false;
 	try {

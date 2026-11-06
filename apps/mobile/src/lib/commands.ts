@@ -4,6 +4,7 @@ import { slashCommandName } from "@pimate/protocol";
 /** Only built-ins with an equivalent PiMate operation. */
 export const BUILTIN_COMMANDS = [
 	{ name: "model", description: "モデルと Thinking を選ぶ", source: "builtin" },
+	{ name: "reload", description: "Extension などを再読み込み", source: "builtin" },
 	{ name: "new", description: "新しいセッション", source: "builtin" },
 	{ name: "resume", description: "過去のセッションを開く", source: "builtin" },
 	{ name: "fork", description: "メッセージを選んで分岐", source: "builtin" },

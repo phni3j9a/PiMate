@@ -28,7 +28,7 @@ const list: GitHubResult = {
 	data: { kind: "list", repo: { name: "o/r", url: "https://github.com/o/r" }, issues: [], prs: [] },
 };
 
-async function setup(github?: boolean) {
+async function setup(github?: boolean, packageUpdate?: boolean) {
 	const storage = new MemoryStorage();
 	await new HostRegistry(storage).save({
 		hostId: "h1",
@@ -52,7 +52,10 @@ async function setup(github?: boolean) {
 	await store.init();
 	cleanup.push(() => store.dispose());
 	const socket = FakeSocket.last();
-	authenticate(socket, [instance("pi"), instance("other")], github === undefined ? {} : { github });
+	authenticate(socket, [instance("pi"), instance("other")], {
+		...(github === undefined ? {} : { github }),
+		...(packageUpdate === undefined ? {} : { packageUpdate }),
+	});
 	return { store, socket };
 }
 
@@ -147,4 +150,61 @@ it("never inserts into another Pi or another Host, and preserves both drafts", a
 	expect(store.insertGitHubReference(target, item)).toBe(false);
 	expect(store.insertGitHubReference({ hostId: "another", instanceId: "other" }, item)).toBe(false);
 	expect(store.getState().drafts).toMatchObject({ "h1/pi": "元の下書き", "h1/other": "別 Pi の下書き" });
+});
+
+it.each([undefined, false])("does not send update requests without capability (%s)", async (capability) => {
+	const { store, socket } = await setup(undefined, capability);
+	expect((await store.updateCheck("h1")).ok).toBe(false);
+	expect((await store.update("h1")).ok).toBe(false);
+	expect(socket.sentOfType("update_check")).toEqual([]);
+	expect(socket.sentOfType("update")).toEqual([]);
+});
+
+it("routes update responses and never retries after a disconnect", async () => {
+	const conn = new HostConnection("localhost:47800", "token", {
+		createSocket: (url) => new FakeSocket(url),
+		app: { version: "test", platform: "android" },
+	});
+	cleanup.push(() => conn.stop());
+	conn.start();
+	const socket = FakeSocket.last();
+	authenticate(socket, [], { packageUpdate: true });
+	const check = conn.updateCheck("check");
+	const update = conn.update("update");
+	expect(socket.sentOfType("update_check")).toEqual([{ type: "update_check", requestId: "check" }]);
+	expect(socket.sentOfType("update")).toEqual([{ type: "update", requestId: "update" }]);
+	socket.receive({
+		type: "update_result",
+		requestId: "update",
+		ok: true,
+		from: "1.0.0",
+		to: "1.1.0",
+		restarting: true,
+	});
+	socket.receive({
+		type: "update_check_result",
+		requestId: "check",
+		current: "1.0.0",
+		latest: "1.1.0",
+		canUpdate: true,
+	});
+	await expect(check).resolves.toMatchObject({ latest: "1.1.0" });
+	await expect(update).resolves.toMatchObject({ restarting: true });
+	const dropped = conn.update("drop");
+	socket.drop();
+	await expect(dropped).rejects.toMatchObject({ code: "outcome_unknown" });
+	expect(socket.sentOfType("update")).toHaveLength(2);
+});
+
+it("store exposes capability and version and routes both operations", async () => {
+	const { store, socket } = await setup(undefined, true);
+	expect(store.getState().hosts[0]).toMatchObject({ packageUpdate: true, version: "0.0.0" });
+	const check = store.updateCheck("h1");
+	const request = socket.sentOfType("update_check")[0];
+	socket.receive({ type: "update_check_result", requestId: request.requestId, current: "1.0.0", canUpdate: true });
+	expect(await check).toMatchObject({ ok: true, value: { current: "1.0.0" } });
+	const update = store.update("h1");
+	const sent = socket.sentOfType("update")[0];
+	socket.receive({ type: "update_result", requestId: sent.requestId, ok: false, code: "busy" });
+	expect(await update).toMatchObject({ ok: true, value: { code: "busy" } });
 });

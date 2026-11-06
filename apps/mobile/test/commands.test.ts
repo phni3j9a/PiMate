@@ -29,7 +29,15 @@ describe("slash commands", () => {
 		expect(commandQuery(insertCommand("review"))).toBeNull();
 	});
 	it("includes only existing app operations and gives them precedence", () => {
-		expect(BUILTIN_COMMANDS.map((c) => c.name)).toEqual(["model", "new", "resume", "fork", "compact", "tree"]);
+		expect(BUILTIN_COMMANDS.map((c) => c.name)).toEqual([
+			"model",
+			"reload",
+			"new",
+			"resume",
+			"fork",
+			"compact",
+			"tree",
+		]);
 		// /tree only with the RC sessionTree capability.
 		expect(commandCatalog([]).some((c) => c.name === "tree")).toBe(false);
 		expect(commandCatalog([], true).some((c) => c.name === "tree")).toBe(true);
@@ -57,7 +65,7 @@ describe("slash commands", () => {
 		for (const c of commands)
 			for (const suffix of ["", " arg", "\targ", "\narg"])
 				expect(commandIntent(`/${c.name}${suffix}`, commands)).toEqual({ kind: "remote", command: c });
-		for (const name of ["unknown", "rev", "review:2", "tree", "reload"])
+		for (const name of ["unknown", "rev", "review:2", "tree"])
 			expect(commandIntent(`/${name} arg`, commands)).toEqual({ kind: "unknown", name });
 		for (const text of ["hello", "/home/x", "/home/x arg", "/", " /review", "see /review", "/review?", "/日本語"])
 			expect(commandIntent(text, commands)).toEqual({ kind: "text" });
