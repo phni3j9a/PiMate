@@ -97,7 +97,7 @@ RC は `hello` snapshot の `promptImages: true` と `promptImageLimit: 4` で�
 
 両 RPC の全画面用取得は `{ image: ViewImage }`（`mimeType`, base64 `data`, 任意の `width` / `height`）を返します。decoded 2 MiB 以下は原本、それ以上は Pi の `resizeImage` で最大2048px・2 MiB 以下へ縮小します。縮小 API / codec が使えない場合は原本が5 MiB以下なら返し、それを超える場合は `unsupported`。5 MiB は base64 化後も Host の8 MiB送信制限に余裕を残すためです。GIF は縮小時に静止画になる場合があります。存在しない entry / index / ファイルは `not_found`、形式・サイズ・読み取り不可は `unsupported`。`expectInstanceId` / `expectSessionId` で取得先を固定してください。ワイヤー仕様は [packages/protocol](../protocol/README.md)。
 
-### アプリからの PC パッケージ更新（開発中）
+### アプリからの PC パッケージ更新（アプリ 0.1.12 / PC 0.1.17 以上）
 
 対応 Host・アプリでは設定から最新版を確認できます。公開パッケージと systemd の `pimate-host.service` 上でのみ、確認後に固定コマンド `pi update npm:@phni3j9a/pimate` を実行し、版が変わったときだけ Host を再起動します。旧 Host は最初に PC で更新・再起動してください。実行中の Pi は自動再読み込みせず、各 Pi で `/reload` または再起動が必要です。registry は npmjs.org 固定で npm の registry 設定を参照しません。
 
