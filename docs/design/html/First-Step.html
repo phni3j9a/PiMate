@@ -19,17 +19,25 @@ a{color:#155A7A}a:hover{color:#1B6B91}
     </span>
   </div>
   <div style="height: 47px; flex-shrink: 0"></div>
-  <div style="height: 52px; flex-shrink: 0"></div>
+  <div style="height: 36px; flex-shrink: 0"></div>
 
   <main style="flex: 1; min-height: 0; overflow: hidden; padding: 0 20px; display: flex; flex-direction: column">
-    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; color: #5E686D">
-      <span style="width: 8px; height: 8px; border-radius: 4px; background: #4D9ABF"></span>
-      接続中
+    <div role="img" aria-label="このスマホと MacBook が接続中" style="display: flex; align-items: center">
+      <span style="width: 48px; height: 48px; border-radius: 14px; background: #F1F3F4; display: flex; align-items: center; justify-content: center; color: #3A4246">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round"><rect x="7" y="3" width="10" height="18" rx="2.5"></rect><path d="M11 18h2"></path></svg>
+      </span>
+      <span style="width: 22px; margin: 0 6px; border-top: 2px dotted #C5CDD1"></span>
+      <span style="width: 10px; height: 10px; border-radius: 5px; background: #4D9ABF"></span>
+      <span style="width: 22px; margin: 0 6px; border-top: 2px dotted #C5CDD1"></span>
+      <span style="width: 48px; height: 48px; border-radius: 14px; background: #F1F3F4; display: flex; align-items: center; justify-content: center; color: #3A4246">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round"><rect x="4" y="5" width="16" height="11" rx="1.5"></rect><path d="M2 19h20"></path></svg>
+      </span>
     </div>
-    <h1 style="margin: 8px 0 0; font-size: 22px; line-height: 30px; font-weight: 600">MacBook とつながりました</h1>
-    <p style="margin: 12px 0 0; font-size: 15px; line-height: 22.5px; color: #5E686D">PC で動いている Pi です。選ぶとチャットを開きます。</p>
+    <h1 style="margin: 20px 0 0; font-size: 22px; line-height: 30px; font-weight: 600">MacBook とつながりました</h1>
+    <p style="margin: 8px 0 0; font-size: 15px; line-height: 22.5px; color: #5E686D">選ぶとチャットを開きます。</p>
 
-    <div style="margin: 20px -12px 0; display: flex; flex-direction: column">
+    <h2 style="margin: 24px 0 0; font-size: 12px; line-height: 18px; font-weight: 600; color: #5E686D">起動中の Pi</h2>
+    <div style="margin: 4px -12px 0; display: flex; flex-direction: column">
       
         <button style="margin-top: 2px; width: 100%; min-height: 60px; display: flex; align-items: flex-start; gap: 10px; border: 0; padding: 10px 12px; border-radius: 12px; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
           <span style="width: 14px; height: 21px; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
@@ -41,7 +49,7 @@ a{color:#155A7A}a:hover{color:#1B6B91}
             <span style="font-size: 14px; line-height: 21px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">README の更新</span>
             
             
-              <span style="margin-top: 1px; font-size: 12px; line-height: 18px; color: #8B5D20; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">質問: 英語版も更新しますか？</span>
+              <span style="margin-top: 1px; font-size: 12px; line-height: 18px; color: #8B5D20; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">入力待ち: Pi が回答を待っています</span>
             
           </span>
           <span style="flex-shrink: 0; font-size: 11px; line-height: 21px; color: #5E686D">今</span>
@@ -56,13 +64,13 @@ a{color:#155A7A}a:hover{color:#1B6B91}
             
           </span>
           <span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
-            <span style="font-size: 14px; line-height: 21px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ログイン画面の修正</span>
+            <span style="font-size: 14px; line-height: 21px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ログイン画面の修正</span>
             
               <span style="margin-top: 1px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 17px; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">~/work/web</span>
             
             
           </span>
-          <span style="flex-shrink: 0; font-size: 11px; line-height: 21px; color: #5E686D">2分前</span>
+          <span style="flex-shrink: 0; font-size: 11px; line-height: 21px; color: #5E686D">作業中</span>
         </button>
       
         <button style="margin-top: 2px; width: 100%; min-height: 60px; display: flex; align-items: flex-start; gap: 10px; border: 0; padding: 10px 12px; border-radius: 12px; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
@@ -72,7 +80,7 @@ a{color:#155A7A}a:hover{color:#1B6B91}
             
           </span>
           <span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
-            <span style="font-size: 14px; line-height: 21px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">API のリファクタ</span>
+            <span style="font-size: 14px; line-height: 21px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">API のリファクタ</span>
             
               <span style="margin-top: 1px; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 17px; color: #5E686D; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">~/work/api</span>
             
@@ -82,27 +90,26 @@ a{color:#155A7A}a:hover{color:#1B6B91}
         </button>
       
     </div>
-
-    <button style="margin-top: 4px; height: 52px; align-self: flex-start; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #155A7A; font-family: inherit; font-size: 15px; text-align: left">
+    <button style="margin-top: 2px; height: 52px; align-self: flex-start; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #155A7A; font-family: inherit; font-size: 15px; text-align: left">
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round"><path d="M12 5v14M5 12h14"></path></svg>
       新しい Pi を起動
     </button>
 
-    <h2 style="margin: 28px 0 0; font-size: 12px; line-height: 18px; font-weight: 600; color: #5E686D">通知</h2>
+    <h2 style="margin: 24px 0 0; font-size: 12px; line-height: 18px; font-weight: 600; color: #5E686D">通知</h2>
     <div style="margin-top: 2px; min-height: 60px; display: flex; align-items: center; gap: 16px; padding: 8px 0">
       <span style="flex: 1; display: flex; flex-direction: column">
-        <span id="notify-label-2" style="font-size: 15px; line-height: 22px">入力待ち・完了を知らせる</span>
+        <span id="v2-notify-label-2" style="font-size: 15px; line-height: 22px">入力待ち・完了を知らせる</span>
         <span style="font-size: 12px; line-height: 18px; color: #5E686D">アプリを開いて PC に接続している間だけ届きます。設定でいつでも変えられます。</span>
       </span>
-      <button role="switch" aria-checked="false" aria-labelledby="notify-label-2" onclick="() =&gt; this.setState({ notify: !on })" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #D3D9DC; display: flex; justify-content: flex-start">
+      <button role="switch" aria-checked="false" aria-labelledby="v2-notify-label-2" onclick="() =&gt; this.setState({ notify: !on })" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #D3D9DC; display: flex; justify-content: flex-start">
         <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
       </button>
     </div>
   </main>
 
   <footer style="flex-shrink: 0; padding: 12px 20px 30px; display: flex; justify-content: center">
-    <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; color: #5E686D; text-align: center">
-      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+    <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; color: #5E686D">
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round"><path d="M4 8h16M4 16h10"></path></svg>
       一覧は、チャットで右へスワイプするといつでも開けます
     </span>
   </footer>
