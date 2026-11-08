@@ -59,6 +59,23 @@ export const ClockIcon = ({ size = 12, color = colors.textSecondary }: IconProps
 		<Path d="M12 7v5l3 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 	</Svg>
 );
+export const AlertIcon = ({ size = 16, color = colors.statusFailedText }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
+		<Path d="M12 7.5v5.5M12 16.5h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
+	</Svg>
+);
+/** Opens outside the app (store, browser). */
+export const ExternalIcon = (p: IconProps) => (
+	<Line
+		d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"
+		size={14}
+		{...p}
+	/>
+);
+export const ShareIcon = (p: IconProps) => (
+	<Line d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" size={16} {...p} />
+);
 export const StopIcon = ({ size = 22, color = colors.text }: IconProps) => (
 	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
 		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />

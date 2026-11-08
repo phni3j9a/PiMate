@@ -18,7 +18,7 @@ import { colors, spacing, typography } from "@/theme/tokens";
 function confirmRemove(host: HostRuntime) {
 	Alert.alert(
 		`「${host.hostName}」を削除しますか？`,
-		"このスマホから接続情報を削除します。PC 側の登録は pimate revoke で取り消してください。",
+		"このスマホから接続情報を削除します。PC 側の登録は PC の Pi の /pimate devices で取り消してください。",
 		[
 			{ text: "キャンセル", style: "cancel" },
 			{ text: "削除", style: "destructive", onPress: () => void appStore.removeHost(host.hostId) },

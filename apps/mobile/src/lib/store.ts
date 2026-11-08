@@ -70,6 +70,8 @@ export interface HostRuntime {
 	version: string | null;
 	authSession?: boolean;
 	instances: InstanceSummary[];
+	/** The Host has sent its Pi list on this connection (an empty `instances` before that means "not known yet"). */
+	instancesReceived: boolean;
 	nextRetryAt: number | null;
 }
 
@@ -438,6 +440,7 @@ export class AppStore {
 			version: c?.info?.version ?? null,
 			authSession: c?.info?.authSession === true,
 			instances: c?.instances ?? [],
+			instancesReceived: c?.instancesReceived ?? false,
 			nextRetryAt: c?.nextRetryAt ?? null,
 		};
 	}

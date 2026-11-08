@@ -175,7 +175,8 @@ function HostEmpty({ host, filtered, empty }: { host: HostRuntime; filtered: boo
 	return <Text style={styles.emptyText}>起動中の Pi はありません。PC で pi を起動するとここに表示されます。</Text>;
 }
 
-function InstanceRow({
+/** One Pi of the list (also used by the first step after pairing). */
+export function InstanceRow({
 	row,
 	selected,
 	attention,

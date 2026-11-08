@@ -104,6 +104,17 @@ describe("AppStore", () => {
 		expect((await new HostRegistry(storage).load())[0].token).toBe("t2");
 	});
 
+	it("tells an unknown Pi list apart from an empty one", async () => {
+		const { store } = await setup({ paired: false });
+		await store.pair({ address: "10.0.0.2:47800", code: "AbCdEfGhIjKlMnOpQr", hostName: "new", hostId: "h2" });
+		const s = FakeSocket.last();
+		s.open();
+		s.receive({ type: "auth_ok", host: { ...hostInfo, hostId: "h2" }, deviceId: "d2" });
+		expect(store.getState().hosts[0]).toMatchObject({ state: "connected", instances: [], instancesReceived: false });
+		s.receive({ type: "instances", instances: [] });
+		expect(store.getState().hosts[0]).toMatchObject({ instances: [], instancesReceived: true });
+	});
+
 	it("auto-selects the most recent instance, subscribes and remembers it", async () => {
 		const { store, storage } = await setup();
 		const s = connect([{ kind: "user", entryId: "u1", text: "hi" }]);

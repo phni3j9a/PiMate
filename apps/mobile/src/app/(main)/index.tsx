@@ -545,12 +545,18 @@ function EmptyState({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 		const connecting = hosts.some((h) => h.state === "connecting");
 		body = {
 			title: connecting ? "PC に接続しています…" : "PC に接続できません",
-			text: connecting ? undefined : "PC で pimate serve が動いているか、Tailscale に接続しているか確認してください。",
+			text: connecting
+				? undefined
+				: "PC とこのスマホが同じ Tailscale につながっているか、PC の Host が動いているか（PC の Pi で /pimate status）確認してください。",
 			spinner: connecting,
 			action: connecting ? undefined : { label: "一覧を開く", onPress: onOpenDrawer },
 		};
 	} else if (!hosts.some((h) => h.instances.length > 0)) {
-		body = { title: "起動中の Pi はありません", text: "PC で pi を起動すると、ここから操作できます。" };
+		body = {
+			title: "起動中の Pi はありません",
+			text: "PC で pi を起動すると、ここから操作できます。",
+			action: { label: "新しい Pi を起動", onPress: () => router.push("/new") },
+		};
 	} else {
 		body = { title: "Pi を選んでください", action: { label: "一覧を開く", onPress: onOpenDrawer } };
 	}
