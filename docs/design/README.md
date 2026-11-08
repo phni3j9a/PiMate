@@ -38,6 +38,11 @@
 | `Subagent-Detail` | サブエージェント — pi-subagents | 親からの依頼、子の作業記録、子への指示、一時停止 |
 | `Subagent-Detail-Readonly` | サブエージェント — 公式サンプル | 見るだけの画面、チェーンの進み具合、全体の停止 |
 | `Settings` | 設定 | マシン、通知、文字サイズ、互換性の説明 |
+| `Pair` | ペアリング — 最初の画面 | 3つの準備（Tailscale・PC への導入・QR）。準備済みならすぐ QR を読める。主ボタンは QR の読み取り |
+| `Setup-Tailscale` | ペアリング — Tailscale につなぐ | スマホと PC を同じアカウントに、ストアへの導線、Tailscale 非対応の Android（8.0 未満）の表示（Tweaks の `oldAndroid`） |
+| `Setup-PC` | ペアリング — PC に PiMate を入れる | コピーできるコマンド（`pi install` → `/pimate setup`）、手順の共有、`/pimate pair` での出し直し |
+| `First-Step-Empty` | 最初のペアリング直後 — Pi なし | 新しい Pi の起動（主ボタン）、通知のオンオフ（既定オフ）、「あとで」 |
+| `First-Step` | 最初のペアリング直後 — Pi あり | 起動中の Pi から選ぶ、一覧は右スワイプでいつでも開けることの一文 |
 | `Tokens` | デザイントークン | 色・文字・サイズ・部品のルール |
 
 ## ファイル構成

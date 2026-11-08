@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>つながりました — Pi なし</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Noto+Sans+JP:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;overflow:hidden}
+a{color:#155A7A}a:hover{color:#1B6B91}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #FFFFFF; color: #1F2326; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif; font-size: 14px; line-height: 1.5; word-break: auto-phrase; text-wrap: pretty">
+  <div aria-hidden="true" style="position: absolute; top: 0; left: 0; right: 0; z-index: 5; height: 47px; box-sizing: border-box; padding: 4px 28px 0 42px; display: flex; align-items: center; justify-content: space-between; color: #1F2326; pointer-events: none">
+    <span style="font-size: 16px; font-weight: 600; letter-spacing: -0.2px; font-variant-numeric: tabular-nums">9:41</span>
+    <span style="display: flex; align-items: center; gap: 6px">
+      <svg width="18" height="12" viewBox="0 0 18 12" style="fill: currentColor"><rect x="0" y="8" width="3" height="4" rx="1"></rect><rect x="5" y="5.5" width="3" height="6.5" rx="1"></rect><rect x="10" y="3" width="3" height="9" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1"></rect></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" style="fill: currentColor"><path d="M8 2.2c2.3 0 4.4.9 6 2.4l1.2-1.3A10.4 10.4 0 0 0 8 .4C5.2.4 2.7 1.5.8 3.3L2 4.6a8.6 8.6 0 0 1 6-2.4zm0 3.6c1.3 0 2.5.5 3.4 1.3l1.2-1.3A6.7 6.7 0 0 0 8 4c-1.8 0-3.4.7-4.6 1.8l1.2 1.3c.9-.8 2.1-1.3 3.4-1.3zM8 9.4c.5 0 .9.2 1.2.5L8 11.6 6.8 9.9c.3-.3.7-.5 1.2-.5z"></path></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13" style="fill: none"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" style="stroke: currentColor; opacity: 0.4"></rect><rect x="2" y="2" width="20" height="9" rx="2" style="fill: currentColor"></rect><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2z" style="fill: currentColor; opacity: 0.4"></path></svg>
+    </span>
+  </div>
+  <div style="height: 47px; flex-shrink: 0"></div>
+  <div style="height: 52px; flex-shrink: 0"></div>
+
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 0 20px; display: flex; flex-direction: column">
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; color: #5E686D">
+      <span style="width: 8px; height: 8px; border-radius: 4px; background: #4D9ABF"></span>
+      接続中
+    </div>
+    <h1 style="margin: 8px 0 0; font-size: 22px; line-height: 30px; font-weight: 600">MacBook とつながりました</h1>
+    <p style="margin: 12px 0 0; font-size: 15px; line-height: 22.5px; color: #5E686D">まだ起動中の Pi はありません。このスマホから PC のフォルダを選んで、新しい Pi を起動できます。</p>
+    <p style="margin: 8px 0 0; font-size: 12px; line-height: 18px; color: #5E686D">PC のターミナルで <code style="font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; color: #3A4246">pi</code> を起動しても、ここに表示されます。</p>
+
+    <h2 style="margin: 40px 0 0; font-size: 12px; line-height: 18px; font-weight: 600; color: #5E686D">通知</h2>
+    <div style="margin-top: 2px; min-height: 60px; display: flex; align-items: center; gap: 16px; padding: 8px 0">
+      <span style="flex: 1; display: flex; flex-direction: column">
+        <span id="notify-label" style="font-size: 15px; line-height: 22px">入力待ち・完了を知らせる</span>
+        <span style="font-size: 12px; line-height: 18px; color: #5E686D">アプリを開いて PC に接続している間だけ届きます。設定でいつでも変えられます。</span>
+      </span>
+      <button role="switch" aria-checked="{{notifyChecked}}" aria-labelledby="notify-label" onClick="{{toggleNotify}}" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: {{trackColor}}; display: flex; justify-content: {{thumbSide}}">
+        <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
+      </button>
+    </div>
+  </main>
+
+  <footer style="flex-shrink: 0; padding: 8px 20px 30px; display: flex; flex-direction: column; gap: 4px">
+    <button style="height: 48px; border: 0; border-radius: 24px; background: #1B6B91; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 600">新しい Pi を起動</button>
+    <button style="height: 44px; border: 0; padding: 0; background: transparent; color: #155A7A; font-family: inherit; font-size: 15px">あとで</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { notify: false };
+  }
+  renderVals() {
+    const on = this.state.notify;
+    return {
+      notifyChecked: on ? 'true' : 'false',
+      trackColor: on ? '#1B6B91' : '#D3D9DC',
+      thumbSide: on ? 'flex-end' : 'flex-start',
+      toggleNotify: () => this.setState({ notify: !on })
+    };
+  }
+}
+</script>
+</body>
+</html>
