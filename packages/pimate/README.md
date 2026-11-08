@@ -259,7 +259,7 @@ setupは既存Hostを検出すると追加pairingのみを提案。別configのH
 
 `/pimate` はPC TUIのみ。RCのremote promptでは拒否し、セットアップの同意・QR・通知はremote UI bridgeを通しません。
 
-初回の案内（オンボーディング）:
+初回の案内（オンボーディング、PC 0.1.18 以上）:
 
 - QR 画面はアプリで押すボタン（「QRコードを読み取る」）を示し、Host の `devices.json` を1秒ごとに見て、このコードで端末が追加されたら QR を消して端末名と次の手順を、期限切れなら `/pimate pair` を案内します（端末名の制御文字は除きます）。
 - `/pimate setup` は Host を起動する前に `tailscale ip` で Tailscale のアドレスを確かめ、なければ同意画面に Tailscale の導入と、あとから `/pimate restart` → `/pimate pair` でつなぐ方法を添えます。CLI の `pimate pair` も、Tailscale のアドレスがなく loopback を使うときは警告します。
