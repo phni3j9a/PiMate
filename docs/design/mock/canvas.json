@@ -136,6 +136,46 @@
       "h": 844,
       "title": "使用状況シート",
       "radius": 40
+    },
+    "Pair.dc.html": {
+      "x": 0,
+      "y": 5056,
+      "w": 390,
+      "h": 844,
+      "title": "ペアリング — 最初の画面（準備と QR）",
+      "radius": 40
+    },
+    "Setup-Tailscale.dc.html": {
+      "x": 470,
+      "y": 5056,
+      "w": 390,
+      "h": 844,
+      "title": "ペアリング — Tailscale でつなぐ",
+      "radius": 40
+    },
+    "Setup-PC.dc.html": {
+      "x": 940,
+      "y": 5056,
+      "w": 390,
+      "h": 844,
+      "title": "ペアリング — PC に PiMate を入れる",
+      "radius": 40
+    },
+    "First-Step-Empty.dc.html": {
+      "x": 1410,
+      "y": 5056,
+      "w": 390,
+      "h": 844,
+      "title": "最初のペアリング直後 — Pi なし",
+      "radius": 40
+    },
+    "First-Step.dc.html": {
+      "x": 1880,
+      "y": 5056,
+      "w": 390,
+      "h": 844,
+      "title": "最初のペアリング直後 — Pi あり",
+      "radius": 40
     }
   },
   "order": [
@@ -154,7 +194,12 @@
     "Subagent-Detail.dc.html",
     "Subagent-Detail-Readonly.dc.html",
     "Settings.dc.html",
-    "Tokens.dc.html"
+    "Tokens.dc.html",
+    "Pair.dc.html",
+    "Setup-Tailscale.dc.html",
+    "Setup-PC.dc.html",
+    "First-Step-Empty.dc.html",
+    "First-Step.dc.html"
   ],
   "notes": {
     "n1": {
@@ -182,6 +227,13 @@
       "x": 0,
       "y": 2228,
       "text": "サブエージェント",
+      "kind": "title1",
+      "maxW": 2270
+    },
+    "n5": {
+      "x": 0,
+      "y": 4756,
+      "text": "はじめての接続",
       "kind": "title1",
       "maxW": 2270
     }

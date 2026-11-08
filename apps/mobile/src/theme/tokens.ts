@@ -56,6 +56,13 @@ const light = {
 	control: "#D3D9DC",
 	/** Dim layer behind sheets and the drawer. */
 	scrim: "rgba(31, 35, 38, 0.32)",
+
+	/** Pi's logo (and the Mt mark, docs/design/icon-kit): only inside drawings of the PC's Pi, never for UI. */
+	piBlue: "#4C93BC",
+	piCoral: "#F38C7B",
+	piYellow: "#F5C15E",
+	/** The two rules around Pi's input line in drawings of the PC's Pi. */
+	piRule: "rgba(27, 107, 145, 0.45)",
 };
 
 const dark: typeof light = {
@@ -88,6 +95,11 @@ const dark: typeof light = {
 
 	control: "#3B4246",
 	scrim: "rgba(0, 0, 0, 0.55)",
+
+	piBlue: "#329DFD",
+	piCoral: "#FC7466",
+	piYellow: "#FDCA3D",
+	piRule: "rgba(124, 190, 222, 0.55)",
 };
 
 /**
@@ -159,6 +171,8 @@ export const radii = {
 	sheet: 16,
 	/** Code / tool output block. */
 	code: 10,
-	/** 主操作・入力欄: capsule — use with any height. */
+	/** 主ボタン・1行の入力欄・コマンド表示: rounded rectangle (no capsules, Tokens.dc.html). */
+	control: 12,
+	/** Round icon buttons only (equal width and height, e.g. send, jump to latest). */
 	capsule: 9999,
 } as const;

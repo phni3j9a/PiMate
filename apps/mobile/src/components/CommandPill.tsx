@@ -36,7 +36,7 @@ export function CommandPill({ command, onSurface }: { command: string; onSurface
 const styles = StyleSheet.create({
 	pill: {
 		height: 44,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		flexDirection: "row",
 		alignItems: "center",
 		paddingLeft: 14,

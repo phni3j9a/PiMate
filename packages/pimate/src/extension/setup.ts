@@ -1,9 +1,20 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, Text } from "@earendil-works/pi-tui";
 import { DEFAULT_HOST_PORT, formatPairingLink, HOST_PROTOCOL_VERSION, PROTOCOL_VERSION } from "@pimate/protocol";
 import QRCode from "qrcode";
 import { HostConfig, resolveConfigDir } from "../host/config.ts";
-import { resolveAbduco } from "../host/index.ts";
+import { defaultListenAddresses, resolveAbduco } from "../host/index.ts";
+import {
+	hasTailscaleAddress,
+	NO_TAILSCALE,
+	PAIRING_CODE_TTL_MS,
+	type PairingProgress,
+	pairedDeviceCount,
+	pairingNotice,
+	pairingProgress,
+	pairingStatusLines,
+	SETUP_HINT,
+} from "../host/pairing-guide.ts";
 import {
 	commandStatus,
 	hasUserSystemd,
@@ -58,31 +69,86 @@ async function pair(ctx: ExtensionCommandContext): Promise<void> {
 	const addresses = health.addresses?.map((a) => a.address) ?? ["127.0.0.1"];
 	const address =
 		addresses.find((a) => a.startsWith("100.")) ?? addresses.find((a) => a.startsWith("fd7a:")) ?? "127.0.0.1";
+	const before = new Set(config.devices().map((device) => device.deviceId));
+	const expiresAt = Date.now() + PAIRING_CODE_TTL_MS;
+	const code = config.createCode(expiresAt);
 	const link = formatPairingLink({
 		address: `${address.includes(":") ? `[${address}]` : address}:${DEFAULT_HOST_PORT}`,
-		code: config.createCode(),
+		code,
 		...config.host,
 		hostName: config.host.name,
 	});
 	const qr = await QRCode.toString(link, { type: "utf8", errorCorrectionLevel: "L" });
-	const notice = `Listening: ${addresses.map((a) => `${a.includes(":") ? `[${a}]` : a}:${DEFAULT_HOST_PORT}`).join(", ")}\n${addresses.length === 1 ? "WARNING: No Tailscale address. Phone cannot connect over loopback; start Tailscale and restart Host.\n" : ""}Scan on your phone (single use; expires in 10 minutes). Keep this link private.\n${link}\n\n`;
-	await ui.custom<void>((_tui, _theme, _kb, done) => ({
-		render(width) {
-			const lines = qr.trimEnd().split("\n");
-			return [
-				...new Text(notice, 0, 0).render(width),
-				...(width >= Math.max(...lines.map((line) => line.length))
-					? lines
-					: new Text("Widen the terminal to show the QR, or use the link above.", 0, 0).render(width)),
-				...new Text("Enter / Esc: dismiss (code remains valid until used/expired)", 0, 0).render(width),
-			];
-		},
-		handleInput(data) {
-			if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape)) done();
-		},
-		invalidate() {},
-	}));
+	const notice = pairingNotice(addresses, DEFAULT_HOST_PORT, link);
+	await ui.custom<void>((tui, _theme, _kb, done) => {
+		// The Host pairs in its own process; watch the shared config for this code's device.
+		let progress: PairingProgress = { state: "waiting" };
+		const check = () => {
+			try {
+				progress = pairingProgress({
+					codePending: config.codePending(code),
+					before,
+					devices: config.devices(),
+					expiresAt,
+					now: Date.now(),
+				});
+			} catch {
+				return; // devices.json is being replaced: look again on the next tick
+			}
+			if (progress.state === "waiting") return;
+			clearInterval(timer);
+			tui.requestRender();
+		};
+		const timer = setInterval(check, 1000);
+		timer.unref();
+		const text = (lines: string[], width: number) => new Text(lines.join("\n"), 0, 0).render(width);
+		return {
+			render(width) {
+				// Once used or expired, the code is worthless: show the outcome instead of the QR.
+				if (progress.state !== "waiting") return text(pairingStatusLines(progress), width);
+				const lines = qr.trimEnd().split("\n");
+				return [
+					...text([notice], width),
+					...(width >= Math.max(...lines.map((line) => line.length))
+						? lines
+						: text(["Widen the terminal to show the QR, or use the link above."], width)),
+					...text(pairingStatusLines(progress), width),
+				];
+			},
+			handleInput(data) {
+				if (!matchesKey(data, Key.enter) && !matchesKey(data, Key.escape)) return;
+				clearInterval(timer);
+				done();
+			},
+			invalidate() {},
+			dispose() {
+				clearInterval(timer);
+			},
+		};
+	});
 }
+/**
+ * After `pi install`, nothing tells a PC user about `/pimate setup`. A PC TUI Pi says it once per process while
+ * no phone has ever paired and no Host runs; it never creates config files or starts anything.
+ */
+export function hintSetup(
+	ctx: ExtensionContext,
+	state: { setupHinted: boolean; abducoSession: string | null },
+	deps = { configDir: resolveConfigDir, health: hostHealth },
+): Promise<void> {
+	if (ctx.mode !== "tui" || state.setupHinted || state.abducoSession) return Promise.resolve();
+	state.setupHinted = true;
+	if (pairedDeviceCount(deps.configDir()) > 0) return Promise.resolve();
+	return deps.health().then((health) => {
+		if (health) return;
+		try {
+			getLocalUI(ctx).notify(SETUP_HINT, "info");
+		} catch {
+			// The session was replaced meanwhile (/new, /resume): its context is gone.
+		}
+	});
+}
+
 export function registerSetup(pi: ExtensionAPI): void {
 	pi.registerCommand("pimate", {
 		description: "PiMate: setup, pair, devices, status, start, stop, restart, uninstall (PC only)",
@@ -101,10 +167,11 @@ export function registerSetup(pi: ExtensionAPI): void {
 							if (await ui.confirm("PiMate is already running", "Create another phone pairing?")) await pair(ctx);
 							return;
 						}
+						const tailscale = hasTailscaleAddress(await defaultListenAddresses());
 						if (
 							!(await ui.confirm(
 								"Set up PiMate",
-								"Start a Host listening on loopback and this PC's Tailscale addresses, then create a private phone pairing code? Paired devices can control Pi. No LAN/public listener is opened.",
+								`Start a Host listening on loopback and this PC's Tailscale addresses, then create a private phone pairing code? Paired devices can control Pi. No LAN/public listener is opened.${tailscale ? "" : `\n\n${NO_TAILSCALE}. You can continue now and pair later with /pimate restart and /pimate pair.`}`,
 							))
 						)
 							return;

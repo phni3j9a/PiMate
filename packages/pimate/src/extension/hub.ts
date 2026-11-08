@@ -50,6 +50,8 @@ export class Hub {
 	subscriptions: (() => void)[] = [];
 	tui?: { requestRender(force?: boolean): void };
 	winchInstalled = false;
+	/** The unpaired-PC hint (`/pimate setup`) was considered for this process. */
+	setupHinted = false;
 	pcPrompt: PcPrompt | null = null;
 	/** Account-wide, so it survives session switches and reloads for the life of the process. */
 	quotas = new Map<QuotaSource, SubscriptionQuota>();

@@ -87,11 +87,11 @@ export async function pairWithHost(
 export function pairingErrorMessage(kind: PairingFailureKind, address: string): string {
 	switch (kind) {
 		case "invalid_code":
-			return "コードが正しくないか、すでに使われています。PC で pimate pair をもう一度実行してください。";
+			return "コードが正しくないか、すでに使われています。PC の Pi で /pimate pair を実行し、新しい QR コードを読み取ってください。";
 		case "expired_code":
-			return "コードの有効期限（10分）が切れています。PC で pimate pair をもう一度実行してください。";
+			return "コードの有効期限（10分）が切れています。PC の Pi で /pimate pair を実行し、新しい QR コードを読み取ってください。";
 		case "unreachable":
-			return `${address} に接続できません。PC で pimate serve が動いているか、同じ Tailscale に接続しているか確認してください。`;
+			return `${address} に接続できません。PC とこのスマホが同じ Tailscale につながっているか、PC の Host が動いているか（PC の Pi で /pimate status）確認してください。`;
 		case "timeout":
 			return `${address} から応答がありません。ネットワークを確認してください。`;
 		case "host_mismatch":

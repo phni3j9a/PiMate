@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
 	input: {
 		marginTop: 12,
 		minHeight: 44,
-		borderRadius: radii.input,
+		borderRadius: radii.control,
 		backgroundColor: colors.background,
 		paddingHorizontal: 16,
 		paddingVertical: 10,
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
 	actions: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 20, marginTop: 12 },
 	answer: {
 		height: 40,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.accent,
 		paddingHorizontal: 20,
 		flexDirection: "row",

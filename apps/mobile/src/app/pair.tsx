@@ -1,6 +1,7 @@
 /**
- * Pairing / onboarding: run `pimate pair` on the PC, then scan its QR code (or paste the link, or open the
- * pimate://pair?... deep link) → confirm → POST /pair → chat. No mock exists; built from the design tokens.
+ * Pairing / onboarding (docs/design/html/Pair.html, Setup-Tailscale.html, Setup-PC.html): a short setup guide
+ * (Tailscale, `/pimate setup` on the PC), then scan the PC's QR code (or paste the link, or open the
+ * pimate://pair?... deep link) → confirm → POST /pair. The first pairing continues to /first-step.
  */
 import type { PairingLink } from "@pimate/protocol";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -11,13 +12,17 @@ import { BackHandler, Linking, ScrollView, StyleSheet, Text, TextInput, View } f
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CloseIcon, ServerIcon } from "@/components/icons";
+import { PiScreen } from "@/components/pairing/parts";
+import { Code, PcSetup, SetupStep, TailscaleSetup } from "@/components/pairing/SetupGuide";
 import { BrandMark, IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
+import { PC_SETUP_COMMAND } from "@/lib/onboarding";
 import { formatPairingLink, PairingFailure, pairingErrorMessage, parsePairingLink } from "@/lib/pairing";
 import { appStore } from "@/lib/runtime";
 import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
 
 type Params = { h?: string; c?: string; n?: string; id?: string };
+type Page = "steps" | "tailscale" | "pc";
 
 /** Accepts pimate://pair?… and the Expo Go form exp://…/--/pair?… */
 function linkFromText(text: string): PairingLink | null {
@@ -41,6 +46,7 @@ export default function PairScreen() {
 	const params = useLocalSearchParams<Params>();
 	const hasHosts = useAppState((s) => s.hosts.length > 0);
 	const hosts = useAppState((s) => s.hosts);
+	const [page, setPage] = useState<Page>("steps");
 	const [link, setLink] = useState<PairingLink | null>(() => linkFromParams(params));
 	const [linkError, setLinkError] = useState<string | null>(
 		params.c && !linkFromParams(params) ? "リンクの形式が正しくありません。" : null,
@@ -62,24 +68,30 @@ export default function PairScreen() {
 		}
 	}, [params.h, params.c, params.n, params.id]);
 
+	// Android back: scanner → confirmation → guide page, before leaving the screen.
 	useEffect(() => {
-		if (!scanning && !link) return;
+		if (!scanning && !link && page === "steps") return;
 		const sub = BackHandler.addEventListener("hardwareBackPress", () => {
 			if (busy) return true;
-			setScanning(false);
-			setLink(null);
-			setError(null);
+			if (scanning) setScanning(false);
+			else if (link) {
+				setLink(null);
+				setError(null);
+			} else setPage("steps");
 			return true;
 		});
 		return () => sub.remove();
-	}, [scanning, link, busy]);
+	}, [scanning, link, page, busy]);
 
 	const startScan = async () => {
 		setLinkError(null);
 		let granted = permission?.granted ?? false;
 		if (!granted && permission?.canAskAgain !== false) granted = (await requestPermission()).granted;
 		if (granted) setScanning(true);
-		else setLinkError("camera");
+		else {
+			setLinkError("camera");
+			setPage("steps");
+		}
 	};
 
 	const submitPasted = () => {
@@ -96,9 +108,12 @@ export default function PairScreen() {
 		if (!link) return;
 		setBusy(true);
 		setError(null);
+		// Only the very first machine gets the one-time first step; adding or re-pairing one returns to the chat.
+		const first = appStore.getState().hosts.length === 0;
 		try {
-			await appStore.pair(link);
-			router.dismissTo("/");
+			const res = await appStore.pair(link);
+			if (first) router.replace({ pathname: "/first-step", params: { hostId: res.hostId } });
+			else router.dismissTo("/");
 		} catch (e) {
 			setError(
 				e instanceof PairingFailure
@@ -145,7 +160,7 @@ export default function PairScreen() {
 						</View>
 					</View>
 					<Text style={styles.body}>
-						このスマホは「{Device.modelName ?? "スマホ"}」として PC に登録されます。登録は PC の pimate revoke
+						このスマホは「{Device.modelName ?? "スマホ"}」として PC に登録されます。登録は PC の Pi の /pimate devices
 						でいつでも取り消せます。
 					</Text>
 					{already ? (
@@ -167,42 +182,50 @@ export default function PairScreen() {
 		);
 	}
 
+	if (page === "tailscale") return <TailscaleSetup onBack={() => setPage("steps")} onNext={() => setPage("pc")} />;
+	if (page === "pc") return <PcSetup onBack={() => setPage("steps")} onScan={() => void startScan()} />;
+
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
-			{hasHosts ? <ScreenHeader title="マシンを追加" onBack={goBack} /> : <View style={{ height: 52 }} />}
+			{hasHosts ? <ScreenHeader title="マシンを追加" onBack={goBack} /> : <View style={{ height: 36 }} />}
 			<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-				{hasHosts ? null : (
+				{hasHosts ? (
+					<Text style={[styles.section, { marginTop: 8 }]} accessibilityRole="header">
+						PC の準備
+					</Text>
+				) : (
 					<>
-						<BrandMark size={56} style={styles.mark} />
+						<BrandMark size={44} style={styles.mark} />
 						<Text style={styles.title} accessibilityRole="header">
 							PC の Pi とつなぐ
 						</Text>
-						<Text style={styles.body}>
-							PC で動いている Pi を、このスマホから確認・操作できます。最初に PC とペアリングします。
-						</Text>
+						<Text style={styles.lead}>PC で動いている Pi を、このスマホから確認・操作できます。</Text>
+						<View style={styles.hero}>
+							<PiScreen command={PC_SETUP_COMMAND} caption="PC の Pi でこう打つと、QR コードが表示されます" />
+						</View>
 					</>
 				)}
 
-				<View style={[styles.steps, hasHosts && { marginTop: 8 }]}>
-					<View style={styles.step}>
-						<Text style={styles.stepNumber}>1</Text>
-						<View style={styles.flex}>
-							<Text style={styles.stepTitle}>PC のターミナルで実行します</Text>
-							<View style={styles.code}>
-								<Text style={styles.codeText} selectable>
-									pimate pair
-								</Text>
-							</View>
-							<Text style={styles.caption}>Host が動いていないときは、先に pimate serve を起動してください。</Text>
-						</View>
-					</View>
-					<View style={styles.step}>
-						<Text style={styles.stepNumber}>2</Text>
-						<View style={styles.flex}>
-							<Text style={styles.stepTitle}>表示された QR コードを読み取ります</Text>
-							<Text style={styles.caption}>コードは 10 分間、1 回だけ使えます。</Text>
-						</View>
-					</View>
+				<View style={styles.steps}>
+					<SetupStep
+						number={1}
+						title="スマホと PC を Tailscale でつなぐ"
+						label="両方で同じアカウントにログイン"
+						onPress={() => setPage("tailscale")}
+					>
+						両方で同じアカウントにログイン
+					</SetupStep>
+					<SetupStep
+						number={2}
+						title="PC に PiMate を入れる"
+						label={`Pi で ${PC_SETUP_COMMAND} を実行`}
+						onPress={() => setPage("pc")}
+					>
+						Pi で <Code>{PC_SETUP_COMMAND}</Code> を実行
+					</SetupStep>
+					<SetupStep number={3} title="QR コードを読み取る" label="コードは 10 分間、1 回だけ使えます">
+						コードは 10 分間、1 回だけ使えます
+					</SetupStep>
 				</View>
 
 				{pasteOpen ? (
@@ -289,28 +312,17 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
-	mark: { marginBottom: 20 },
+	mark: { marginBottom: 18 },
 	title: { fontSize: 22, lineHeight: 30, fontWeight: "600", color: colors.text },
+	lead: { ...typography.body, color: colors.textSecondary, marginTop: 8 },
 	body: { ...typography.body, color: colors.textSecondary, marginTop: 12 },
-	steps: { marginTop: 32, gap: 24 },
-	step: { flexDirection: "row", gap: 12 },
-	stepNumber: { width: 18, fontSize: 15, lineHeight: 22, fontWeight: "600", color: colors.textSecondary },
-	stepTitle: { fontSize: 15, lineHeight: 22, color: colors.text },
-	code: {
-		marginTop: 10,
-		alignSelf: "flex-start",
-		minWidth: 180,
-		borderRadius: radii.code,
-		backgroundColor: colors.surface,
-		paddingVertical: 10,
-		paddingHorizontal: 14,
-	},
-	codeText: { fontFamily: fontFamily.mono, fontSize: 13, lineHeight: 20, color: colors.text },
-	caption: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },
-	paste: { marginTop: 32 },
+	hero: { marginTop: 24, marginBottom: 12 },
+	section: { fontSize: 12, lineHeight: 18, fontWeight: "600", color: colors.textSecondary },
+	steps: { marginTop: 4 },
+	paste: { marginTop: 24 },
 	pasteField: {
 		minHeight: 48,
-		borderRadius: radii.input,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
 		alignItems: "center",

@@ -121,10 +121,13 @@ export function ScreenHeader({
 	title,
 	onBack,
 	backLabel = "戻る",
+	right,
 }: {
 	title?: string;
 	onBack?: () => void;
 	backLabel?: string;
+	/** Shown at the right end (e.g. step progress). */
+	right?: ReactNode;
 }) {
 	return (
 		<View style={styles.header}>
@@ -140,6 +143,7 @@ export function ScreenHeader({
 					{title}
 				</Text>
 			) : null}
+			{right}
 		</View>
 	);
 }
@@ -160,7 +164,7 @@ export const styles = StyleSheet.create({
 	pressed: { opacity: 0.6 },
 	primary: {
 		height: 48,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.accent,
 		flexDirection: "row",
 		alignItems: "center",

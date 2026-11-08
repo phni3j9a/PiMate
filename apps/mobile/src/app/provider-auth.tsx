@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
 	field: {
 		marginTop: 8,
 		minHeight: 44,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		justifyContent: "center",
 		paddingHorizontal: 14,

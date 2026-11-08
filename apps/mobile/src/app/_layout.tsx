@@ -48,6 +48,7 @@ export default function RootLayout() {
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
 				<Stack.Screen name="(main)" />
 				<Stack.Screen name="pair" />
+				<Stack.Screen name="first-step" />
 				<Stack.Screen name="settings" />
 				<Stack.Screen name="provider-auth" />
 				<Stack.Screen name="new" />

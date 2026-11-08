@@ -59,6 +59,23 @@ export const ClockIcon = ({ size = 12, color = colors.textSecondary }: IconProps
 		<Path d="M12 7v5l3 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 	</Svg>
 );
+export const AlertIcon = ({ size = 16, color = colors.statusFailedText }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
+		<Path d="M12 7.5v5.5M12 16.5h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
+	</Svg>
+);
+/** Opens outside the app (store, browser). */
+export const ExternalIcon = (p: IconProps) => (
+	<Line
+		d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"
+		size={14}
+		{...p}
+	/>
+);
+export const ShareIcon = (p: IconProps) => (
+	<Line d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" size={16} {...p} />
+);
 export const StopIcon = ({ size = 22, color = colors.text }: IconProps) => (
 	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
 		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />
@@ -87,6 +104,13 @@ export const LaptopIcon = ({ size = 15, color = colors.textSecondary }: IconProp
 	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
 		<Rect x={4} y={5} width={16} height={11} rx={1.5} stroke={color} strokeWidth={1.9} />
 		<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+	</Svg>
+);
+/** This phone (first-connection drawings). */
+export const PhoneIcon = ({ size = 20, color = colors.textCode }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+		<Rect x={7} y={3} width={10} height={18} rx={2.5} stroke={color} strokeWidth={1.9} />
+		<Path d="M11 18h2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
 	</Svg>
 );
 

@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
 	titleNote: { ...typography.caption, color: colors.textSecondary },
 	search: {
 		height: 40,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
 		alignItems: "center",

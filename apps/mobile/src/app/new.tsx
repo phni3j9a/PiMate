@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
 	pathField: {
 		marginTop: 8,
 		height: 44,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		justifyContent: "center",
 		paddingHorizontal: 14,
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
 	pickSub: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginTop: 1 },
 	search: {
 		height: 40,
-		borderRadius: radii.capsule,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
 		alignItems: "center",

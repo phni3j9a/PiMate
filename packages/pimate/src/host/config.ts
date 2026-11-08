@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { closeSync, linkSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, linkSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join, resolve } from "node:path";
 import type { PairResponse } from "@pimate/protocol";
@@ -82,6 +82,10 @@ export class HostConfig {
 			flag: "wx",
 		});
 		return code;
+	}
+	/** The code has not been claimed yet (an unused code stays here until it is claimed). */
+	codePending(code: string): boolean {
+		return existsSync(join(this.dir, "pairing", `${hash(code)}.json`));
 	}
 	pair(code: string, name: string): PairResponse {
 		return this.update((devices) => {
