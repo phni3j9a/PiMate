@@ -7,6 +7,7 @@ import { DEFAULT_HOST_PORT, formatPairingLink } from "@pimate/protocol";
 import QRCode from "qrcode";
 import { atomicWrite, HostConfig, resolveConfigDir } from "./config.ts";
 import { HostCore, parseAbducoList } from "./index.ts";
+import { APP_SCAN_BUTTON, NO_TAILSCALE } from "./pairing-guide.ts";
 import { defaultListenAddresses, HostServer } from "./server.ts";
 import { conversation, lastAssistant, type TurnResult, TurnWatch } from "./turn.ts";
 import {
@@ -61,7 +62,12 @@ async function main(): Promise<void> {
 			else throw new Error(usage);
 		}
 		if (command === "pair") {
-			address ??= `${(await defaultListenAddresses()).find((ip) => ip.startsWith("100.")) ?? "127.0.0.1"}:${port}`;
+			let tailscale = true;
+			if (!address) {
+				const ip = (await defaultListenAddresses()).find((a) => a.startsWith("100."));
+				tailscale = !!ip;
+				address = `${ip ?? "127.0.0.1"}:${port}`;
+			}
 			if (!/^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+):\d{1,5}$/.test(address))
 				throw new Error("Invalid pairing address (host:port required)");
 			const link = formatPairingLink({
@@ -72,7 +78,9 @@ async function main(): Promise<void> {
 			});
 			console.log(link);
 			console.log(await QRCode.toString(link, { type: "terminal", small: true }));
+			console.log(`On your phone, open PiMate, tap "${APP_SCAN_BUTTON}" (Scan QR code) and scan this code.`);
 			console.log("Single use; expires in 10 minutes. Keep this code private.");
+			if (!tailscale) console.warn(`WARNING: ${NO_TAILSCALE}, restart the Host, then run pimate pair again.`);
 			return;
 		}
 		const server = new HostServer({ port, listen: listen.length ? listen : undefined });

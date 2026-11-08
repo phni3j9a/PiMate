@@ -258,6 +258,12 @@ setupは既存Hostを検出すると追加pairingのみを提案。別configのH
 手動で `pimate serve` したHostは元のターミナルで停止してください。
 
 `/pimate` はPC TUIのみ。RCのremote promptでは拒否し、セットアップの同意・QR・通知はremote UI bridgeを通しません。
+
+初回の案内（オンボーディング）:
+
+- QR 画面はアプリで押すボタン（「QRコードを読み取る」）を示し、Host の `devices.json` を1秒ごとに見て、このコードで端末が追加されたら QR を消して端末名と次の手順を、期限切れなら `/pimate pair` を案内します（端末名の制御文字は除きます）。
+- `/pimate setup` は Host を起動する前に `tailscale ip` で Tailscale のアドレスを確かめ、なければ同意画面に Tailscale の導入と、あとから `/pimate restart` → `/pimate pair` でつなぐ方法を添えます。CLI の `pimate pair` も、Tailscale のアドレスがなく loopback を使うときは警告します。
+- 電話がまだペアリングされておらず（config の `devices.json` が空・なし）Host も応答しない PC では、TUI の Pi の起動時に `PiMate: run /pimate setup to use this Pi from your phone.` を1行だけ表示します。プロセスごとに1回で、abduco 配下の Pi では出さず、設定ファイルの作成や Host の起動もしません。
 Host/RCはpackage versionとprotocolを送信し、未知の追加fieldは許容、異なるRC protocolはログとstatusに表示してskipします。
 管理UIは既定ポート47800専用。カスタムport/listenを使う開発Hostは従来CLIで管理してください。
 

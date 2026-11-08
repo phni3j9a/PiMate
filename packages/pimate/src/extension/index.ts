@@ -6,7 +6,7 @@ import { validateRequest } from "./dispatch.ts";
 import { createHandlers } from "./handlers.ts";
 import { getHub } from "./hub.ts";
 import { quotaFromHeaders, quotaFromStreamEvent } from "./quota.ts";
-import { registerSetup } from "./setup.ts";
+import { hintSetup, registerSetup } from "./setup.ts";
 import { SubagentRegistry } from "./subagents/registry.ts";
 import { findMessageEntry, normalizeMessage } from "./transcript.ts";
 import { navigateTree } from "./tree.ts";
@@ -67,6 +67,7 @@ export default function pimate(pi: ExtensionAPI): void {
 			};
 			await h.start();
 			patchUI(ctx, h);
+			void hintSetup(ctx, h);
 			if (h.abducoSession) {
 				ctx.ui.setWidget("pimate-redraw", (tui) => {
 					h.tui = tui;
