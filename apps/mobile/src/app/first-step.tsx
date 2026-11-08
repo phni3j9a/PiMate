@@ -9,7 +9,8 @@ import { BackHandler, Linking, ScrollView, StyleSheet, Switch, Text, View } from
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InstanceRow } from "@/components/InstanceDrawer";
 import { MenuIcon, PlusIcon } from "@/components/icons";
-import { Spinner, StatusMark } from "@/components/StatusMark";
+import { CommandNote, Connection } from "@/components/pairing/parts";
+import { Spinner } from "@/components/StatusMark";
 import { PrimaryButton, TextButton } from "@/components/ui";
 import { relativeTime } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
@@ -63,14 +64,9 @@ export default function FirstStepScreen() {
 
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
-			<View style={{ height: 52 }} />
+			<View style={{ height: 36 }} />
 			<ScrollView contentContainerStyle={styles.content}>
-				<View style={styles.connection} accessible accessibilityLabel={`${host.hostName}: ${label.text}`}>
-					<StatusMark kind={label.mark} size={label.mark === "running" ? 12 : 8} />
-					<Text style={[styles.connectionText, label.tone === "failed" && { color: colors.statusFailedText }]}>
-						{label.text}
-					</Text>
-				</View>
+				<Connection mark={label.mark} label={`このスマホと ${host.hostName}: ${label.text}`} />
 				<Text style={styles.title} accessibilityRole="header">
 					{host.hostName} とつながりました
 				</Text>
@@ -78,7 +74,7 @@ export default function FirstStepScreen() {
 				{phase === "loading" ? (
 					<View style={styles.loading}>
 						<Spinner size={16} />
-						<Text style={styles.body}>PC の Pi を確認しています…</Text>
+						<Text style={[styles.body, { marginTop: 0 }]}>PC の Pi を確認しています…</Text>
 					</View>
 				) : phase === "offline" ? (
 					<>
@@ -99,11 +95,16 @@ export default function FirstStepScreen() {
 						<Text style={styles.body}>
 							まだ起動中の Pi はありません。このスマホから PC のフォルダを選んで、新しい Pi を起動できます。
 						</Text>
-						<Text style={styles.caption}>PC のターミナルで pi を起動しても、ここに表示されます。</Text>
+						<View style={styles.piHint}>
+							<CommandNote command="pi">PC のターミナルで起動した Pi も、ここに表示されます</CommandNote>
+						</View>
 					</>
 				) : (
 					<>
-						<Text style={styles.body}>PC で動いている Pi です。選ぶとチャットを開きます。</Text>
+						<Text style={styles.body}>選ぶとチャットを開きます。</Text>
+						<Text style={[styles.section, styles.listSection]} accessibilityRole="header">
+							起動中の Pi
+						</Text>
 						<View style={styles.list}>
 							{rows.map((row) => (
 								<InstanceRow
@@ -185,15 +186,14 @@ const styles = StyleSheet.create({
 	flex: { flex: 1, minWidth: 0 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
-	connection: { flexDirection: "row", alignItems: "center", gap: 6 },
-	connectionText: { ...typography.caption, color: colors.textSecondary },
-	title: { marginTop: 8, fontSize: 22, lineHeight: 30, fontWeight: "600", color: colors.text },
-	body: { ...typography.body, color: colors.textSecondary, marginTop: 12 },
-	caption: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },
-	loading: { flexDirection: "row", alignItems: "center", gap: 10 },
+	title: { marginTop: 20, fontSize: 22, lineHeight: 30, fontWeight: "600", color: colors.text },
+	body: { ...typography.body, color: colors.textSecondary, marginTop: 8 },
+	loading: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
 	inlineAction: { alignSelf: "flex-start", marginTop: 4 },
+	piHint: { marginTop: 20 },
+	listSection: { marginTop: 24 },
 	// Rows carry their own 12px inset (drawer layout); line their text up with the screen edge.
-	list: { marginTop: 20, marginHorizontal: -12 },
+	list: { marginTop: 4, marginHorizontal: -12 },
 	newPi: { alignSelf: "flex-start", justifyContent: "flex-start", height: 52, gap: 12, marginTop: 4 },
 	section: { marginTop: 36, fontSize: 12, lineHeight: 18, fontWeight: "600", color: colors.textSecondary },
 	notificationRow: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 8 },

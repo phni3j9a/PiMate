@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	firstStepPhase,
-	PC_INSTALL_COMMANDS,
+	PACKAGE_INSTALL_COMMAND,
 	PC_SETUP_COMMAND,
 	pcSetupMessage,
 	TAILSCALE_MIN_ANDROID_API,
@@ -29,7 +29,7 @@ describe("setup guidance", () => {
 	});
 
 	it("tells the PC side the public package and /pimate setup, never the bare pimate CLI", () => {
-		expect(PC_INSTALL_COMMANDS).toBe("pi install npm:@phni3j9a/pimate\npi");
+		expect(PACKAGE_INSTALL_COMMAND).toBe("pi install npm:@phni3j9a/pimate");
 		expect(PC_SETUP_COMMAND).toBe("/pimate setup");
 		const message = pcSetupMessage();
 		expect(message).toContain("pi install npm:@phni3j9a/pimate\npi\n");

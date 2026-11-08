@@ -12,6 +12,7 @@ import { BackHandler, Linking, ScrollView, StyleSheet, Text, TextInput, View } f
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CloseIcon, ServerIcon } from "@/components/icons";
+import { PiScreen } from "@/components/pairing/parts";
 import { Code, PcSetup, SetupStep, TailscaleSetup } from "@/components/pairing/SetupGuide";
 import { BrandMark, IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
@@ -186,40 +187,41 @@ export default function PairScreen() {
 
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
-			{hasHosts ? <ScreenHeader title="マシンを追加" onBack={goBack} /> : <View style={{ height: 52 }} />}
+			{hasHosts ? <ScreenHeader title="マシンを追加" onBack={goBack} /> : <View style={{ height: 36 }} />}
 			<ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-				{hasHosts ? null : (
+				{hasHosts ? (
+					<Text style={[styles.section, { marginTop: 8 }]} accessibilityRole="header">
+						PC の準備
+					</Text>
+				) : (
 					<>
-						<BrandMark size={56} style={styles.mark} />
+						<BrandMark size={44} style={styles.mark} />
 						<Text style={styles.title} accessibilityRole="header">
 							PC の Pi とつなぐ
 						</Text>
-						<Text style={styles.body}>
-							PC で動いている Pi を、このスマホから確認・操作できます。準備が済んでいれば、すぐに QR
-							コードを読み取れます。
-						</Text>
+						<Text style={styles.lead}>PC で動いている Pi を、このスマホから確認・操作できます。</Text>
+						<View style={styles.hero}>
+							<PiScreen command={PC_SETUP_COMMAND} caption="PC の Pi でこう打つと、QR コードが表示されます" />
+						</View>
 					</>
 				)}
 
-				<Text style={[styles.section, hasHosts && { marginTop: 8 }]} accessibilityRole="header">
-					{hasHosts ? "PC の準備" : "はじめての準備"}
-				</Text>
 				<View style={styles.steps}>
 					<SetupStep
 						number={1}
-						title="スマホと PC を Tailscale につなぐ"
-						label="両方で同じアカウントにログインします"
+						title="スマホと PC を Tailscale でつなぐ"
+						label="両方で同じアカウントにログイン"
 						onPress={() => setPage("tailscale")}
 					>
-						両方で同じアカウントにログインします
+						両方で同じアカウントにログイン
 					</SetupStep>
 					<SetupStep
 						number={2}
 						title="PC に PiMate を入れる"
-						label={`Pi で ${PC_SETUP_COMMAND} を実行すると QR が出ます`}
+						label={`Pi で ${PC_SETUP_COMMAND} を実行`}
 						onPress={() => setPage("pc")}
 					>
-						Pi で <Code>{PC_SETUP_COMMAND}</Code> を実行すると QR が出ます
+						Pi で <Code>{PC_SETUP_COMMAND}</Code> を実行
 					</SetupStep>
 					<SetupStep number={3} title="QR コードを読み取る" label="コードは 10 分間、1 回だけ使えます">
 						コードは 10 分間、1 回だけ使えます
@@ -310,15 +312,17 @@ const styles = StyleSheet.create({
 	flex: { flex: 1 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
-	mark: { marginBottom: 20 },
+	mark: { marginBottom: 18 },
 	title: { fontSize: 22, lineHeight: 30, fontWeight: "600", color: colors.text },
+	lead: { ...typography.body, color: colors.textSecondary, marginTop: 8 },
 	body: { ...typography.body, color: colors.textSecondary, marginTop: 12 },
-	section: { marginTop: 32, fontSize: 12, lineHeight: 18, fontWeight: "600", color: colors.textSecondary },
+	hero: { marginTop: 24, marginBottom: 12 },
+	section: { fontSize: 12, lineHeight: 18, fontWeight: "600", color: colors.textSecondary },
 	steps: { marginTop: 4 },
 	paste: { marginTop: 24 },
 	pasteField: {
 		minHeight: 48,
-		borderRadius: radii.input,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
 		alignItems: "center",

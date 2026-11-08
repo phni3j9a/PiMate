@@ -4,9 +4,8 @@
  */
 import type { HostRuntime } from "./store";
 
+/** Run in the PC's shell, followed by `pi` (`/pimate setup` then runs inside Pi). */
 export const PACKAGE_INSTALL_COMMAND = "pi install npm:@phni3j9a/pimate";
-/** Installs the package, then starts Pi in the same terminal (`/pimate setup` runs inside Pi). */
-export const PC_INSTALL_COMMANDS = `${PACKAGE_INSTALL_COMMAND}\npi`;
 export const PC_SETUP_COMMAND = "/pimate setup";
 export const PC_PAIR_COMMAND = "/pimate pair";
 export const TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download";

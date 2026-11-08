@@ -106,6 +106,13 @@ export const LaptopIcon = ({ size = 15, color = colors.textSecondary }: IconProp
 		<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
 	</Svg>
 );
+/** This phone (first-connection drawings). */
+export const PhoneIcon = ({ size = 20, color = colors.textCode }: IconProps) => (
+	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+		<Rect x={7} y={3} width={10} height={18} rx={2.5} stroke={color} strokeWidth={1.9} />
+		<Path d="M11 18h2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+	</Svg>
+);
 
 export const MoreIcon = ({ size = 20, color = colors.text }: IconProps) => (
 	<Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>

@@ -10,7 +10,7 @@ import { useAppState, useNow } from "@/lib/hooks";
 import { buildDrawerGroups, type DrawerRow, drawerSubagentText, hostConnectionLabel } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
-import { colors, fontFamily, typography } from "@/theme/tokens";
+import { colors, fontFamily, radii, typography } from "@/theme/tokens";
 
 import { BellIcon, GearIcon, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
 	search: {
 		flex: 1,
 		height: 40,
-		borderRadius: 20,
+		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
 		alignItems: "center",
