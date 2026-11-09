@@ -14,7 +14,18 @@ export interface NotificationSettings {
 	failed: boolean;
 }
 export type NotificationPermission = "granted" | "denied" | "undetermined";
+/** Settings' one control: オフ / 要対応 (input + failed) / すべて (input + complete + failed). */
+export type NotificationLevel = "off" | "attention" | "all";
 const DEFAULTS: NotificationSettings = { enabled: false, input: true, complete: true, failed: true };
+
+export function notificationLevel(settings: NotificationSettings): NotificationLevel {
+	return !settings.enabled ? "off" : settings.complete ? "all" : "attention";
+}
+
+/** Enabled settings always include input and failed (older builds stored any combination); complete is kept. */
+function normalized(settings: NotificationSettings): NotificationSettings {
+	return settings.enabled ? { ...settings, input: true, failed: true } : settings;
+}
 const KEY = "pimate.notifications.v1";
 const LABELS: Record<PiAlert["kind"], [NotificationCategory, string]> = {
 	input: ["input", "Pi が入力を待っています"],
@@ -73,7 +84,10 @@ export class NotificationCenter {
 			const settings = { ...DEFAULTS };
 			for (const key of Object.keys(settings) as (keyof NotificationSettings)[])
 				if (typeof value?.[key] === "boolean") settings[key] = value[key];
-			this.set({ settings });
+			const next = normalized(settings);
+			if (next.input !== settings.input || next.failed !== settings.failed)
+				await this.deps.storage.setItem(KEY, JSON.stringify(next)).catch(() => {});
+			this.set({ settings: next });
 		} catch {
 			this.set({ error: "通知設定を読み込めませんでした。通知はオフのままです。" });
 		}
@@ -91,12 +105,25 @@ export class NotificationCenter {
 	private watch() {
 		this.deps.watch(this.state.loaded && this.state.settings.enabled && this.state.permission === "granted");
 	}
-	async update(key: keyof NotificationSettings, value: boolean) {
+	/** One switch (first-step): on keeps the stored categories. */
+	update(key: keyof NotificationSettings, value: boolean) {
+		return this.save({ ...this.state.settings, [key]: value });
+	}
+	setLevel(level: NotificationLevel) {
+		const { complete } = this.state.settings;
+		return this.save({
+			enabled: level !== "off",
+			input: true,
+			complete: level === "all" || (level === "off" && complete),
+			failed: true,
+		});
+	}
+	private async save(requested: NotificationSettings) {
 		if (!this.state.loaded || this.state.busy) return;
 		this.set({ busy: true, error: "" });
 		try {
-			if (key === "enabled" && value) this.set({ permission: await this.deps.permission(true) });
-			const settings = { ...this.state.settings, [key]: value };
+			const settings = normalized(requested);
+			if (settings.enabled && !this.state.settings.enabled) this.set({ permission: await this.deps.permission(true) });
 			// Never display enabled after a storage failure (restart must retain the same intent).
 			this.saveQueue = this.saveQueue
 				.catch(() => {})
@@ -104,7 +131,7 @@ export class NotificationCenter {
 			await this.saveQueue;
 			this.set({ settings });
 			this.watch();
-			if (key === "enabled" && !value) await this.deps.clear();
+			if (!settings.enabled) await this.deps.clear();
 		} catch {
 			this.set({ error: "通知設定を変更できませんでした。もう一度お試しください。" });
 		} finally {
