@@ -38,7 +38,7 @@ QR 画面のペアリング完了表示・Tailscale の事前チェック・未�
 
 Grok Bot 用の Skill を `grok-bot/skills/` に同梱しています。PC 0.1.16以上では、`pimate spawn` で起動した Pi がアプリ0.1.11以上の一覧で「Grok Bot」区画に分かれます（更新後に起動した Pi が対象。Host の再起動が必要）。設定と安全上の注意は下記の詳細ドキュメントを参照してください。
 
-更新: `pi update npm:@phni3j9a/pimate` → `/pimate restart` → `/pimate status`。RC の新機能には各 Pi で `/reload` または再起動が必要です。
+更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。
 アプリ0.1.12 / PC 0.1.17以上では systemd 常駐 Host をアプリの設定から更新できます。旧Hostとの不一致時は再起動を提案します。Host再起動はPiセッションを終了しません。
 
 削除: `/pimate uninstall` の後、ターミナルで `pi remove npm:@phni3j9a/pimate`。

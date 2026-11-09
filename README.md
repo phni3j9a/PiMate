@@ -77,7 +77,7 @@ APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.m
 - `/pimate devices` — 接続済み端末一覧・失効
 - `/pimate status` — Host/Extensionのバージョン、互換性、公開先、常駐状態、abduco
 - `/pimate start` / `stop` / `restart` — Host制御（Piセッションは終了しません）
-- 更新: `pi update npm:@phni3j9a/pimate` → `/pimate restart` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。旧 Host の初回更新は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されないため、RC の新機能には各 Pi で `/reload` または再起動が必要です。今回の Host 機能には不要です。
+- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。初回は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されず、各 Pi で `/reload` または再起動してください（0.1.19 の新機能は Host 側だけなので、Host の再起動だけで使えます）。
 
 ### 削除
 
