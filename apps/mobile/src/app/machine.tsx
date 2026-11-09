@@ -12,9 +12,8 @@ import { ChevronRightIcon } from "@/components/icons";
 import { PiScreen, ShellCommands } from "@/components/pairing/parts";
 import { StatusMark } from "@/components/StatusMark";
 import { ScreenHeader, TextButton, styles as ui } from "@/components/ui";
-import { platformLabel } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
-import { hostConnectionLabel } from "@/lib/presentation";
+import { hostConnectionLabel, hostSummary } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
 import { newer } from "@/lib/updates";
@@ -26,7 +25,7 @@ const RESTART_COMMAND = "/pimate restart";
 
 function formatDate(ms: number): string {
 	const d = new Date(ms);
-	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+	return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 /** A section header with the standard gap above it (the first section passes `first`). */
@@ -42,57 +41,38 @@ function Section({ title, first, children }: { title: string; first?: boolean; c
 	);
 }
 
-function InfoRow({ label, children }: { label: string; children: ReactNode }) {
-	const styles = useStyles();
-	return (
-		<View style={styles.row} accessible accessibilityLabel={label}>
-			<Text style={styles.label}>{label}</Text>
-			<View style={styles.value}>{children}</View>
-		</View>
-	);
-}
-
 function StatusSection({ host }: { host: HostRuntime }) {
 	const styles = useStyles();
 	const { colors } = useAppearance();
 	const label = hostConnectionLabel(host);
-	const platform = platformLabel(host.platform ?? undefined);
+	const summary = host.state === "connected" ? hostSummary(host) : label.text;
+	const paired = `${formatDate(host.pairedAt)} にペアリング`;
 	return (
 		<Section title="状態" first>
-			<InfoRow label={`接続、${label.text}`}>
-				<StatusMark kind={label.mark} size={label.mark === "running" ? 12 : 8} />
-				<Text style={[styles.valueText, label.tone === "failed" && { color: colors.statusFailedText }]}>
-					{label.text}
+			<View style={styles.row}>
+				<View style={styles.mark}>
+					<StatusMark kind={label.mark} size={label.mark === "running" ? 12 : 8} />
+				</View>
+				<Text
+					style={[styles.name, styles.flex, label.tone === "failed" && { color: colors.statusFailedText }]}
+					numberOfLines={1}
+				>
+					{summary}
 				</Text>
-			</InfoRow>
-			{platform ? (
-				<InfoRow label={`OS、${platform}`}>
-					<Text style={styles.valueText}>{platform}</Text>
-				</InfoRow>
-			) : null}
-			<InfoRow label={`アドレス、${host.address}`}>
-				<Text style={styles.valueText} numberOfLines={1} selectable>
-					{host.address}
-				</Text>
-			</InfoRow>
-			<InfoRow label={`ペアリング、${formatDate(host.pairedAt)}`}>
-				<Text style={styles.valueText}>{formatDate(host.pairedAt)}</Text>
-			</InfoRow>
-			{host.state === "connected" && host.instancesReceived ? (
-				<InfoRow label={`Pi、${host.instances.length} 件`}>
-					<Text style={styles.valueText}>{host.instances.length} 件</Text>
-				</InfoRow>
-			) : null}
-			{host.state === "offline" ? (
-				<TextButton
-					label="今すぐ再接続"
-					weight="400"
-					style={styles.leading}
-					onPress={() => appStore.retryConnection(host.hostId)}
-				/>
-			) : host.state === "auth_failed" ? (
-				<TextButton label="ペアリングし直す" weight="400" style={styles.leading} onPress={() => router.push("/pair")} />
-			) : null}
+				{host.state === "offline" ? (
+					<TextButton label="今すぐ再接続" weight="400" onPress={() => appStore.retryConnection(host.hostId)} />
+				) : host.state === "auth_failed" ? (
+					<TextButton label="ペアリングし直す" weight="400" onPress={() => router.push("/pair")} />
+				) : null}
+			</View>
+			<View style={styles.machine} accessible accessibilityLabel={`${host.address}、${paired}`}>
+				<View style={styles.flex}>
+					<Text style={styles.name} numberOfLines={1} selectable>
+						{host.address}
+					</Text>
+					<Text style={styles.sub}>{paired}</Text>
+				</View>
+			</View>
 		</Section>
 	);
 }
@@ -180,12 +160,15 @@ function PackageSection({ host }: { host: HostRuntime }) {
 					<TextButton label="更新" onPress={confirm} />
 				) : null}
 			</View>
-			{manual ? (
+			{manual && check?.reason === "not_service" ? (
 				<View style={styles.commands}>
 					<Text style={styles.sub}>PC で実行してください</Text>
 					<ShellCommands commands={[UPDATE_COMMAND]} />
 					<PiScreen command={RESTART_COMMAND} copy />
 				</View>
+			) : manual ? (
+				// A dev checkout: `pi update npm:…` would install a second copy, so only point at the PC.
+				<Text style={[styles.sub, styles.commands]}>開発版のため PC で更新してください</Text>
 			) : null}
 		</Section>
 	);
@@ -277,12 +260,10 @@ const useStyles = makeStyles(({ colors }) => ({
 	section: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
 	sectionGap: { marginTop: 28 },
 	row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
-	label: { fontSize: 15, lineHeight: 22, color: colors.text },
-	value: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 8 },
-	valueText: { flexShrink: 1, fontSize: 15, lineHeight: 22, color: colors.textSecondary, textAlign: "right" },
 	machine: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 },
 	name: { fontSize: 15, lineHeight: 22, color: colors.text },
 	sub: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
 	commands: { gap: 8, paddingBottom: 8 },
+	mark: { width: 12, alignItems: "center" },
 	leading: { justifyContent: "flex-start" },
 }));
