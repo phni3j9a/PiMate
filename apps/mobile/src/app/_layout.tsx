@@ -1,6 +1,7 @@
 import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono/400Regular";
 import { JetBrainsMono_600SemiBold } from "@expo-google-fonts/jetbrains-mono/600SemiBold";
 import { useFonts } from "expo-font";
+import { NavigationBar } from "expo-navigation-bar";
 import * as Notifications from "expo-notifications";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -47,6 +48,7 @@ export default function RootLayout() {
 	return (
 		<GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
 			<StatusBar style={scheme === "dark" ? "light" : "dark"} />
+			<NavigationBar style={scheme === "dark" ? "light" : "dark"} />
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
 				<Stack.Screen name="(main)" />
 				<Stack.Screen name="pair" />
