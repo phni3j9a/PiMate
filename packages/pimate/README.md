@@ -67,6 +67,12 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 `pimate` bin も同じCLIです。`HostServer` / `HostConfig` は `@pimate/pimate/host` から使用できます。
 `await server.start()` は実際のlistenアドレス/ポートを返します（テストはport:0）。`await server.close()` はPiを終了しません。
 
+### 端末・Host・GitHub の状態（PC パッケージ0.1.19以上）
+
+認証済みアプリは `pairedDevices` capability で `devices` / `device_revoke` を利用でき、一覧には端末名・ID・作成日時・最終接続日時・要求元かどうかのみを返します。token や hash は返しません。すべての登録端末は自身を含めて任意の登録を取り消せます。自身の取り消し結果は切断より先に送信し、切断コードは4403です。切断やタイムアウトで結果が不明な場合は PC で確認し、自動再送しません。
+
+`hostRestart` は Host が `pimate-host.service` 内にいるときだけ true。`host_restart` は固定の `systemctl --user restart --no-block pimate-host.service` のみを実行します。再起動に伴う切断が結果より先に届く場合は結果不明です。`githubStatus` が true のとき `github_status` は固定の `gh api --hostname github.com user --jq .login` で github.com の導入・認証状態とログイン名のみを返します。通信エラーなどは失敗として扱い、未ログインと混同せず、トークンや生出力も返しません。いずれも余分なキーは拒否します。旧 Host には capability がなく、新しい要求を送れません。
+
 ### セキュリティと同期
 
 - **既定のbindは127.0.0.1とTailscaleアドレスのみ**。Tailscaleのアドレスは `tailscale ip` が返し、かつ手元のインターフェースにあるものだけを使います（100.64.0.0/10は携帯回線などでも使われるため、範囲だけでは判定しません）。Tailscaleがない・止まっている場合はloopbackのみで警告。`--listen` は明示的な上書きで、公開IP/全インターフェースを指定すると外部公開になります。TLSはHostではなくTailscale/WireGuardに依存します。Tailscale ACLも別途設定してください。

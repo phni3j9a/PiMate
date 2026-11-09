@@ -6,6 +6,7 @@ import type {
 	GitHubErrorCode,
 	GitHubQuery,
 	GitHubResult,
+	GitHubStatusResult,
 	GitHubSummary,
 	InstanceSummary,
 } from "@pimate/protocol";
@@ -123,6 +124,32 @@ function failure(error: unknown): Extract<GitHubResult, { ok: false }> {
 	else if (/not found|could not resolve to (a|an)|could not find|no pull requests found/i.test(stderr))
 		code = "not_found";
 	return { ok: false, code, message: (stderr || text(e?.message) || "GitHub query failed").trim().slice(0, 500) };
+}
+
+/** Read only the current github.com identity; never return gh output or errors. */
+export async function githubStatus(
+	cwd: string,
+	env: NodeJS.ProcessEnv = process.env,
+	exec: GitHubExec = execFileAsync,
+): Promise<GitHubStatusResult> {
+	try {
+		const { stdout } = await exec("gh", ["api", "--hostname", "github.com", "user", "--jq", ".login"], {
+			cwd,
+			env: { ...env, GH_REPO: "", GH_PROMPT_DISABLED: "1", NO_COLOR: "1", GH_NO_UPDATE_NOTIFIER: "1" },
+			timeout: 15_000,
+			maxBuffer: 4 * 1024 * 1024,
+			encoding: "utf8",
+		});
+		const login = stdout.trim();
+		if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) return { ok: false, code: "failed" };
+		return { ok: true, status: { installed: true, loggedIn: true, login } };
+	} catch (error) {
+		const e = error as { code?: unknown; stderr?: unknown };
+		if (e?.code === "ENOENT") return { ok: true, status: { installed: false, loggedIn: false } };
+		if (e?.code === 4 || /HTTP 401|gh auth login|not logged (?:in|into)/i.test(text(e?.stderr, 4096)))
+			return { ok: true, status: { installed: true, loggedIn: false } };
+		return { ok: false, code: "failed" };
+	}
 }
 
 /** The caller supplies only its own discovered instance list. All CLI arguments below are fixed except a validated number. */

@@ -123,3 +123,40 @@ it("executes the fixed command against a test-only fake pi", async () => {
 	expect(await updater.update()).toMatchObject({ ok: true, restarting: false });
 	expect(readFileSync(join(root, "args"), "utf8")).toBe("update\nnpm:@phni3j9a/pimate\n");
 });
+
+it("detects only the managed service cgroup", async () => {
+	const { inManagedService } = await import("../src/host/update.ts");
+	expect(inManagedService("linux", () => "0::/user.slice/pimate-host.service\n")).toBe(true);
+	expect(inManagedService("linux", () => "0::/user.slice/pimate-host-123.service\n")).toBe(false);
+	expect(inManagedService("darwin", () => "0::/pimate-host.service")).toBe(false);
+	expect(
+		inManagedService("linux", () => {
+			throw new Error("no proc");
+		}),
+	).toBe(false);
+});
+
+it("uses fixed restart arguments with a fake systemctl", async () => {
+	const { execFileSync } = await import("node:child_process");
+	const dir = mkdtempSync(join(tmpdir(), "pimate-systemctl-test-"));
+	dirs.push(dir);
+	writeFileSync(join(dir, "systemctl"), '#!/bin/sh\nprintf "%s\\n" "$@" > "$OUT"\n', { mode: 0o700 });
+	const module = new URL("../src/host/service.ts", import.meta.url).href;
+	execFileSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`import { restartManagedService } from ${JSON.stringify(module)}; await restartManagedService();`,
+		],
+		{
+			env: { ...process.env, PATH: dir, HOME: dir, OUT: join(dir, "args") },
+		},
+	);
+	expect(readFileSync(join(dir, "args"), "utf8").trim().split("\n")).toEqual([
+		"--user",
+		"restart",
+		"--no-block",
+		"pimate-host.service",
+	]);
+});
