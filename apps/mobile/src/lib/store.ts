@@ -306,6 +306,7 @@ export class AppStore {
 	private readonly deps: StoreDeps;
 	private readonly registry: HostRegistry;
 	private readonly records = new Map<string, PairedHost>();
+	private readonly removing = new Map<string, number>();
 	private readonly connections = new Map<string, HostConnection>();
 	private readonly unsubscribers = new Map<string, () => void>();
 	private initPromise: Promise<void> | null = null;
@@ -508,7 +509,18 @@ export class AppStore {
 	}
 
 	async removeHost(hostId: string): Promise<void> {
-		await this.registry.remove(hostId);
+		this.removing.set(hostId, (this.removing.get(hostId) ?? 0) + 1);
+		try {
+			await this.registry.remove(hostId);
+		} catch (error) {
+			if (this.removing.get(hostId) === 1) {
+				this.removing.delete(hostId);
+				if (this.connections.get(hostId)?.state === "auth_failed") this.onConnectionChange(hostId);
+			} else this.removing.set(hostId, this.removing.get(hostId)! - 1);
+			throw error;
+		}
+		if (this.removing.get(hostId) === 1) this.removing.delete(hostId);
+		else this.removing.set(hostId, this.removing.get(hostId)! - 1);
 		this.detach(hostId);
 		const patch: Partial<AppState> = { hosts: this.runtimes() };
 		if (this.state.selection?.hostId === hostId) {
@@ -523,7 +535,7 @@ export class AppStore {
 		const record = this.records.get(hostId);
 		const conn = this.connections.get(hostId);
 		if (!record || !conn) return;
-		if (conn.state === "auth_failed" && !record.needsRepair) {
+		if (conn.state === "auth_failed" && !record.needsRepair && !this.removing.has(hostId)) {
 			record.needsRepair = true;
 			void this.registry.save(record).catch(() => {});
 		}
@@ -1394,11 +1406,14 @@ export class AppStore {
 				title: "再起動できませんでした",
 				text: "PC のサービスを確認してください。",
 			};
-		} catch {
+		} catch (error) {
+			if (error instanceof RcError && error.code === "outcome_unknown" && error.reason !== "timeout")
+				return { ok: false, code: "disconnected", title: "接続が切れました", text: "PC で状態を確認してください。" };
+			if (error instanceof RcError && error.code === "not_connected") return { ok: false, ...offlineText() };
 			return {
 				ok: false,
 				title: "再起動結果を確認できません",
-				text: "接続が切れたか時間切れです。PC で確認してください。自動再送はしません。",
+				text: "PC で状態を確認してください。自動再送はしません。",
 			};
 		}
 	}

@@ -162,8 +162,13 @@ function PackageSection({ host }: { host: HostRuntime }) {
 				onPress: () => {
 					setRestart("再起動中…");
 					void appStore.restartHost(host.hostId).then((result) => {
-						// No code = the socket closed or timed out after sending, which is what a restart looks like.
-						setRestart(result.ok || !result.code ? "Host を再起動しました" : result.title);
+						setRestart(
+							result.ok
+								? "Host を再起動しました"
+								: result.code === "disconnected"
+									? "Host を再起動しています…"
+									: result.title,
+						);
 					});
 				},
 			},

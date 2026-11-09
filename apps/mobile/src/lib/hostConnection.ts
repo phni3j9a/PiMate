@@ -62,7 +62,10 @@ export interface ConnectionDeps {
 
 export class RcError extends Error {
 	readonly code: "not_connected" | "outcome_unknown" | "unsupported";
-	constructor(code: "not_connected" | "outcome_unknown" | "unsupported") {
+	constructor(
+		code: "not_connected" | "outcome_unknown" | "unsupported",
+		readonly reason?: "timeout",
+	) {
 		super(code);
 		this.code = code;
 	}
@@ -267,7 +270,7 @@ export class HostConnection {
 			const timer = timeoutMs
 				? this.deps.setTimeout(() => {
 						this.hostPending.delete(msg.requestId);
-						reject(new RcError("outcome_unknown"));
+						reject(new RcError("outcome_unknown", "timeout"));
 					}, timeoutMs)
 				: null;
 			const clear = () => {
