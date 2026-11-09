@@ -62,6 +62,12 @@
       ],
       "expo-secure-store",
       [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "PC に表示された PiMate のペアリング用 QR コードを読み取るためにカメラを使います。",
