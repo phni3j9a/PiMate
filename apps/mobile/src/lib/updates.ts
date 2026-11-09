@@ -1,6 +1,7 @@
 /** Version compare and the app release check against GitHub (no React Native imports). */
 
-const RELEASES_URL = "https://api.github.com/repos/phni3j9a/PiMate/releases?per_page=20";
+// shortcut: one page only (app and PC releases alternate, so 100 covers ~50 PC releases between app ones), paginate if that ever stops holding.
+const RELEASES_URL = "https://api.github.com/repos/phni3j9a/PiMate/releases?per_page=100";
 
 /** `latest` is a newer `x.y.z` than `current`; anything else (pre-release suffixes, garbage) is not newer. */
 export function newer(latest: string, current: string): boolean {
