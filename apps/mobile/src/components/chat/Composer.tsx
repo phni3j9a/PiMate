@@ -1,8 +1,7 @@
 /** Chat composer (Main.html footer) with the in-card status notices of Chat-Edge.html. */
 import type { PromptImage } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import {
 	ArrowUpIcon,
 	CheckIcon,
@@ -19,7 +18,8 @@ import { Spinner } from "@/components/StatusMark";
 import { IconButton, TextButton } from "@/components/ui";
 import { openImageViewer } from "@/lib/imageViewer";
 import type { OutboxEntry } from "@/lib/store";
-import { colors, radii, sizes, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii, sizes } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
 
 export type BannerTone = "normal" | "waiting" | "failed";
@@ -34,12 +34,6 @@ export interface Banner {
 	onDismiss?: () => void;
 }
 
-const toneColor: Record<BannerTone, string> = {
-	normal: colors.textSecondary,
-	waiting: colors.statusWaitingText,
-	failed: colors.statusFailedText,
-};
-
 function BannerIcon({ icon, color }: { icon: Banner["icon"]; color: string }) {
 	if (icon === "offline") return <WifiOffIcon color={color} />;
 	if (icon === "swap") return <SwapIcon color={color} size={15} />;
@@ -50,7 +44,11 @@ function BannerIcon({ icon, color }: { icon: Banner["icon"]; color: string }) {
 }
 
 function BannerView({ banner }: { banner: Banner }) {
-	const color = toneColor[banner.tone];
+	const styles = useStyles();
+	const { colors } = useAppearance();
+	const color = { normal: colors.textSecondary, waiting: colors.statusWaitingText, failed: colors.statusFailedText }[
+		banner.tone
+	];
 	return (
 		<View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
 			<View style={styles.bannerIcon}>
@@ -90,6 +88,8 @@ export function QueuedRows({
 	sessionId?: string;
 	onRestore: (id: string) => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	if (!entries.length) return null;
 	return (
 		<ScrollView style={styles.queued} keyboardShouldPersistTaps="handled">
@@ -193,6 +193,9 @@ export function Composer({
 		onRemove: (index: number) => void;
 	};
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
+	const { fontScale } = useWindowDimensions();
 	return (
 		<View>
 			{children}
@@ -223,7 +226,10 @@ export function Composer({
 					</ScrollView>
 				) : null}
 				<TextInput
-					style={styles.input}
+					style={[
+						styles.input,
+						{ minHeight: styles.input.minHeight * fontScale, maxHeight: styles.input.maxHeight * fontScale },
+					]}
 					value={draft}
 					onChangeText={onChangeDraft}
 					placeholder={placeholder}
@@ -288,6 +294,7 @@ export function Composer({
 }
 
 function AttachmentThumbnails({ images }: { images: PromptImage[] }) {
+	const styles = useStyles();
 	return (
 		<ScrollView horizontal contentContainerStyle={styles.attachmentContent} keyboardShouldPersistTaps="handled">
 			{images.map((image, index) => (
@@ -298,7 +305,7 @@ function AttachmentThumbnails({ images }: { images: PromptImage[] }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography, scale }) => ({
 	pressed: { opacity: 0.6 },
 	card: {
 		paddingTop: 12,
@@ -315,8 +322,8 @@ const styles = StyleSheet.create({
 	input: {
 		...typography.composer,
 		color: colors.text,
-		minHeight: typography.composer.lineHeight,
-		maxHeight: typography.composer.lineHeight * 6,
+		minHeight: scale(typography.composer.lineHeight),
+		maxHeight: scale(typography.composer.lineHeight) * 6,
 		padding: 0,
 		paddingRight: 6,
 		textAlignVertical: "top",
@@ -343,7 +350,7 @@ const styles = StyleSheet.create({
 	bannerActionText: { fontSize: 13, fontWeight: "600", color: colors.accentText },
 	unconfirmed: { padding: 12, gap: 4 },
 	queued: { marginBottom: 6, maxHeight: 240 },
-	queuedRow: { height: 40, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 12 },
+	queuedRow: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 12, paddingRight: 12 },
 	queuedLabel: { fontSize: 12, color: colors.textSecondary },
 	queuedText: { flex: 1, minWidth: 0, fontSize: 13, color: colors.text },
-});
+}));

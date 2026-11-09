@@ -5,8 +5,7 @@
 import type { SessionListItem } from "@pimate/protocol";
 import { router } from "expo-router";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { CommandPill } from "@/components/CommandPill";
 import { BackIcon, CheckIcon, ChevronRightIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
@@ -19,7 +18,8 @@ import { chatTitle, originLabel } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { formatCost, sessionStats } from "@/lib/sessionInfo";
 import type { Result } from "@/lib/store";
-import { colors, fontFamily, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily } from "@/theme/tokens";
 
 type Page = "main" | "sessions" | "fork";
 
@@ -86,6 +86,7 @@ async function runInSheet(
 }
 
 function MainPage({ onPage, onClose }: { onPage: (p: Page) => void; onClose: () => void }) {
+	const styles = useStyles();
 	const { view, host, summary, op, ready } = useSelected();
 	const stats = sessionStats(view?.items ?? []);
 	const disabled = !ready || !!op;
@@ -249,6 +250,8 @@ function Row({
 	busy?: boolean;
 	chevron?: boolean;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<Pressable
 			accessibilityRole="button"
@@ -272,6 +275,7 @@ function Row({
 }
 
 function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.subHeader}>
 			<IconButton label="戻る" onPress={onBack} size={40} style={{ marginLeft: -10 }}>
@@ -285,6 +289,7 @@ function SubHeader({ title, onBack }: { title: string; onBack: () => void }) {
 }
 
 function SessionsPage({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+	const styles = useStyles();
 	const { op, ready } = useSelected();
 	const [state, setState] = useState<{ list: SessionListItem[] } | { error: string } | null>(null);
 	const [now] = useState(() => Date.now());
@@ -326,6 +331,7 @@ function SessionsPage({ onBack, onDone }: { onBack: () => void; onDone: () => vo
 }
 
 function ForkPage({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+	const styles = useStyles();
 	const { view, op, ready } = useSelected();
 	const users = (view?.items ?? []).filter((i) => i.kind === "user").reverse();
 	return (
@@ -364,6 +370,7 @@ function ListRow({
 	disabled: boolean;
 	onPress: () => void;
 }): ReactNode {
+	const styles = useStyles();
 	return (
 		<Pressable
 			accessibilityRole="button"
@@ -384,6 +391,7 @@ function ListRow({
 }
 
 function Loading() {
+	const styles = useStyles();
 	return (
 		<View style={{ alignItems: "center", paddingVertical: 28, gap: 8 }}>
 			<Spinner />
@@ -392,7 +400,7 @@ function Loading() {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	title: { ...typography.sheetTitle, color: colors.text },
 	path: { fontFamily: fontFamily.mono, fontSize: 11, lineHeight: 16, color: colors.textSecondary, marginTop: 2 },
@@ -406,14 +414,14 @@ const styles = StyleSheet.create({
 		marginTop: 28,
 		marginBottom: 2,
 	},
-	row: { height: 52, flexDirection: "row", alignItems: "center", gap: 10 },
+	row: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10 },
 	rowLabel: { flex: 1, fontSize: 15, color: colors.text },
 	command: { fontFamily: fontFamily.mono, fontSize: 11, color: colors.textSecondary },
 	detail: { fontSize: 13, color: colors.textSecondary },
 	error: { marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: colors.surface },
 	errorTitle: { fontSize: 14, lineHeight: 20, fontWeight: "600", color: colors.statusFailedText },
 	errorText: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-	infoRow: { height: 48, flexDirection: "row", alignItems: "center" },
+	infoRow: { minHeight: 48, flexDirection: "row", alignItems: "center" },
 	infoValue: { fontSize: 13, color: colors.textSecondary },
 	caption: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },
 	destructive: { alignSelf: "flex-start", minHeight: 46, marginTop: 14 },
@@ -423,4 +431,4 @@ const styles = StyleSheet.create({
 	listRow: { minHeight: 56, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
 	listTitle: { fontSize: 15, lineHeight: 21, color: colors.text },
 	listMeta: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2 },
-});
+}));

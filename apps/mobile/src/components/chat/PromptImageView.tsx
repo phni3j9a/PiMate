@@ -2,9 +2,10 @@
 import type { ViewImage } from "@pimate/protocol";
 import { Image } from "expo-image";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import { openImageViewer } from "@/lib/imageViewer";
-import { colors, radii } from "@/theme/tokens";
+import { makeStyles } from "@/theme/appearance";
+import { radii } from "@/theme/tokens";
 
 export function PromptImageView({
 	image,
@@ -15,6 +16,7 @@ export function PromptImageView({
 	compact?: boolean;
 	onPress?: () => void;
 }) {
+	const styles = useStyles();
 	const [failed, setFailed] = useState<string | null>(null);
 	const uri = useMemo(() => `data:${image.mimeType};base64,${image.data}`, [image.mimeType, image.data]);
 	const broken = failed === uri;
@@ -42,7 +44,7 @@ export function PromptImageView({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	frame: {
 		width: 180,
 		maxWidth: "100%",
@@ -57,4 +59,4 @@ const styles = StyleSheet.create({
 	pressed: { opacity: 0.6 },
 	image: { width: "100%", height: "100%" },
 	fallback: { color: colors.textSecondary, fontSize: 11, textAlign: "center" },
-});
+}));

@@ -3,7 +3,8 @@ import { Image } from "expo-image";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import type { MarkdownImage } from "@/lib/markdownImages";
-import { colors, radii } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii } from "@/theme/tokens";
 
 /** Like entry images, the chat captures the host/instance/session/cwd before providing this loader. */
 export const FileImageContext = createContext<
@@ -11,6 +12,8 @@ export const FileImageContext = createContext<
 >(null);
 
 export function MarkdownImageTile({ image, onPress }: { image: MarkdownImage; onPress: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const load = useContext(FileImageContext);
 	const { src, kind, alt } = image;
 	const [thumbnail, setThumbnail] = useState<ViewImage | "loading" | "failed">("loading");
@@ -54,6 +57,8 @@ export function MarkdownImageTile({ image, onPress }: { image: MarkdownImage; on
 }
 
 function UriTile({ uri, alt, onPress }: { uri: string; alt: string; onPress: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const source = useMemo(() => ({ uri }), [uri]);
 	const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
 	return (
@@ -84,7 +89,7 @@ function UriTile({ uri, alt, onPress }: { uri: string; alt: string; onPress: () 
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	tile: {
 		width: 180,
 		maxWidth: "100%",
@@ -98,4 +103,4 @@ const styles = StyleSheet.create({
 	},
 	pressed: { opacity: 0.6 },
 	error: { color: colors.textSecondary, fontSize: 11, textAlign: "center", padding: 8 },
-});
+}));

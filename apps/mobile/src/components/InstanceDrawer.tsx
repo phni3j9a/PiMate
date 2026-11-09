@@ -2,21 +2,23 @@
 import { router } from "expo-router";
 import type { DrawerContentComponentProps } from "expo-router/drawer";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { relativeTime } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
 import { buildDrawerGroups, type DrawerRow, drawerSubagentText, hostConnectionLabel } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
-import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii } from "@/theme/tokens";
 
 import { BellIcon, GearIcon, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
 import { TextButton } from "./ui";
 
 export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const insets = useSafeAreaInsets();
 	const hosts = useAppState((s) => s.hosts);
 	const selection = useAppState((s) => s.selection);
@@ -141,6 +143,8 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 }
 
 function HostHeader({ host }: { host: HostRuntime }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const label = hostConnectionLabel(host);
 	const Icon = host.platform === "darwin" ? LaptopIcon : ServerIcon;
 	return (
@@ -160,6 +164,7 @@ function HostHeader({ host }: { host: HostRuntime }) {
 }
 
 function HostEmpty({ host, filtered, empty }: { host: HostRuntime; filtered: boolean; empty: boolean }) {
+	const styles = useStyles();
 	if (host.state === "auth_failed")
 		return <Text style={styles.emptyText}>このスマホの登録が無効です。設定からペアリングし直してください。</Text>;
 	if (host.state === "offline")
@@ -189,6 +194,7 @@ export function InstanceRow({
 	right: string;
 	onPress: () => void;
 }) {
+	const styles = useStyles();
 	const asking = row.status !== "waiting_input" && (row.subagents?.waiting ?? 0) > 0;
 	const mark = row.status === "running" ? "running" : row.status === "waiting_input" || asking ? "waiting" : "idle";
 	const statusText = row.status === "running" ? "作業中" : row.status === "waiting_input" ? "入力待ち" : "待機";
@@ -238,13 +244,13 @@ export function InstanceRow({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	root: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 12 },
 	pressed: { opacity: 0.6 },
 	searchRow: { paddingTop: 6, paddingHorizontal: 2, flexDirection: "row", alignItems: "center", gap: 6 },
 	search: {
 		flex: 1,
-		height: 40,
+		minHeight: 40,
 		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
@@ -258,7 +264,7 @@ const styles = StyleSheet.create({
 	groupHeader: {
 		marginTop: 22,
 		paddingHorizontal: 12,
-		height: 28,
+		minHeight: 28,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 6,
@@ -299,7 +305,7 @@ const styles = StyleSheet.create({
 	emptyRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 12 },
 	emptyText: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: 12, paddingVertical: 8 },
 	settings: {
-		height: 52,
+		minHeight: 52,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 12,
@@ -309,4 +315,4 @@ const styles = StyleSheet.create({
 	},
 	settingsText: { fontSize: 14, color: colors.text },
 	newPi: { marginTop: 6 },
-});
+}));

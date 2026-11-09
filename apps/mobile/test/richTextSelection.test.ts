@@ -48,6 +48,11 @@ vi.mock("@/theme/tokens", () => ({
 	radii: {},
 	typography: { body: { fontSize: 15, lineHeight: 22 } },
 }));
+vi.mock("@/theme/appearance", () => ({
+	useAppearance: () => ({ colors: {}, scale: (n: number) => n }),
+	makeStyles: (factory: (theme: unknown) => unknown) => () =>
+		factory({ colors: {}, typography: { body: { fontSize: 15, lineHeight: 22 } }, scale: (n: number) => n }),
+}));
 vi.mock("../src/components/chat/MarkdownImage", async () => {
 	const { createContext } = await import("react");
 	return { FileImageContext: createContext(undefined), MarkdownImageTile: () => null };

@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
+import { Alert, ScrollView, Text, type TextStyle, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
@@ -17,10 +17,11 @@ import {
 	type Span,
 	splitImageSpans,
 } from "@/lib/richText";
-import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii, typography } from "@/theme/tokens";
 import { FileImageContext, MarkdownImageTile } from "./MarkdownImage";
 
-function spanStyle(span: Span): TextStyle[] {
+function spanStyle(span: Span, styles: ReturnType<typeof useStyles>): TextStyle[] {
 	const s: TextStyle[] = [];
 	if (span.bold) s.push(styles.bold);
 	if (span.italic) s.push(styles.italic);
@@ -30,11 +31,12 @@ function spanStyle(span: Span): TextStyle[] {
 }
 
 function Spans({ spans }: { spans: Span[] }) {
+	const styles = useStyles();
 	return spans.map((span, i) => {
 		const key = `${i}:${span.text.length}`;
 		if (span.code)
 			return (
-				<Text key={key} style={[styles.inlineCode, ...spanStyle(span)]}>
+				<Text key={key} style={[styles.inlineCode, ...spanStyle(span, styles)]}>
 					{` ${span.text} `}
 				</Text>
 			);
@@ -43,7 +45,7 @@ function Spans({ spans }: { spans: Span[] }) {
 			return (
 				<Text
 					key={key}
-					style={spanStyle(span)}
+					style={spanStyle(span, styles)}
 					accessibilityRole="link"
 					onPress={() => void WebBrowser.openBrowserAsync(href)}
 				>
@@ -51,7 +53,7 @@ function Spans({ spans }: { spans: Span[] }) {
 				</Text>
 			);
 		}
-		const style = spanStyle(span);
+		const style = spanStyle(span, styles);
 		return style.length ? (
 			<Text key={key} style={style}>
 				{span.text}
@@ -63,6 +65,7 @@ function Spans({ spans }: { spans: Span[] }) {
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
+	const { colors } = useAppearance();
 	const [copied, setCopied] = useState(false);
 	useEffect(() => {
 		if (!copied) return;
@@ -88,6 +91,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 function CodeBlock({ text, lang }: { text: string; lang?: string }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.codeBlock}>
 			<View style={styles.codeHead}>
@@ -115,6 +119,7 @@ function Table({
 	rows: Span[][][];
 	gallery: ViewerImage[];
 }) {
+	const styles = useStyles();
 	const scrollGesture = useMemo(
 		// Recognize horizontal drags before the drawer's 5dp pan, not long presses or vertical drags.
 		() =>
@@ -159,15 +164,13 @@ function Table({
 	);
 }
 
-/** h1–h3 sized from the body text, so they follow typography.body. */
-const HEADING: TextStyle[] = [4, 2, 1].map((up) => ({
-	fontSize: typography.body.fontSize + up,
-	lineHeight: Math.round((typography.body.fontSize + up) * 1.45),
-}));
-/** Centers a marker of `size` on the first line of body text. */
-const firstLine = (size: number) => (typography.body.lineHeight - size) / 2;
-
 function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }) {
+	const styles = useStyles();
+	const { colors, scale } = useAppearance();
+	const HEADING: TextStyle[] = [4, 2, 1].map((up) => ({
+		fontSize: scale(typography.body.fontSize + up),
+		lineHeight: scale(Math.round((typography.body.fontSize + up) * 1.45)),
+	}));
 	return blocks.map((block, i) => {
 		const key = block.type === "image" ? `image:${block.image.index}:${block.image.src}` : i;
 		switch (block.type) {
@@ -235,6 +238,7 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 
 /** Assistant Markdown (Main.html <p>/<code>): headings, lists, code, quotes, tables, links. */
 export function RichText({ text, scope }: { text: string; scope?: string }) {
+	const styles = useStyles();
 	const parentLoad = useContext(FileImageContext);
 	// PC files are mutable: scope the cache to this answer so a later answer re-reads an overwritten file.
 	const loadFile = useMemo(
@@ -255,7 +259,7 @@ export function RichText({ text, scope }: { text: string; scope?: string }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography, scale }) => ({
 	root: { gap: 8 },
 	actions: { alignItems: "flex-start" },
 	paragraph: { ...typography.body, color: colors.text },
@@ -267,11 +271,18 @@ const styles = StyleSheet.create({
 	item: { flexDirection: "row" },
 	markerCol: { minWidth: 22, paddingLeft: 4 },
 	/** Bullet as a drawn dot: the "•" glyph renders tiny next to Japanese text on Android. */
-	dot: { width: 5, height: 5, borderRadius: 3, marginTop: firstLine(5), marginLeft: 2, backgroundColor: colors.text },
+	dot: {
+		width: 5,
+		height: 5,
+		borderRadius: 3,
+		marginTop: (scale(typography.body.lineHeight) - 5) / 2,
+		marginLeft: 2,
+		backgroundColor: colors.text,
+	},
 	box: {
 		width: 14,
 		height: 14,
-		marginTop: firstLine(14),
+		marginTop: (scale(typography.body.lineHeight) - 14) / 2,
 		borderRadius: 4,
 		borderWidth: 1.5,
 		borderColor: colors.textTertiary,
@@ -288,7 +299,7 @@ const styles = StyleSheet.create({
 	},
 	codeBlock: { borderRadius: radii.code, backgroundColor: colors.surface, paddingBottom: 10, paddingHorizontal: 12 },
 	codeHead: {
-		height: 32,
+		minHeight: 32,
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
@@ -307,4 +318,4 @@ const styles = StyleSheet.create({
 		color: colors.text,
 	},
 	rule: { height: 1, marginVertical: 4, backgroundColor: colors.surfaceStrong },
-});
+}));

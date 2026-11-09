@@ -1,10 +1,11 @@
 /** Inline completion above the composer; selecting only edits the draft. */
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { Spinner } from "@/components/StatusMark";
 import { TextButton } from "@/components/ui";
 import { commandCatalog, commandKind, commandQuery, filterCommands, insertCommand } from "@/lib/commands";
 import type { CommandsState } from "@/lib/store";
-import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii } from "@/theme/tokens";
 
 export function CommandPalette({
 	draft,
@@ -19,6 +20,8 @@ export function CommandPalette({
 	onSelect: (text: string) => void;
 	onRetry: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	if (commandQuery(draft) === null) return null;
 	const commands = filterCommands(commandCatalog(catalog?.list ?? [], tree), draft);
 	return (
@@ -73,7 +76,7 @@ export function CommandPalette({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	palette: { marginBottom: 8, borderRadius: radii.input, backgroundColor: colors.surface, overflow: "hidden" },
 	heading: {
 		...typography.caption,
@@ -90,4 +93,4 @@ const styles = StyleSheet.create({
 	kind: { fontSize: 11, color: colors.textSecondary },
 	status: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
 	empty: { ...typography.caption, color: colors.textSecondary, padding: 14 },
-});
+}));

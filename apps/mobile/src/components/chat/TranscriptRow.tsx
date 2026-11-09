@@ -1,8 +1,7 @@
 /** One row of the chat transcript (docs/design/html/Main.html, Chat-Edge.html, Chat-Waiting.html, Chat-Attach.html). */
 import type { SubagentRun } from "@pimate/protocol";
 import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-
+import { Pressable, Text, View } from "react-native";
 import { ChangeDiff } from "@/components/diff/DiffView";
 import { BulbIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, SwapIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
@@ -10,7 +9,8 @@ import { seconds, tailLines } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { toolRowInfo } from "@/lib/subagents";
 import type { SpacedRow } from "@/lib/transcriptRows";
-import { colors, fontFamily, radii, sizes, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii, sizes } from "@/theme/tokens";
 
 import { DialogCard, PcPromptCard } from "./DialogCard";
 import { RichText } from "./RichText";
@@ -47,6 +47,8 @@ export const TranscriptRow = memo(function TranscriptRow({
 	subagent,
 	onOpenSubagent,
 }: Props) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const margin = { marginTop: row.marginTop };
 	switch (row.kind) {
 		case "user":
@@ -138,6 +140,8 @@ function ThinkingRow({
 	onToggle: (key: string, open: boolean) => void;
 	margin: number;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<View style={{ marginTop: margin }}>
 			<Pressable
@@ -167,6 +171,7 @@ function ThinkingRow({
 }
 
 function RunningTime({ since }: { since: number }) {
+	const styles = useStyles();
 	const now = useNow(1000);
 	return <Text style={styles.toolMeta}>{seconds(now - since)}</Text>;
 }
@@ -182,6 +187,8 @@ function ToolRow({
 	onToggle: (key: string, open: boolean) => void;
 	margin: number;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	// A finished edit/write opens its diff (or why it is missing) instead of the raw tool text.
 	const change = row.change;
 	const hasOutput = !!change || !!row.output.trim();
@@ -250,6 +257,8 @@ function SubagentToolRow({
 	margin: number;
 	onPress: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const info = toolRowInfo(run);
 	// The mark is the tool call's (a background run returns at once: blue dot); waits and failures stay visible.
 	const mark = info.mark === "running" && !callRunning ? "done" : info.mark;
@@ -283,8 +292,10 @@ function SubagentToolRow({
 
 /** `+6 −2` in the diff colors (`+18` when nothing was removed). */
 export function ChangeCounts({ add, del, size = 11 }: { add: number; del: number; size?: number }) {
+	const styles = useStyles();
+	const { colors, scale } = useAppearance();
 	return (
-		<Text style={[styles.counts, { fontSize: size }]} accessibilityLabel={`追加 ${add} 行、削除 ${del} 行`}>
+		<Text style={[styles.counts, { fontSize: scale(size) }]} accessibilityLabel={`追加 ${add} 行、削除 ${del} 行`}>
 			<Text style={{ color: colors.diffAddText }}>+{add}</Text>
 			{del ? <Text style={{ color: colors.diffDelText }}> −{del}</Text> : null}
 		</Text>
@@ -303,6 +314,8 @@ function TurnSummaryRow({
 	onToggle: (key: string, open: boolean) => void;
 	onOpenReview: (turnId: string) => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const work = row.durationMs ? `${seconds(row.durationMs)} 作業 · ` : "";
 	const label = `${work}ツール ${row.tools} 回`;
 	return (
@@ -339,7 +352,7 @@ function TurnSummaryRow({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	userWrap: { flexDirection: "row", justifyContent: "flex-end", paddingLeft: 48 },
 	bubble: {
@@ -352,7 +365,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 	},
 	bubbleText: { ...typography.body, color: colors.text },
-	compactRow: { height: sizes.toolRow, flexDirection: "row", alignItems: "center", gap: 8 },
+	compactRow: { minHeight: sizes.toolRow, flexDirection: "row", alignItems: "center", gap: 8 },
 	markCol: { width: 14, alignItems: "center", justifyContent: "center" },
 	thinkingLabel: { ...typography.caption, flex: 1, color: colors.textSecondary },
 	thinkingText: {
@@ -390,4 +403,4 @@ const styles = StyleSheet.create({
 	noticeText: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },
 	noticeCode: { fontFamily: fontFamily.mono, color: colors.textSecondary },
 	noticeTo: { color: colors.text, fontWeight: "600" },
-});
+}));

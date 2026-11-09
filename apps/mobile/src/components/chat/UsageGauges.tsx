@@ -1,15 +1,14 @@
 /** Context / Claude / Codex rings beside the composer's model (Issue #59). Tapping opens the usage sheet. */
 import type { SubscriptionQuota } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-
+import { Pressable, View } from "react-native";
 import { ClaudeLogo, ContextIcon, OpenAILogo, RingIcon } from "@/components/icons";
 import { useQuotaClock } from "@/lib/hooks";
 import { quotaGroups } from "@/lib/sessionInfo";
-import { colors } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
 
 /** Neutral until 80%, then waiting yellow, failed coral from 95%. */
-export function usageColor(percent: number | null): string {
+export function usageColor(percent: number | null, colors: typeof import("@/theme/tokens").palettes.light): string {
 	if (percent !== null && percent >= 95) return colors.statusFailed;
 	if (percent !== null && percent >= 80) return colors.statusWaiting;
 	return colors.textSecondary;
@@ -24,6 +23,8 @@ export function UsageGauges({
 	quotas: SubscriptionQuota[] | null;
 	onPress: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const now = useQuotaClock(quotas);
 	const [claude, codex] = quotaGroups(quotas, now);
 	const items: { name: string; percent: number | null; icon: ReactNode }[] = [
@@ -43,7 +44,7 @@ export function UsageGauges({
 		>
 			{items.map((i) => (
 				<View key={i.name} style={styles.gauge}>
-					<RingIcon percent={i.percent} color={usageColor(i.percent)} />
+					<RingIcon percent={i.percent} color={usageColor(i.percent, colors)} />
 					<View style={styles.icon}>{i.icon}</View>
 				</View>
 			))}
@@ -51,9 +52,9 @@ export function UsageGauges({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
 	row: { flexShrink: 0, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 },
 	pressed: { opacity: 0.6 },
 	gauge: { width: 24, height: 24 },
 	icon: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center" },
-});
+}));

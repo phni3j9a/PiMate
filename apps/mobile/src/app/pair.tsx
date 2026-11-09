@@ -10,7 +10,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, Linking, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { CloseIcon, ServerIcon } from "@/components/icons";
 import { PiScreen } from "@/components/pairing/parts";
 import { Code, PcSetup, SetupStep, TailscaleSetup } from "@/components/pairing/SetupGuide";
@@ -19,7 +18,8 @@ import { useAppState } from "@/lib/hooks";
 import { PC_SETUP_COMMAND } from "@/lib/onboarding";
 import { formatPairingLink, PairingFailure, pairingErrorMessage, parsePairingLink } from "@/lib/pairing";
 import { appStore } from "@/lib/runtime";
-import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii, spacing } from "@/theme/tokens";
 
 type Params = { h?: string; c?: string; n?: string; id?: string };
 type Page = "steps" | "tailscale" | "pc";
@@ -43,6 +43,8 @@ function goBack() {
 }
 
 export default function PairScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const params = useLocalSearchParams<Params>();
 	const hasHosts = useAppState((s) => s.hosts.length > 0);
 	const hosts = useAppState((s) => s.hosts);
@@ -273,6 +275,8 @@ export default function PairScreen() {
 }
 
 function Scanner({ onClose, onLink }: { onClose: () => void; onLink: (link: PairingLink) => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const [invalid, setInvalid] = useState(false);
 	const done = useRef(false);
 	return (
@@ -308,7 +312,7 @@ function Scanner({ onClose, onLink }: { onClose: () => void; onLink: (link: Pair
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	flex: { flex: 1 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
@@ -354,7 +358,7 @@ const styles = StyleSheet.create({
 	hostAddress: { fontFamily: fontFamily.mono, fontSize: 12, lineHeight: 18, color: colors.textSecondary },
 	scanner: { flex: 1, backgroundColor: "#000000" },
 	scannerOverlay: { flex: 1, alignItems: "center" },
-	scannerTop: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", paddingHorizontal: 6, height: 52 },
+	scannerTop: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", paddingHorizontal: 6, minHeight: 52 },
 	scannerTitle: { fontSize: 15, fontWeight: "600", color: colors.onAccent },
 	frame: {
 		marginTop: 80,
@@ -372,4 +376,4 @@ const styles = StyleSheet.create({
 		color: colors.onAccent,
 		textAlign: "center",
 	},
-});
+}));

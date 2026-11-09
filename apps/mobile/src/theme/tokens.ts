@@ -5,7 +5,6 @@
  * inline styles of the screen mocks (docs/design/mock/*.dc.html). The dark palette keeps the same roles and
  * the same rule: separate areas with surface tone and spacing, not lines or shadows.
  */
-import { Appearance } from "react-native";
 
 const light = {
 	/** 背景: every full screen (drawer, settings, sheets too). */
@@ -102,12 +101,7 @@ const dark: typeof light = {
 	piRule: "rgba(124, 190, 222, 0.55)",
 };
 
-/**
- * Follows the system theme as of launch. Styles are module-level StyleSheets, so a change while the app runs
- * applies on the next launch. shortcut: launch-time only; move styles into hooks if live switching is needed.
- */
-export const scheme: "light" | "dark" = Appearance.getColorScheme() === "dark" ? "dark" : "light";
-export const colors = scheme === "dark" ? dark : light;
+export const palettes = { light, dark };
 
 /**
  * Monospace family for code, paths and commands: JetBrains Mono, as in the mock. Loaded in the root layout

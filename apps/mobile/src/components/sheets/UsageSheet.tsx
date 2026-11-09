@@ -1,8 +1,7 @@
 /** Usage sheet (Issue #59): this Pi's context, and the newest Claude / Codex allowances seen on this PC. */
 import type { SubscriptionQuota } from "@pimate/protocol";
 import type { ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-
+import { ScrollView, Text, View } from "react-native";
 import { usageColor } from "@/components/chat/UsageGauges";
 import { ClaudeLogo, ContextIcon, OpenAILogo } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
@@ -12,7 +11,7 @@ import { tokens } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import { contextLine, formatCost, quotaGroups, sessionStats } from "@/lib/sessionInfo";
-import { colors, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
 
 export function UsageSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
 	return (
@@ -28,6 +27,8 @@ const LOGOS: Record<SubscriptionQuota["source"], ReactNode> = {
 };
 
 function UsageSheetBody() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const view = useAppState((s) => s.view);
 	const op = useAppState((s) => s.op);
 	const hosts = useAppState((s) => s.hosts);
@@ -108,6 +109,8 @@ function UsageSheetBody() {
 }
 
 function Bar({ percent, label }: { percent: number | null; label: string }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<View
 			style={styles.bar}
@@ -118,17 +121,18 @@ function Bar({ percent, label }: { percent: number | null; label: string }) {
 			<View
 				style={[
 					styles.barFill,
-					{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%`, backgroundColor: percentFill(percent) },
+					{
+						width: `${Math.min(100, Math.max(0, percent ?? 0))}%`,
+						backgroundColor:
+							usageColor(percent, colors) === colors.textSecondary ? colors.text : usageColor(percent, colors),
+					},
 				]}
 			/>
 		</View>
 	);
 }
 
-const percentFill = (percent: number | null) =>
-	usageColor(percent) === colors.textSecondary ? colors.text : usageColor(percent);
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	titleRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 },
 	title: { fontSize: 19, lineHeight: 26, fontWeight: "700", color: colors.text },
 	sectionRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 },
@@ -143,4 +147,4 @@ const styles = StyleSheet.create({
 	compacting: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
 	group: { marginTop: 24 },
 	window: { marginBottom: 12 },
-});
+}));

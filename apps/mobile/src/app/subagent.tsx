@@ -8,9 +8,8 @@
 import { isSubagentActive, type SubagentAction } from "@pimate/protocol";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { type Banner, Composer } from "@/components/chat/Composer";
 import { TranscriptRow } from "@/components/chat/TranscriptRow";
 import { BackIcon, ChevronRightIcon } from "@/components/icons";
@@ -32,7 +31,8 @@ import {
 	findChild,
 	runStop,
 } from "@/lib/subagents";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { spacing } from "@/theme/tokens";
 
 const REFRESH_GAP_MS = 1000;
 
@@ -60,6 +60,8 @@ export default function SubagentScreen() {
 }
 
 function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; runId: string; childId: string }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const view = useAppState((s) => s.view);
 	const models = useAppState((s) => s.models);
 	const hosts = useAppState((s) => s.hosts);
@@ -474,6 +476,8 @@ function SubagentDetail({ instanceId, runId, childId }: { instanceId: string; ru
 }
 
 function RunLink({ label, onPress }: { label: string; onPress: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<Pressable
 			accessibilityRole="link"
@@ -486,10 +490,10 @@ function RunLink({ label, onPress }: { label: string; onPress: () => void }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
 	flex: { flex: 1 },
-	header: { height: 52, flexDirection: "row", alignItems: "center", paddingLeft: 6, paddingRight: 8, gap: 2 },
+	header: { minHeight: 52, flexDirection: "row", alignItems: "center", paddingLeft: 6, paddingRight: 8, gap: 2 },
 	titleBox: { flex: 1, minWidth: 0 },
 	title: { fontSize: 15, fontWeight: "600", lineHeight: 20, color: colors.text },
 	subtitle: { fontSize: 11, lineHeight: 15, color: colors.textSecondary },
@@ -524,4 +528,4 @@ const styles = StyleSheet.create({
 	footer: { paddingTop: 6, paddingHorizontal: 16 },
 	readonly: { paddingTop: 14, paddingHorizontal: spacing.screenSide, alignItems: "center", gap: 4 },
 	readonlyText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, textAlign: "center" },
-});
+}));

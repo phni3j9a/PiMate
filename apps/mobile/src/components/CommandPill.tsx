@@ -1,14 +1,17 @@
 /** A copyable terminal command (`pimate attach …`), as in docs/design Chat-Attach / Sheet-Session. */
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { makeStyles, useAppearance } from "@/theme/appearance";
 
-import { colors, fontFamily, radii } from "@/theme/tokens";
+import { fontFamily, radii } from "@/theme/tokens";
 
 import { CheckIcon, CopyIcon } from "./icons";
 import { IconButton } from "./ui";
 
 export function CommandPill({ command, onSurface }: { command: string; onSurface?: boolean }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const [copied, setCopied] = useState(false);
 	useEffect(() => {
 		if (!copied) return;
@@ -33,9 +36,9 @@ export function CommandPill({ command, onSurface }: { command: string; onSurface
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	pill: {
-		height: 44,
+		minHeight: 44,
 		borderRadius: radii.control,
 		flexDirection: "row",
 		alignItems: "center",
@@ -43,4 +46,4 @@ const styles = StyleSheet.create({
 		paddingRight: 2,
 	},
 	text: { flex: 1, fontFamily: fontFamily.mono, fontSize: 13, color: colors.text },
-});
+}));

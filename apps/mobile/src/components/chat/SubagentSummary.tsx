@@ -1,12 +1,13 @@
 /** The one line above the composer while subagents work (docs/design/html/Chat-Subagents.html). Opens the list. */
-import { Pressable, StyleSheet, Text, View } from "react-native";
-
+import { Pressable, Text, View } from "react-native";
 import { ChevronUpIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
 import type { SubagentSummary } from "@/lib/subagents";
-import { colors } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
 
 export function SubagentSummaryLine({ summary, onPress }: { summary: SubagentSummary; onPress: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<Pressable
 			accessibilityRole="button"
@@ -35,9 +36,9 @@ export function SubagentSummaryLine({ summary, onPress }: { summary: SubagentSum
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	line: {
-		height: 40,
+		minHeight: 40,
 		marginBottom: 6,
 		paddingLeft: 12,
 		paddingRight: 4,
@@ -49,4 +50,4 @@ const styles = StyleSheet.create({
 	label: { fontSize: 13, fontWeight: "600", color: colors.text },
 	counts: { flex: 1, minWidth: 0, fontSize: 12, color: colors.textSecondary, fontVariant: ["tabular-nums"] },
 	chevron: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
-});
+}));

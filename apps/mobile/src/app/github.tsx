@@ -1,7 +1,7 @@
 import type { GitHubData, GitHubDetail, GitHubQuery, GitHubSummary } from "@pimate/protocol";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RichText } from "@/components/chat/RichText";
 import { ChevronRightIcon } from "@/components/icons";
@@ -9,7 +9,8 @@ import { PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import type { Result } from "@/lib/store";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { spacing } from "@/theme/tokens";
 
 function back() {
 	if (router.canGoBack()) router.back();
@@ -30,6 +31,8 @@ const state = (item: GitHubSummary) =>
 
 /** Both routes carry the Pi captured at entry, not the current selection. Native back returns to the list. */
 export default function GitHubScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { hostId, instanceId, kind, number } = useLocalSearchParams<{
 		hostId?: string;
 		instanceId?: string;
@@ -202,6 +205,8 @@ export default function GitHubScreen() {
 }
 
 function PrStatus({ item }: { item: GitHubSummary }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const ci = item.ci;
 	return (
 		<View style={{ gap: 4 }}>
@@ -243,6 +248,8 @@ function PrStatus({ item }: { item: GitHubSummary }) {
 }
 
 function Detail({ item }: { item: GitHubDetail }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<View style={{ gap: 16 }}>
 			<Text style={styles.title} accessibilityRole="header" selectable>
@@ -317,10 +324,11 @@ function Detail({ item }: { item: GitHubDetail }) {
 	);
 }
 function Truncated() {
+	const styles = useStyles();
 	return <Text style={styles.meta}>一部を省略しています。続きは GitHub で確認してください。</Text>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
 	header: { flexDirection: "row", alignItems: "center", paddingRight: spacing.screenSide },
 	content: { paddingHorizontal: spacing.screenSide, paddingTop: 8, paddingBottom: 24, gap: 12 },
@@ -343,4 +351,4 @@ const styles = StyleSheet.create({
 	message: { ...typography.body, color: colors.textSecondary, padding: 24, textAlign: "center" },
 	webButton: { alignSelf: "flex-start", minHeight: 44 },
 	footer: { paddingHorizontal: spacing.screenSide, paddingVertical: 14, gap: 12 },
-});
+}));

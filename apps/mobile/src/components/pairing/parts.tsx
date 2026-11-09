@@ -18,17 +18,18 @@ import Animated, {
 	withTiming,
 } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
-
 import { CheckIcon, CopyIcon, LaptopIcon, PhoneIcon } from "@/components/icons";
 import { type MarkKind, StatusMark } from "@/components/StatusMark";
 import { IconButton } from "@/components/ui";
-import { colors, fontFamily, radii } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii } from "@/theme/tokens";
 
 /**
  * Pi's TUI logo (`▀▀█` / `█▀ █`) as its 4×4 pixels, one path per colour so same-coloured pixels have no seams.
  * Use a multiple of 4 for `size` so the pixels land on whole points.
  */
 export function PiLogo({ size = 16 }: { size?: number }) {
+	const { colors } = useAppearance();
 	return (
 		<Svg width={size} height={size} viewBox="0 0 4 4">
 			<Path d="M0 0H3V2H2V1H0Z" fill={colors.piCoral} />
@@ -40,6 +41,7 @@ export function PiLogo({ size = 16 }: { size?: number }) {
 
 /** Pi's block cursor; still when the OS asks for reduced motion. */
 function Cursor() {
+	const styles = useStyles();
 	const reduced = useReducedMotion();
 	const opacity = useSharedValue(1);
 	useEffect(() => {
@@ -57,6 +59,7 @@ function Cursor() {
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
+	const { colors } = useAppearance();
 	const [copied, setCopied] = useState(false);
 	useEffect(() => {
 		if (!copied) return;
@@ -78,6 +81,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 
 /** A drawing of the PC's Pi: its logo, then the input line between Pi's two rules. */
 export function PiScreen({ command, caption, copy }: { command: string; caption?: string; copy?: boolean }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.screen} accessible={!copy} accessibilityLabel={`PC の Pi の入力欄: ${command}`}>
 			<View style={styles.screenHeader}>
@@ -101,6 +105,7 @@ export function PiScreen({ command, caption, copy }: { command: string; caption?
 
 /** Commands for the PC's shell, each after a dim `$`; copied together, one per line. */
 export function ShellCommands({ commands }: { commands: string[] }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.shell}>
 			<View style={styles.flex}>
@@ -118,6 +123,7 @@ export function ShellCommands({ commands }: { commands: string[] }) {
 
 /** A step number in the commands' monospace face. */
 export function StepTile({ number, small }: { number: number; small?: boolean }) {
+	const styles = useStyles();
 	return (
 		<View style={[styles.tile, small && styles.tileSmall]}>
 			<Text style={[styles.tileText, small && styles.tileTextSmall]}>{number}</Text>
@@ -127,6 +133,7 @@ export function StepTile({ number, small }: { number: number; small?: boolean })
 
 /** Where the guide is (header, right): pixels like the logo's, the current step in the accent. */
 export function StepProgress({ step, total }: { step: number; total: number }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.progress} accessible accessibilityLabel={`手順 ${step} / ${total}`}>
 			{Array.from({ length: total }, (_, i) => (
@@ -145,6 +152,7 @@ export function StepProgress({ step, total }: { step: number; total: number }) {
 
 /** A dotted connector (dots rather than a dotted border, which Android draws only on all sides). */
 export function Dots({ count, vertical }: { count: number; vertical?: boolean }) {
+	const styles = useStyles();
 	return (
 		<View style={[styles.dots, vertical && styles.dotsVertical]}>
 			{Array.from({ length: count }, (_, i) => (
@@ -157,6 +165,8 @@ export function Dots({ count, vertical }: { count: number; vertical?: boolean })
 
 /** A device in a surface tile (phone / PC). */
 export function DeviceTile({ kind, size = 44 }: { kind: "phone" | "pc"; size?: number }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<View style={[styles.device, { width: size, height: size, borderRadius: size >= 48 ? 14 : 12 }]}>
 			{kind === "phone" ? <PhoneIcon /> : <LaptopIcon size={20} color={colors.textCode} />}
@@ -166,6 +176,7 @@ export function DeviceTile({ kind, size = 44 }: { kind: "phone" | "pc"; size?: n
 
 /** Phone ⋯ mark ⋯ PC; the mark is the connection's (as in the drawer's machine header). */
 export function Connection({ mark, label }: { mark: MarkKind; label: string }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.connection} accessible accessibilityLabel={label}>
 			<DeviceTile kind="phone" size={48} />
@@ -181,6 +192,7 @@ export function Connection({ mark, label }: { mark: MarkKind; label: string }) {
 
 /** A surface card with a command on the left and a note beside it (`$ pi` …). */
 export function CommandNote({ command, children }: { command: string; children: ReactNode }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.note}>
 			<Text style={styles.shellLine}>
@@ -194,7 +206,7 @@ export function CommandNote({ command, children }: { command: string; children: 
 
 const mono = fontFamily.mono;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	flex: { flex: 1 },
 	screen: {
 		borderRadius: radii.cardMin,
@@ -227,14 +239,14 @@ const styles = StyleSheet.create({
 	shellLine: { fontFamily: mono, fontSize: 13, lineHeight: 20, color: colors.text, paddingVertical: 2 },
 	prompt: { color: colors.textSecondary },
 	tile: {
-		width: 28,
-		height: 28,
+		minWidth: 28,
+		minHeight: 28,
 		borderRadius: 8,
 		backgroundColor: colors.surface,
 		alignItems: "center",
 		justifyContent: "center",
 	},
-	tileSmall: { width: 22, height: 22, borderRadius: 6 },
+	tileSmall: { minWidth: 22, minHeight: 22, borderRadius: 6 },
 	tileText: { fontFamily: fontFamily.monoBold, fontSize: 13, color: colors.textCode },
 	tileTextSmall: { fontSize: 12 },
 	progress: { flexDirection: "row", alignItems: "center", gap: 4, paddingRight: 14 },
@@ -258,4 +270,4 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 16,
 	},
 	noteText: { flex: 1, fontSize: 12, lineHeight: 18, color: colors.textSecondary },
-});
+}));

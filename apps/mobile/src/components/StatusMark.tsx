@@ -11,10 +11,11 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { colors } from "@/theme/tokens";
+import { useAppearance } from "@/theme/appearance";
 
 /** Rotating arc (mock: 13px, track #E6E9EB, arc #5E686D). */
-export function Spinner({ size = 13, color = colors.textSecondary }: { size?: number; color?: string }) {
+export function Spinner({ size = 13, color }: { size?: number; color?: string }) {
+	const { colors } = useAppearance();
 	const rotation = useSharedValue(0);
 	useEffect(() => {
 		rotation.set(withRepeat(withTiming(360, { duration: 900, easing: Easing.linear }), -1, false));
@@ -25,7 +26,7 @@ export function Spinner({ size = 13, color = colors.textSecondary }: { size?: nu
 		<Animated.View style={[{ width: size, height: size }, style]}>
 			<Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
 				<Circle cx={8} cy={8} r={6} stroke={colors.surfaceStrong} strokeWidth={2} />
-				<Path d="M8 2a6 6 0 0 1 6 6" stroke={color} strokeWidth={2} strokeLinecap="round" />
+				<Path d="M8 2a6 6 0 0 1 6 6" stroke={color ?? colors.textSecondary} strokeWidth={2} strokeLinecap="round" />
 			</Svg>
 		</Animated.View>
 	);
@@ -35,6 +36,7 @@ export type MarkKind = "running" | "waiting" | "failed" | "done" | "idle";
 
 /** A status mark. Always pair it with a text label: status is never shown by color alone. */
 export function StatusMark({ kind, size }: { kind: MarkKind; size?: number }) {
+	const { colors } = useAppearance();
 	if (kind === "running") return <Spinner size={size ?? 13} />;
 	if (kind === "idle") {
 		const d = size ?? 5;

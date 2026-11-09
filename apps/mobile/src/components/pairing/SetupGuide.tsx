@@ -5,9 +5,8 @@
 import * as Device from "expo-device";
 import * as WebBrowser from "expo-web-browser";
 import { type ReactNode, useState } from "react";
-import { Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { AlertIcon, CheckIcon, ChevronRightIcon, ExternalIcon, ShareIcon } from "@/components/icons";
 import { PrimaryButton, ScreenHeader, TextButton, styles as ui } from "@/components/ui";
 import {
@@ -18,7 +17,8 @@ import {
 	TAILSCALE_DOWNLOAD_URL,
 	tailscaleStore,
 } from "@/lib/onboarding";
-import { colors, fontFamily, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, spacing } from "@/theme/tokens";
 
 import { DeviceTile, Dots, PiScreen, ShellCommands, StepProgress, StepTile } from "./parts";
 
@@ -37,6 +37,8 @@ export function SetupStep({
 	children: ReactNode;
 	onPress?: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const body = (
 		<>
 			<StepTile number={number} />
@@ -67,10 +69,13 @@ export function SetupStep({
 
 /** Inline command inside running text. */
 export function Code({ children }: { children: string }) {
+	const styles = useStyles();
 	return <Text style={styles.inlineCode}>{children}</Text>;
 }
 
 export function TailscaleSetup({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const store = tailscaleStore(Platform.OS, Device.platformApiLevel);
 	const [openFailed, setOpenFailed] = useState(false);
 	const openStore = async () => {
@@ -160,6 +165,8 @@ export function TailscaleSetup({ onBack, onNext }: { onBack: () => void; onNext:
 }
 
 export function PcSetup({ onBack, onScan }: { onBack: () => void; onScan: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
 			<ScreenHeader title="PC に PiMate を入れる" onBack={onBack} right={<StepProgress step={2} total={3} />} />
@@ -200,7 +207,7 @@ export function PcSetup({ onBack, onScan }: { onBack: () => void; onScan: () => 
 	);
 }
 
-export const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	flex: { flex: 1, minWidth: 0 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingTop: 8, paddingBottom: 24 },
@@ -237,4 +244,4 @@ export const styles = StyleSheet.create({
 	caption: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },
 	note: { ...typography.caption, color: colors.textSecondary, marginTop: 20 },
 	bottom: { paddingHorizontal: spacing.screenSide, paddingTop: 8, paddingBottom: 12, gap: 4 },
-});
+}));
