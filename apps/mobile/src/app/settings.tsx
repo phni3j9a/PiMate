@@ -1,9 +1,10 @@
+import { appearance, makeStyles, useAppearance } from "@/theme/appearance";
 /** Settings (docs/design/html/Settings.html): paired machines and the app version. */
 
 import type { PackageUpdateCheck } from "@pimate/protocol";
 import { router } from "expo-router";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ChevronRightIcon, PlusIcon } from "@/components/icons";
@@ -13,7 +14,7 @@ import { useAppState } from "@/lib/hooks";
 import { hostConnectionLabel, hostSummary } from "@/lib/presentation";
 import { appStore, appVersion, notificationCenter } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { spacing } from "@/theme/tokens";
 
 function confirmRemove(host: HostRuntime) {
 	Alert.alert(
@@ -36,6 +37,7 @@ function newer(latest: string, current: string): boolean {
 }
 
 function PackageRow({ host }: { host: HostRuntime }) {
+	const styles = useStyles();
 	const [check, setCheck] = useState<PackageUpdateCheck | null>(null);
 	const [message, setMessage] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -127,6 +129,8 @@ function PackageRow({ host }: { host: HostRuntime }) {
 }
 
 export default function SettingsScreen() {
+	const styles = useStyles();
+	const { colors, mode, size, saveError } = useAppearance();
 	const hosts = useAppState((s) => s.hosts);
 	const notifications = useSyncExternalStore(notificationCenter.subscribe, notificationCenter.getState);
 	return (
@@ -263,6 +267,60 @@ export default function SettingsScreen() {
 						{notifications.error}
 					</Text>
 				) : null}
+				<Text style={[styles.section, { marginTop: 28 }]} accessibilityRole="header">
+					表示
+				</Text>
+				<View style={styles.displayRow}>
+					<Text style={styles.machineName}>テーマ</Text>
+					<View style={styles.segmented} accessibilityRole="radiogroup" accessibilityLabel="テーマ">
+						{(
+							[
+								["system", "システム"],
+								["light", "ライト"],
+								["dark", "ダーク"],
+							] as const
+						).map(([value, label]) => (
+							<Pressable
+								key={value}
+								accessibilityRole="radio"
+								accessibilityLabel={label}
+								accessibilityState={{ checked: mode === value }}
+								onPress={() => appearance.update({ mode: value })}
+								style={[styles.segment, mode === value && styles.segmentSelected]}
+							>
+								<Text style={[styles.segmentText, mode === value && styles.segmentTextSelected]}>{label}</Text>
+							</Pressable>
+						))}
+					</View>
+				</View>
+				<View style={styles.displayRow}>
+					<Text style={styles.machineName}>文字サイズ</Text>
+					<View style={styles.segmented} accessibilityRole="radiogroup" accessibilityLabel="文字サイズ">
+						{(
+							[
+								["small", "小"],
+								["standard", "標準"],
+								["large", "大"],
+							] as const
+						).map(([value, label]) => (
+							<Pressable
+								key={value}
+								accessibilityRole="radio"
+								accessibilityLabel={label}
+								accessibilityState={{ checked: size === value }}
+								onPress={() => appearance.update({ size: value })}
+								style={[styles.segment, size === value && styles.segmentSelected]}
+							>
+								<Text style={[styles.segmentText, size === value && styles.segmentTextSelected]}>{label}</Text>
+							</Pressable>
+						))}
+					</View>
+				</View>
+				{saveError ? (
+					<Text accessibilityRole="alert" style={styles.explanation}>
+						表示設定を保存できませんでした。もう一度選択してください。
+					</Text>
+				) : null}
 				<View style={styles.spacer} />
 			</ScrollView>
 			<View style={styles.version}>
@@ -273,7 +331,7 @@ export default function SettingsScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { flexGrow: 1, paddingTop: 8, paddingHorizontal: spacing.screenSide, paddingBottom: 16 },
 	section: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
@@ -283,7 +341,36 @@ const styles = StyleSheet.create({
 	machineBody: { flex: 1, minWidth: 0 },
 	machineName: { fontSize: 15, lineHeight: 22, color: colors.text },
 	machineSub: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
-	add: { justifyContent: "flex-start", height: 52, gap: 12 },
+	add: { justifyContent: "flex-start", minHeight: 52, gap: 12 },
+	displayRow: {
+		minHeight: 52,
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+		paddingVertical: 8,
+		flexWrap: "wrap",
+	},
+	segmented: {
+		minHeight: 36,
+		width: 192,
+		maxWidth: "100%",
+		padding: 3,
+		flexDirection: "row",
+		borderRadius: 10,
+		backgroundColor: colors.surfaceStrong,
+	},
+	segment: {
+		flex: 1,
+		minHeight: 30,
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: 7,
+		paddingVertical: 3,
+	},
+	segmentSelected: { backgroundColor: colors.background },
+	segmentText: { fontSize: 12, color: colors.textSecondary },
+	segmentTextSelected: { fontWeight: "600", color: colors.text },
 	spacer: { flex: 1 },
 	notificationRow: {
 		minHeight: 52,
@@ -302,4 +389,4 @@ const styles = StyleSheet.create({
 		paddingTop: 8,
 	},
 	versionText: { ...typography.caption, color: colors.textSecondary },
-});
+}));

@@ -4,8 +4,7 @@
  */
 import { isSubagentActive, type SubagentChild, type SubagentRun } from "@pimate/protocol";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { ChevronRightIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner, StatusMark } from "@/components/StatusMark";
@@ -22,7 +21,8 @@ import {
 	sheetHeader,
 	sheetSections,
 } from "@/lib/subagents";
-import { colors, fontFamily, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily } from "@/theme/tokens";
 
 export function SubagentSheet({
 	visible,
@@ -41,6 +41,8 @@ export function SubagentSheet({
 }
 
 function Body({ onOpenChild }: { onOpenChild: (runId: string, childId: string) => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const view = useAppState((s) => s.view);
 	const runs = view?.subagents.runs ?? [];
 	const { open, previous } = sheetSections(runs);
@@ -185,6 +187,8 @@ function ChildRow({
 	previous?: boolean;
 	onPress?: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const mark = childMark(child.state);
 	const line = childLine(child, run, { previous, now });
 	const time = childElapsed(child, run, now);
@@ -225,7 +229,7 @@ function ChildRow({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	title: { ...typography.sheetTitle, color: colors.text, marginTop: 4 },
 	stats: { fontSize: 13, lineHeight: 19, color: colors.textSecondary, marginTop: 4, fontVariant: ["tabular-nums"] },
@@ -245,7 +249,7 @@ const styles = StyleSheet.create({
 	agent: { fontSize: 12, color: colors.textSecondary },
 	activity: { fontFamily: fontFamily.mono, fontSize: 11.5, lineHeight: 18, color: colors.textSecondary },
 	lineText: { fontSize: 12, lineHeight: 18, color: colors.textSecondary },
-	right: { height: 22, flexDirection: "row", alignItems: "center", gap: 4 },
+	right: { minHeight: 22, flexDirection: "row", alignItems: "center", gap: 4 },
 	time: { fontSize: 12, color: colors.textSecondary, fontVariant: ["tabular-nums"] },
 	footer: {
 		marginTop: 28,
@@ -256,4 +260,4 @@ const styles = StyleSheet.create({
 		textAlign: "center",
 	},
 	code: { fontFamily: fontFamily.mono, fontSize: 11.5 },
-});
+}));

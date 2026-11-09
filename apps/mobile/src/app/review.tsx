@@ -5,9 +5,8 @@
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { ChangeCounts } from "@/components/chat/TranscriptRow";
 import { ChangeDiff } from "@/components/diff/DiffView";
 import { BackIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon } from "@/components/icons";
@@ -25,7 +24,8 @@ import { useAppState } from "@/lib/hooks";
 import { chatTitle } from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import { draftKey } from "@/lib/store";
-import { colors, fontFamily, spacing } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, spacing } from "@/theme/tokens";
 
 const SCOPES: { scope: ReviewScope; label: string }[] = [
 	{ scope: "turn", label: "このターン" },
@@ -38,6 +38,8 @@ function back() {
 }
 
 export default function ReviewScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const params = useLocalSearchParams<{ scope?: string; turn?: string }>();
 	const view = useAppState((s) => s.view);
 	const hosts = useAppState((s) => s.hosts);
@@ -150,6 +152,8 @@ export default function ReviewScreen() {
 }
 
 function FileBlock({ file, open, onToggle }: { file: FileChange; open: boolean; onToggle: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	return (
 		<View>
 			<Pressable
@@ -184,14 +188,14 @@ function FileBlock({ file, open, onToggle }: { file: FileChange; open: boolean; 
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
-	header: { height: 52, flexDirection: "row", alignItems: "center", paddingLeft: 6, paddingRight: 2, gap: 4 },
+	header: { minHeight: 52, flexDirection: "row", alignItems: "center", paddingLeft: 6, paddingRight: 2, gap: 4 },
 	titleBox: { flex: 1, minWidth: 0 },
 	title: { fontSize: 15, fontWeight: "600", lineHeight: 20, color: colors.text },
 	subtitle: { fontSize: 11, lineHeight: 15, color: colors.textSecondary },
 	segmentWrap: { paddingHorizontal: spacing.screenSide, paddingTop: 4, paddingBottom: 12 },
-	segment: { flexDirection: "row", height: 36, padding: 3, borderRadius: 10, backgroundColor: colors.surfaceStrong },
+	segment: { flexDirection: "row", minHeight: 36, padding: 3, borderRadius: 10, backgroundColor: colors.surfaceStrong },
 	segItem: { flex: 1, borderRadius: 7, alignItems: "center", justifyContent: "center" },
 	segOn: { backgroundColor: colors.background },
 	segText: { fontSize: 13, color: colors.textSecondary },
@@ -199,10 +203,10 @@ const styles = StyleSheet.create({
 	list: { flex: 1 },
 	listContent: { paddingHorizontal: spacing.screenSide, paddingTop: 4, paddingBottom: 12, gap: 2 },
 	empty: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, paddingVertical: 24, textAlign: "center" },
-	fileRow: { height: 52, flexDirection: "row", alignItems: "center", gap: 12 },
+	fileRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
 	badge: {
-		width: 20,
-		height: 20,
+		minWidth: 20,
+		minHeight: 20,
 		borderRadius: 5,
 		alignItems: "center",
 		justifyContent: "center",
@@ -215,4 +219,4 @@ const styles = StyleSheet.create({
 	lines: { fontSize: 11, color: colors.textSecondary },
 	pieces: { marginBottom: 12, gap: 8 },
 	footer: { paddingHorizontal: spacing.screenSide, paddingTop: 12, paddingBottom: 14 },
-});
+}));

@@ -2,9 +2,8 @@
 import type { FolderInfo, ModelDefault, ModelInfo, ModelRef, ThinkingLevel } from "@pimate/protocol";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { CheckIcon, ChevronRightIcon, CloseIcon, SearchIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
@@ -24,7 +23,8 @@ import {
 	thinkingShort,
 } from "@/lib/sessionInfo";
 import type { HostRuntime } from "@/lib/store";
-import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii, spacing } from "@/theme/tokens";
 
 type Folders = { home: string; folders: FolderInfo[] } | { error: string } | null;
 type Models =
@@ -46,6 +46,8 @@ function shortPath(path: string, home: string | undefined): string {
 }
 
 export default function NewPiScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const hosts = useAppState((s) => s.hosts);
 	const selection = useAppState((s) => s.selection);
 	const [hostId, setHostId] = useState<string | null>(() => {
@@ -340,6 +342,8 @@ export default function NewPiScreen() {
 }
 
 function MachineRow({ host, selected, onPress }: { host: HostRuntime; selected: boolean; onPress: () => void }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const online = host.state === "connected";
 	return (
 		<Pressable
@@ -372,6 +376,7 @@ function FolderList({
 	connected: boolean;
 	onPick: (f: FolderInfo) => void;
 }) {
+	const styles = useStyles();
 	if (!connected) return <Text style={[styles.muted, { marginTop: 14 }]}>このマシンに接続していません</Text>;
 	if (!folders)
 		return (
@@ -419,6 +424,8 @@ function ModelPicker({
 	onPick: (model: ModelRef | null, thinking: ThinkingLevel | null) => void;
 	onClose: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const list = models && models !== "loading" ? models.models : null;
 	const scoped = models && models !== "loading" ? models.scoped : undefined;
 	const saved = models && models !== "loading" ? models.default : undefined;
@@ -560,6 +567,8 @@ function PickRow({
 	selected: boolean;
 	onPress: () => void;
 }) {
+	const styles = useStyles();
+	const { scale } = useAppearance();
 	return (
 		<Pressable
 			accessibilityRole="radio"
@@ -570,28 +579,28 @@ function PickRow({
 		>
 			<View style={styles.flex}>
 				<Text style={[styles.pickTitle, selected && { fontWeight: "700" }]}>{title}</Text>
-				<Text style={[styles.pickSub, mono && { fontFamily: fontFamily.mono, fontSize: 11 }]}>{sub}</Text>
+				<Text style={[styles.pickSub, mono && { fontFamily: fontFamily.mono, fontSize: scale(11) }]}>{sub}</Text>
 			</View>
 			{selected ? <CheckIcon /> : null}
 		</Pressable>
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	flex: { flex: 1 },
 	pressed: { opacity: 0.6 },
 	screen: { flex: 1, backgroundColor: colors.background },
-	header: { height: spacing.headerHeight, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
+	header: { minHeight: spacing.headerHeight, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
 	headerTitle: { ...typography.headerTitle, flex: 1, textAlign: "center", color: colors.text },
 	content: { paddingHorizontal: spacing.screenSide, paddingTop: 4, paddingBottom: 16 },
 	label: { fontSize: 12, lineHeight: 17, fontWeight: "600", color: colors.textSecondary },
 	muted: { ...typography.caption, color: colors.textSecondary },
-	machine: { height: 52, flexDirection: "row", alignItems: "center", gap: 10 },
+	machine: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 10 },
 	dot: { width: 7, height: 7, borderRadius: 4 },
 	machineName: { flex: 1, fontSize: 15, color: colors.text },
 	pathField: {
 		marginTop: 8,
-		height: 44,
+		minHeight: 44,
 		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		justifyContent: "center",
@@ -599,14 +608,14 @@ const styles = StyleSheet.create({
 	},
 	pathInput: { fontFamily: fontFamily.mono, fontSize: 13, color: colors.text, padding: 0 },
 	recent: { ...typography.caption, color: colors.textSecondary, marginTop: 14 },
-	folder: { height: 44, flexDirection: "row", alignItems: "center", gap: 10 },
+	folder: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10 },
 	folderPath: { flex: 1, minWidth: 0, fontFamily: fontFamily.mono, fontSize: 13, color: colors.text },
 	folderMeta: { fontSize: 12, color: colors.textSecondary },
 	loading: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14 },
 	trust: { marginTop: 20, flexDirection: "row", alignItems: "center", gap: 16 },
 	trustTitle: { fontSize: 15, lineHeight: 21, color: colors.text },
 	trustText: { fontSize: 12, lineHeight: 17, color: colors.textSecondary, marginTop: 2 },
-	modelRow: { marginTop: 16, height: 52, flexDirection: "row", alignItems: "center", gap: 6 },
+	modelRow: { marginTop: 16, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 6 },
 	modelTitle: { flex: 1, fontSize: 15, color: colors.text },
 	modelValue: { flexShrink: 1, fontSize: 14, color: colors.textSecondary },
 	message: {
@@ -636,7 +645,7 @@ const styles = StyleSheet.create({
 	pickTitle: { fontSize: 15, lineHeight: 21, color: colors.text },
 	pickSub: { fontSize: 12, lineHeight: 16, color: colors.textSecondary, marginTop: 1 },
 	search: {
-		height: 40,
+		minHeight: 40,
 		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
@@ -647,8 +656,8 @@ const styles = StyleSheet.create({
 	},
 	searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
 	segment: { flexDirection: "row", backgroundColor: colors.surfaceStrong, borderRadius: 10, padding: 3 },
-	segItem: { flex: 1, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+	segItem: { flex: 1, minHeight: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
 	segOn: { backgroundColor: colors.background },
 	segText: { fontSize: 13, color: colors.textSecondary },
 	segTextOn: { color: colors.text, fontWeight: "700" },
-});
+}));

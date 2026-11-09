@@ -1,9 +1,10 @@
 import type { TranscriptImages as Images, ViewImage } from "@pimate/protocol";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { entryImageSources, imageTiles } from "@/lib/entryImages";
 import { type LazyViewImage, openImageViewer } from "@/lib/imageViewer";
-import { colors, radii } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii } from "@/theme/tokens";
 import { PromptImageView } from "./PromptImageView";
 
 /** Provided only by the parent chat, captured with its host/instance/session target. */
@@ -12,6 +13,7 @@ export const EntryImageContext = createContext<
 >(null);
 
 export function TranscriptImages({ entryId, ...item }: Images & { entryId?: string }) {
+	const styles = useStyles();
 	const fetch = useContext(EntryImageContext);
 	const { images, imageIndices, imageCount } = item;
 	const canLoad = !!fetch && !!entryId;
@@ -61,6 +63,8 @@ function ImageTile({
 	compact: boolean;
 	onPress: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	// Mounted rows retain this state, so its lazy source must only request thumbnails.
 	const [loaded, setLoaded] = useState<ViewImage | "loading" | "failed">("loading");
 	useEffect(() => {
@@ -99,7 +103,7 @@ function ImageTile({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	wrap: { gap: 4 },
 	grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 136 },
 	singleGrid: { maxWidth: 180 },
@@ -117,4 +121,4 @@ const styles = StyleSheet.create({
 	more: { color: colors.text, fontSize: 18, fontWeight: "600" },
 	error: { color: colors.statusFailedText, fontSize: 10, textAlign: "center", padding: 4 },
 	meta: { color: colors.textSecondary, fontSize: 11 },
-});
+}));

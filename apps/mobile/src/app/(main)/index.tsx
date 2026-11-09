@@ -10,7 +10,6 @@ import {
 	type LayoutChangeEvent,
 	type NativeScrollEvent,
 	type NativeSyntheticEvent,
-	StyleSheet,
 	Text,
 	View,
 } from "react-native";
@@ -40,9 +39,12 @@ import { modelLabel } from "@/lib/sessionInfo";
 import { draftKey } from "@/lib/store";
 import { findRunByToolCall, subagentSummary, toolRowTarget } from "@/lib/subagents";
 import { buildRows, type Row, type SpacedRow, spaceRows, visibleRows } from "@/lib/transcriptRows";
-import { colors, radii, sizes, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii, sizes, spacing } from "@/theme/tokens";
 
 export default function ChatScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const focused = useIsFocused();
 	const drawer = useDrawerStatus();
 	useEffect(() => {
@@ -407,6 +409,8 @@ function Transcript({
 	runs: readonly SubagentRun[] | undefined;
 	onOpenRun: (run: SubagentRun) => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const listRef = useRef<FlatList<SpacedRow>>(null);
 	const atBottom = useRef(true);
 	const [showJump, setShowJump] = useState(false);
@@ -521,6 +525,7 @@ function Transcript({
 }
 
 function EmptyState({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+	const styles = useStyles();
 	const hosts = useAppState((s) => s.hosts);
 	const selection = useAppState((s) => s.selection);
 	const view = useAppState((s) => s.view);
@@ -571,11 +576,11 @@ function EmptyState({ onOpenDrawer }: { onOpenDrawer: () => void }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	flex: { flex: 1 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	header: {
-		height: spacing.headerHeight,
+		minHeight: spacing.headerHeight,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 2,
@@ -618,4 +623,4 @@ const styles = StyleSheet.create({
 	emptyText: { ...typography.body, color: colors.textSecondary, textAlign: "center" },
 	emptyList: { flex: 1, justifyContent: "center" },
 	emptyLine: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },
-});
+}));

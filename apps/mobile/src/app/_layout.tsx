@@ -10,15 +10,17 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAppState } from "@/lib/hooks";
 import { notificationTarget } from "@/lib/notifications";
 import { startAppStore } from "@/lib/runtime";
-import { colors, scheme } from "@/theme/tokens";
+import { appearance, useAppearance } from "@/theme/appearance";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 startAppStore();
+void appearance.load();
 
 export default function RootLayout() {
+	const { colors, scheme, loaded: appearanceLoaded } = useAppearance();
 	const [fontsLoaded, fontError] = useFonts({ JetBrainsMono_400Regular, JetBrainsMono_600SemiBold });
 	const loaded = useAppState((s) => s.loaded);
-	const ready = loaded && (fontsLoaded || !!fontError);
+	const ready = appearanceLoaded && loaded && (fontsLoaded || !!fontError);
 
 	useEffect(() => {
 		if (ready) void SplashScreen.hideAsync().catch(() => {});

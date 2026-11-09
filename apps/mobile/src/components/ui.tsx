@@ -1,9 +1,9 @@
 /** Shared controls: icon buttons, the single filled capsule button, text buttons and the screen header. */
 import { Image } from "expo-image";
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, type StyleProp, StyleSheet, Text, View, type ViewStyle } from "react-native";
-
-import { colors, radii, scheme, sizes, spacing, typography } from "@/theme/tokens";
+import { ActivityIndicator, Pressable, type StyleProp, Text, View, type ViewStyle } from "react-native";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii, sizes, spacing } from "@/theme/tokens";
 
 import { BackIcon } from "./icons";
 
@@ -22,6 +22,7 @@ export function IconButton({
 	disabled?: boolean;
 	style?: StyleProp<ViewStyle>;
 }) {
+	const styles = useStyles();
 	return (
 		<Pressable
 			accessibilityRole="button"
@@ -53,6 +54,8 @@ export function PrimaryButton({
 	busy?: boolean;
 	disabled?: boolean;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const inactive = disabled || busy;
 	return (
 		<Pressable
@@ -89,6 +92,8 @@ export function TextButton({
 	disabled?: boolean;
 	style?: StyleProp<ViewStyle>;
 }) {
+	const styles = useStyles();
+	const { colors, scale } = useAppearance();
 	const color =
 		tone === "accent" ? colors.accentText : tone === "destructive" ? colors.statusFailedText : colors.textSecondary;
 	return (
@@ -104,8 +109,8 @@ export function TextButton({
 			{icon}
 			<Text
 				style={{
-					fontSize: size,
-					lineHeight: Math.round(size * 1.4),
+					fontSize: scale(size),
+					lineHeight: scale(Math.round(size * 1.4)),
 					color,
 					fontWeight: weight ?? (tone === "accent" ? "600" : "400"),
 				}}
@@ -129,6 +134,7 @@ export function ScreenHeader({
 	/** Shown at the right end (e.g. step progress). */
 	right?: ReactNode;
 }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.header}>
 			{onBack ? (
@@ -148,11 +154,11 @@ export function ScreenHeader({
 	);
 }
 
-const brandMark =
-	scheme === "dark" ? require("../../assets/brand/mark-dark.png") : require("../../assets/brand/mark-light.png");
-
 /** The PiMate Mt mark (docs/design/icon-kit), decorative: the app name is always shown as text nearby. */
 export function BrandMark({ size, style }: { size: number; style?: StyleProp<ViewStyle> }) {
+	const { scheme } = useAppearance();
+	const brandMark =
+		scheme === "dark" ? require("../../assets/brand/mark-dark.png") : require("../../assets/brand/mark-light.png");
 	return (
 		<View style={style} accessible={false} importantForAccessibility="no-hide-descendants">
 			<Image source={brandMark} style={{ width: size, height: size }} contentFit="contain" />
@@ -160,10 +166,12 @@ export function BrandMark({ size, style }: { size: number; style?: StyleProp<Vie
 	);
 }
 
-export const styles = StyleSheet.create({
+export const styles = { pressed: { opacity: 0.6 } };
+
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	primary: {
-		height: 48,
+		minHeight: 48,
 		borderRadius: radii.control,
 		backgroundColor: colors.accent,
 		flexDirection: "row",
@@ -181,6 +189,6 @@ export const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: 8,
 	},
-	header: { height: spacing.headerHeight, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
+	header: { minHeight: spacing.headerHeight, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
 	headerTitle: { ...typography.sheetTitle, flex: 1, color: colors.text },
-});
+}));

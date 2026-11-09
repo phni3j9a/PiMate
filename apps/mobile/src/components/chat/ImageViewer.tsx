@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
 import type { UriImage, ViewerImage } from "@/lib/imageViewer";
 import { clamp, DOUBLE_TAP_SCALE, fittedSize, MAX_SCALE, maxOffset, type Size, zoomAround } from "@/lib/zoom";
+import { makeStyles } from "@/theme/appearance";
 import { sizes } from "@/theme/tokens";
 import { CloseIcon } from "../icons";
 import { IconButton } from "../ui";
@@ -37,6 +38,7 @@ export function ImageViewer({
 	initialIndex: number;
 	onClose: () => void;
 }) {
+	const styles = useStyles();
 	const insets = useSafeAreaInsets();
 	const [box, setBox] = useState<LayoutRectangle | null>(null);
 	const [index, setIndex] = useState(initialIndex);
@@ -109,6 +111,7 @@ function ViewerPage({
 	onZoomChange: (zoomed: boolean) => void;
 	onDismiss: () => void;
 }) {
+	const styles = useStyles();
 	const loaded = useLoadedImage(image);
 	const [failed, setFailed] = useState<string | null>(null);
 	const [displayed, setDisplayed] = useState<string | null>(null);
@@ -275,7 +278,7 @@ function useLoadedImage(image: ViewerImage): ViewImage | UriImage | "loading" | 
 	return "load" in image ? result : image;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
 	root: { flex: 1 },
 	backdrop: { backgroundColor: BACKDROP },
 	fill: { width: "100%", height: "100%" },
@@ -293,4 +296,4 @@ const styles = StyleSheet.create({
 	},
 	counter: { color: FOREGROUND, fontSize: 15, fontVariant: ["tabular-nums"] },
 	spacer: { width: sizes.tapTarget },
-});
+}));

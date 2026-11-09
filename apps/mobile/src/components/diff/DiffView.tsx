@@ -3,12 +3,12 @@
  * in coral (no green). Used full-bleed on the Review screen and compact inside an expanded edit/write tool row.
  */
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-
+import { ScrollView, Text, View } from "react-native";
 import { TextButton } from "@/components/ui";
 import type { ChangePiece } from "@/lib/changes";
 import type { DiffHunk, DiffLine } from "@/lib/diff";
-import { colors, fontFamily } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily } from "@/theme/tokens";
 
 /** Lines rendered before "すべて表示": long diffs stay cheap to lay out. */
 const LINE_LIMIT = { compact: 60, full: 400 };
@@ -17,6 +17,7 @@ type Variant = "compact" | "full";
 
 /** One change (edit/write call): its note and hunks, cut after a line limit until the user asks for all. */
 export function ChangeDiff({ piece, variant }: { piece: ChangePiece; variant: Variant }) {
+	const styles = useStyles();
 	const [all, setAll] = useState(false);
 	const limit = all ? Number.POSITIVE_INFINITY : LINE_LIMIT[variant];
 	let budget = limit;
@@ -49,6 +50,7 @@ export function ChangeDiff({ piece, variant }: { piece: ChangePiece; variant: Va
 }
 
 function Hunks({ hunks, variant }: { hunks: DiffHunk[]; variant: Variant }) {
+	const styles = useStyles();
 	const compact = variant === "compact";
 	// Long lines scroll sideways instead of wrapping, so line numbers stay aligned with their code.
 	return (
@@ -79,6 +81,8 @@ function Hunks({ hunks, variant }: { hunks: DiffHunk[]; variant: Variant }) {
 }
 
 function Line({ line, compact }: { line: DiffLine; compact: boolean }) {
+	const styles = useStyles();
+	const { colors, scale } = useAppearance();
 	const add = line.kind === "add";
 	const del = line.kind === "del";
 	const color = add ? colors.diffAddText : del ? colors.diffDelText : colors.text;
@@ -92,8 +96,8 @@ function Line({ line, compact }: { line: DiffLine; compact: boolean }) {
 			accessible
 			accessibilityLabel={`${add ? "追加" : del ? "削除" : ""} ${line.newNo ?? line.oldNo ?? ""} 行 ${line.text}`}
 		>
-			<Text style={[styles.line, styles.number, { width: compact ? 30 : 34 }]}>{line.oldNo ?? ""}</Text>
-			<Text style={[styles.line, styles.number, { width: compact ? 30 : 26 }]}>{line.newNo ?? ""}</Text>
+			<Text style={[styles.line, styles.number, { width: scale(compact ? 30 : 34) }]}>{line.oldNo ?? ""}</Text>
+			<Text style={[styles.line, styles.number, { width: scale(compact ? 30 : 26) }]}>{line.newNo ?? ""}</Text>
 			<Text style={[styles.line, styles.sign, { color }]}>{add ? "+" : del ? "-" : " "}</Text>
 			<Text style={[styles.line, { color, paddingRight: compact ? 12 : 20 }]}>
 				{line.text}
@@ -103,7 +107,7 @@ function Line({ line, compact }: { line: DiffLine; compact: boolean }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	note: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginBottom: 6 },
 	noteFull: { marginHorizontal: 0 },
 	// Full: bleeds to the screen edges like the mock (the parent has 20px side padding).
@@ -121,4 +125,4 @@ const styles = StyleSheet.create({
 	noNewline: { color: colors.textTertiary },
 	moreCompact: { alignSelf: "flex-start", marginTop: 2 },
 	moreFull: { alignSelf: "flex-start", marginTop: 4 },
-});
+}));

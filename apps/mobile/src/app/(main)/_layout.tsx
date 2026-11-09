@@ -4,10 +4,11 @@ import { useWindowDimensions } from "react-native";
 
 import { InstanceDrawer } from "@/components/InstanceDrawer";
 import { useAppState } from "@/lib/hooks";
-import { colors } from "@/theme/tokens";
+import { useAppearance } from "@/theme/appearance";
 
 /** Chat with the ChatGPT-style instance drawer. Without a paired host, onboarding (pairing) comes first. */
 export default function MainLayout() {
+	const { colors } = useAppearance();
 	const hasHosts = useAppState((s) => s.hosts.length > 0);
 	const { width } = useWindowDimensions();
 	if (!hasHosts) return <Redirect href="/pair" />;

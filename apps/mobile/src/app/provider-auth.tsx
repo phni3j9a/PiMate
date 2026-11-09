@@ -11,16 +11,16 @@ import * as Crypto from "expo-crypto";
 import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { CheckIcon, CopyIcon } from "@/components/icons";
 import { Spinner } from "@/components/StatusMark";
 import { IconButton, PrimaryButton, ScreenHeader, TextButton } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
 import { type AuthState, authBrowserUrl, flowActive, ProviderAuthController, providerGroups } from "@/lib/providerAuth";
 import { appStore } from "@/lib/runtime";
-import { colors, fontFamily, radii, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii, spacing } from "@/theme/tokens";
 
 const PROVIDERS: Record<AuthProviderId, string> = {
 	openai: "OpenAI",
@@ -98,6 +98,8 @@ function confirmLogout(controller: ProviderAuthController, provider: AuthProvide
 }
 
 export default function ProviderAuthScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { hostId } = useLocalSearchParams<{ hostId?: string }>();
 	const [controller, setController] = useState<ProviderAuthController | null>(null);
 	useEffect(() => {
@@ -221,6 +223,8 @@ function FlowPanel({
 	busy: AuthState["busy"];
 	offline: boolean;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const [value, setValue] = useState("");
 	const [copied, setCopied] = useState(false);
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -389,7 +393,7 @@ function FlowPanel({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
 	flex: { flex: 1 },
 	content: { flexGrow: 1, paddingTop: 4, paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
@@ -428,4 +432,4 @@ const styles = StyleSheet.create({
 	result: { ...typography.body, color: colors.text, marginVertical: 12 },
 	footer: { marginTop: 16, gap: 8 },
 	hint: { ...typography.caption, color: colors.textSecondary, textAlign: "center" },
-});
+}));

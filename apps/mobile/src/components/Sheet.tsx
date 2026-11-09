@@ -1,9 +1,10 @@
 /** Bottom sheet for user-opened settings (docs/design Sheet-Model, Sheet-Session). Agent requests never use this. */
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Animated, Keyboard, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Keyboard, Modal, Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { makeStyles } from "@/theme/appearance";
 
-import { colors, radii } from "@/theme/tokens";
+import { radii } from "@/theme/tokens";
 
 export function Sheet({
 	visible,
@@ -17,6 +18,7 @@ export function Sheet({
 	label: string;
 	children: ReactNode;
 }) {
+	const styles = useStyles();
 	const insets = useSafeAreaInsets();
 	const keyboard = useKeyboardHeight(visible);
 	const offset = useRef(new Animated.Value(600)).current;
@@ -81,7 +83,7 @@ function useKeyboardHeight(active: boolean): number {
 	return height;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
 	root: { flex: 1, justifyContent: "flex-end" },
 	backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.scrim },
 	panel: {
@@ -99,4 +101,4 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.control,
 		marginBottom: 12,
 	},
-});
+}));

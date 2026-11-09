@@ -5,7 +5,7 @@
  */
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { BackHandler, Linking, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { BackHandler, Linking, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InstanceRow } from "@/components/InstanceDrawer";
 import { MenuIcon, PlusIcon } from "@/components/icons";
@@ -17,7 +17,8 @@ import { useAppState, useNow } from "@/lib/hooks";
 import { firstStepPhase } from "@/lib/onboarding";
 import { buildDrawerGroups, type DrawerRow, hostConnectionLabel, needsAttention } from "@/lib/presentation";
 import { appStore, notificationCenter } from "@/lib/runtime";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { spacing } from "@/theme/tokens";
 
 const toChat = () => router.replace("/");
 // From here the stack holds only this screen, so the new Pi screen closes back to the chat.
@@ -29,6 +30,8 @@ function attentionText(row: DrawerRow): string | undefined {
 }
 
 export default function FirstStepScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { hostId } = useLocalSearchParams<{ hostId?: string }>();
 	const hosts = useAppState((s) => s.hosts);
 	const host = hosts.find((h) => h.hostId === hostId);
@@ -182,7 +185,7 @@ export default function FirstStepScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	flex: { flex: 1, minWidth: 0 },
 	screen: { flex: 1, backgroundColor: colors.background },
 	content: { paddingHorizontal: spacing.screenSide, paddingBottom: 24 },
@@ -194,7 +197,7 @@ const styles = StyleSheet.create({
 	listSection: { marginTop: 24 },
 	// Rows carry their own 12px inset (drawer layout); line their text up with the screen edge.
 	list: { marginTop: 4, marginHorizontal: -12 },
-	newPi: { alignSelf: "flex-start", justifyContent: "flex-start", height: 52, gap: 12, marginTop: 4 },
+	newPi: { alignSelf: "flex-start", justifyContent: "flex-start", minHeight: 52, gap: 12, marginTop: 4 },
 	section: { marginTop: 36, fontSize: 12, lineHeight: 18, fontWeight: "600", color: colors.textSecondary },
 	notificationRow: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 8 },
 	rowTitle: { fontSize: 15, lineHeight: 22, color: colors.text },
@@ -203,4 +206,4 @@ const styles = StyleSheet.create({
 	bottom: { paddingHorizontal: spacing.screenSide, paddingTop: 8, paddingBottom: 12, gap: 4 },
 	hint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingBottom: 16 },
 	hintText: { ...typography.caption, color: colors.textSecondary, textAlign: "center", flexShrink: 1 },
-});
+}));

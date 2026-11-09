@@ -1,9 +1,8 @@
 import type { SessionTree, SessionTreeItem } from "@pimate/protocol";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { BackIcon, CheckIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
@@ -12,7 +11,8 @@ import { ago } from "@/lib/format";
 import { useAppState } from "@/lib/hooks";
 import { appStore } from "@/lib/runtime";
 import { treeKind, treeRows } from "@/lib/treeRows";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { spacing } from "@/theme/tokens";
 
 function back() {
 	if (router.canGoBack()) router.back();
@@ -20,6 +20,8 @@ function back() {
 }
 
 export default function TreeScreen() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	// Keep the route bound to the conversation it opened for, even if the PC switches sessions meanwhile.
 	const [target] = useState(() => appStore.opTarget());
 	const view = useAppState((s) => s.view);
@@ -280,7 +282,7 @@ export default function TreeScreen() {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	screen: { flex: 1, backgroundColor: colors.background },
 	header: { minHeight: 52, flexDirection: "row", alignItems: "center", paddingLeft: 6, paddingRight: 16, gap: 4 },
 	title: { ...typography.sheetTitle, color: colors.text, flex: 1 },
@@ -340,4 +342,4 @@ const styles = StyleSheet.create({
 		marginTop: 8,
 	},
 	moveButton: { marginTop: 16 },
-});
+}));

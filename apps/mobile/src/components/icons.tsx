@@ -1,7 +1,7 @@
 /** Line icons transcribed from the design mock SVGs (docs/design/html/*.html, 24×24 viewBox). */
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
-import { colors } from "@/theme/tokens";
+import { useAppearance } from "@/theme/appearance";
 
 interface IconProps {
 	size?: number;
@@ -9,7 +9,9 @@ interface IconProps {
 	strokeWidth?: number;
 }
 
-function Line({ d, size = 22, color = colors.text, strokeWidth = 2 }: IconProps & { d: string }) {
+function Line({ d, size = 22, color: inputColor, strokeWidth = 2 }: IconProps & { d: string }) {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.text;
 	return (
 		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
 			<Path d={d} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
@@ -47,24 +49,36 @@ export const WifiOffIcon = (p: IconProps) => (
 		{...p}
 	/>
 );
-export const SearchIcon = ({ size = 16, color = colors.textSecondary }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Circle cx={11} cy={11} r={6.5} stroke={color} strokeWidth={2} />
-		<Path d="M20 20l-4.2-4.2" stroke={color} strokeWidth={2} strokeLinecap="round" />
-	</Svg>
-);
-export const ClockIcon = ({ size = 12, color = colors.textSecondary }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
-		<Path d="M12 7v5l3 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-	</Svg>
-);
-export const AlertIcon = ({ size = 16, color = colors.statusFailedText }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
-		<Path d="M12 7.5v5.5M12 16.5h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
-	</Svg>
-);
+export const SearchIcon = ({ size = 16, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Circle cx={11} cy={11} r={6.5} stroke={color} strokeWidth={2} />
+			<Path d="M20 20l-4.2-4.2" stroke={color} strokeWidth={2} strokeLinecap="round" />
+		</Svg>
+	);
+};
+export const ClockIcon = ({ size = 12, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
+			<Path d="M12 7v5l3 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+		</Svg>
+	);
+};
+export const AlertIcon = ({ size = 16, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.statusFailedText;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
+			<Path d="M12 7.5v5.5M12 16.5h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
+		</Svg>
+	);
+};
 /** Opens outside the app (store, browser). */
 export const ExternalIcon = (p: IconProps) => (
 	<Line
@@ -76,66 +90,99 @@ export const ExternalIcon = (p: IconProps) => (
 export const ShareIcon = (p: IconProps) => (
 	<Line d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" size={16} {...p} />
 );
-export const StopIcon = ({ size = 22, color = colors.text }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />
-		<Rect x={9} y={9} width={6} height={6} rx={1} fill={color} />
-	</Svg>
-);
-export const GearIcon = ({ size = 18, color = colors.textSecondary }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.8} />
-		<Path
-			d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"
-			stroke={color}
-			strokeWidth={1.8}
-			strokeLinecap="round"
-		/>
-	</Svg>
-);
-export const ServerIcon = ({ size = 15, color = colors.textSecondary }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Rect x={3} y={4} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
-		<Rect x={3} y={13} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
-		<Path d="M7 7.5h.01M7 16.5h.01" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-	</Svg>
-);
-export const LaptopIcon = ({ size = 15, color = colors.textSecondary }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Rect x={4} y={5} width={16} height={11} rx={1.5} stroke={color} strokeWidth={1.9} />
-		<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-	</Svg>
-);
+export const StopIcon = ({ size = 22, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.text;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />
+			<Rect x={9} y={9} width={6} height={6} rx={1} fill={color} />
+		</Svg>
+	);
+};
+export const GearIcon = ({ size = 18, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.8} />
+			<Path
+				d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"
+				stroke={color}
+				strokeWidth={1.8}
+				strokeLinecap="round"
+			/>
+		</Svg>
+	);
+};
+export const ServerIcon = ({ size = 15, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Rect x={3} y={4} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
+			<Rect x={3} y={13} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
+			<Path d="M7 7.5h.01M7 16.5h.01" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+		</Svg>
+	);
+};
+export const LaptopIcon = ({ size = 15, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Rect x={4} y={5} width={16} height={11} rx={1.5} stroke={color} strokeWidth={1.9} />
+			<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+		</Svg>
+	);
+};
 /** This phone (first-connection drawings). */
-export const PhoneIcon = ({ size = 20, color = colors.textCode }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Rect x={7} y={3} width={10} height={18} rx={2.5} stroke={color} strokeWidth={1.9} />
-		<Path d="M11 18h2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-	</Svg>
-);
+export const PhoneIcon = ({ size = 20, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textCode;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Rect x={7} y={3} width={10} height={18} rx={2.5} stroke={color} strokeWidth={1.9} />
+			<Path d="M11 18h2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+		</Svg>
+	);
+};
 
-export const MoreIcon = ({ size = 20, color = colors.text }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-		<Circle cx={5} cy={12} r={1.6} />
-		<Circle cx={12} cy={12} r={1.6} />
-		<Circle cx={19} cy={12} r={1.6} />
-	</Svg>
-);
-export const CopyIcon = ({ size = 18, color = colors.text }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
-		<Rect x={9} y={9} width={11} height={11} rx={2} strokeLinejoin="round" />
-		<Path d="M5 15V6a2 2 0 0 1 2-2h9" strokeLinecap="round" strokeLinejoin="round" />
-	</Svg>
-);
-export const TerminalIcon = ({ size = 16, color = colors.text }: IconProps) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
-		<Rect x={3} y={4} width={18} height={13} rx={2} strokeLinejoin="round" />
-		<Path d="M8 21h8M7 9l3 2-3 2M12 13h4" strokeLinecap="round" strokeLinejoin="round" />
-	</Svg>
-);
-export const CheckIcon = (p: IconProps) => (
-	<Line d="M5 12.5l4.5 4.5L19 7.5" size={18} strokeWidth={2.4} color={colors.accent} {...p} />
-);
+export const MoreIcon = ({ size = 20, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.text;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+			<Circle cx={5} cy={12} r={1.6} />
+			<Circle cx={12} cy={12} r={1.6} />
+			<Circle cx={19} cy={12} r={1.6} />
+		</Svg>
+	);
+};
+export const CopyIcon = ({ size = 18, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.text;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
+			<Rect x={9} y={9} width={11} height={11} rx={2} strokeLinejoin="round" />
+			<Path d="M5 15V6a2 2 0 0 1 2-2h9" strokeLinecap="round" strokeLinejoin="round" />
+		</Svg>
+	);
+};
+export const TerminalIcon = ({ size = 16, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.text;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
+			<Rect x={3} y={4} width={18} height={13} rx={2} strokeLinejoin="round" />
+			<Path d="M8 21h8M7 9l3 2-3 2M12 13h4" strokeLinecap="round" strokeLinejoin="round" />
+		</Svg>
+	);
+};
+export const CheckIcon = (p: IconProps) => {
+	const { colors } = useAppearance();
+	return <Line d="M5 12.5l4.5 4.5L19 7.5" size={18} strokeWidth={2.4} color={colors.accent} {...p} />;
+};
 export const FolderIcon = (p: IconProps) => (
 	<Line
 		d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"
@@ -148,17 +195,21 @@ export const PencilIcon = (p: IconProps) => (
 	<Line d="M12 20h8M4 20l1-4L16 5l3 3L8 19z" size={22} strokeWidth={1.9} {...p} />
 );
 /** Favorite model (Pi's scoped models): outline, filled when on. */
-export const StarIcon = ({ size = 20, color = colors.textSecondary, filled }: IconProps & { filled?: boolean }) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-		<Path
-			d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"
-			stroke={color}
-			strokeWidth={1.8}
-			strokeLinejoin="round"
-			fill={filled ? color : "none"}
-		/>
-	</Svg>
-);
+export const StarIcon = ({ size = 20, color: inputColor, filled }: IconProps & { filled?: boolean }) => {
+	const { colors } = useAppearance();
+	const color = inputColor ?? colors.textSecondary;
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+			<Path
+				d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"
+				stroke={color}
+				strokeWidth={1.8}
+				strokeLinejoin="round"
+				fill={filled ? color : "none"}
+			/>
+		</Svg>
+	);
+};
 
 /** Context: a page filling with lines (Issue #59 composer gauges). */
 export const ContextIcon = (p: IconProps) => (
@@ -183,14 +234,18 @@ export const ClaudeLogo = ({ size = 12 }: { size?: number }) => (
 	</Svg>
 );
 /** OpenAI Blossom: monochrome only (black or white). */
-export const OpenAILogo = ({ size = 12 }: { size?: number }) => (
-	<Svg width={size} height={size} viewBox="0 0 24 24">
-		<Path d={OPENAI_MARK} fill={colors.text} />
-	</Svg>
-);
+export const OpenAILogo = ({ size = 12 }: { size?: number }) => {
+	const { colors } = useAppearance();
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24">
+			<Path d={OPENAI_MARK} fill={colors.text} />
+		</Svg>
+	);
+};
 
 /** Ring filled by `percent`; null = unknown, drawn dotted so it never reads as 0%. */
 export function RingIcon({ percent, color, size = 24 }: { percent: number | null; color: string; size?: number }) {
+	const { colors } = useAppearance();
 	const c = 2 * Math.PI * 10.5;
 	const filled = ((percent === null ? 0 : Math.max(0, Math.min(100, percent))) / 100) * c;
 	return (

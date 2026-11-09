@@ -1,8 +1,7 @@
 /** Model / Thinking sheet (docs/design/html/Sheet-Model.html). Changes apply to the Pi on the PC as well. */
 import type { ModelInfo, ThinkingLevel } from "@pimate/protocol";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { CheckIcon, SearchIcon, StarIcon } from "@/components/icons";
 import { Sheet } from "@/components/Sheet";
 import { Spinner } from "@/components/StatusMark";
@@ -22,7 +21,8 @@ import {
 	thinkingShort,
 	toggleFavorite,
 } from "@/lib/sessionInfo";
-import { colors, fontFamily, radii, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { fontFamily, radii } from "@/theme/tokens";
 
 export function ModelSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
 	return (
@@ -33,6 +33,8 @@ export function ModelSheet({ visible, onClose }: { visible: boolean; onClose: ()
 }
 
 function ModelSheetBody() {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const view = useAppState((s) => s.view);
 	const models = useAppState((s) => s.models);
 	const op = useAppState((s) => s.op);
@@ -247,6 +249,8 @@ function ModelRow({
 	favoriteDisabled: boolean;
 	onToggleFavorite: () => void;
 }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const window = model.contextWindow ? ` · ${tokens(model.contextWindow).toUpperCase()}` : "";
 	return (
 		<Pressable
@@ -281,13 +285,13 @@ function ModelRow({
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	titleRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 },
 	title: { fontSize: 19, lineHeight: 26, fontWeight: "700", color: colors.text },
 	titleNote: { ...typography.caption, color: colors.textSecondary },
 	search: {
-		height: 40,
+		minHeight: 40,
 		borderRadius: radii.control,
 		backgroundColor: colors.surface,
 		flexDirection: "row",
@@ -318,10 +322,10 @@ const styles = StyleSheet.create({
 	section: { fontSize: 15, lineHeight: 21, fontWeight: "700", color: colors.text },
 	sectionNote: { ...typography.caption, color: colors.textSecondary },
 	segment: { flexDirection: "row", backgroundColor: colors.surfaceStrong, borderRadius: 10, padding: 3 },
-	segItem: { flex: 1, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+	segItem: { flex: 1, minHeight: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
 	segOn: { backgroundColor: colors.background },
 	segText: { fontSize: 13, color: colors.textSecondary },
 	segTextOn: { color: colors.text, fontWeight: "700" },
 	pending: { ...typography.caption, color: colors.textSecondary, marginTop: 6 },
 	defaultValue: { fontSize: 15, lineHeight: 21, color: colors.text },
-});
+}));

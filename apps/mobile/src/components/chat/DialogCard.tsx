@@ -4,14 +4,14 @@
  */
 import type { UIQuestion, UIRequest } from "@pimate/protocol";
 import { createContext, useContext, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { CommandPill } from "@/components/CommandPill";
 import { TerminalIcon } from "@/components/icons";
 import { StatusMark } from "@/components/StatusMark";
 import { TextButton } from "@/components/ui";
 import type { UIAnswer } from "@/lib/store";
-import { colors, radii, typography } from "@/theme/tokens";
+import { makeStyles, useAppearance } from "@/theme/appearance";
+import { radii } from "@/theme/tokens";
 
 export interface DialogContextValue {
 	/** requestId of the answer in flight. */
@@ -44,6 +44,8 @@ export function DialogCard({ request, marginTop }: { request: UIRequest; marginT
 }
 
 function SimpleDialogCard({ request, marginTop }: { request: UIRequest; marginTop: number }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { answering, canAnswer, onAnswer } = useContext(DialogContext);
 	const [choice, setChoice] = useState<string | null>(null);
 	const [text, setText] = useState(request.kind === "editor" ? (request.message ?? "") : "");
@@ -145,6 +147,8 @@ type Draft = { selected: string[]; own: boolean; text: string };
 
 /** pimate_ask: every question in one card; single-select needs an option or own text, multi-select may stay empty. */
 function QuestionnaireCard({ request, marginTop }: { request: UIRequest; marginTop: number }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { answering, canAnswer, onAnswer } = useContext(DialogContext);
 	const questions = request.questions ?? [];
 	const [drafts, setDrafts] = useState<Draft[]>(() => questions.map(() => ({ selected: [], own: false, text: "" })));
@@ -273,10 +277,12 @@ function QuestionnaireCard({ request, marginTop }: { request: UIRequest; marginT
 }
 
 function RadioMark({ on }: { on: boolean }) {
+	const styles = useStyles();
 	return <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>;
 }
 
 function CheckMark({ on }: { on: boolean }) {
+	const styles = useStyles();
 	return (
 		<View style={[styles.radio, styles.check, on && styles.radioOn]}>
 			{on ? <Text style={styles.checkTick}>✓</Text> : null}
@@ -286,6 +292,8 @@ function CheckMark({ on }: { on: boolean }) {
 
 /** A TUI screen the phone cannot answer: point to the PC terminal (and `pimate attach` when there is one). */
 export function PcPromptCard({ title, marginTop }: { title: string | null; marginTop: number }) {
+	const styles = useStyles();
+	const { colors } = useAppearance();
 	const { abducoSession } = useContext(DialogContext);
 	const what = title ? `「${title}」の画面` : "Extension の独自画面";
 	return (
@@ -307,7 +315,7 @@ export function PcPromptCard({ title, marginTop }: { title: string | null; margi
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, typography }) => ({
 	pressed: { opacity: 0.6 },
 	card: { padding: 16, borderRadius: radii.cardMin, backgroundColor: colors.surface },
 	head: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -346,7 +354,7 @@ const styles = StyleSheet.create({
 	hint: { ...typography.caption, color: colors.textSecondary, marginTop: 8 },
 	actions: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 20, marginTop: 12 },
 	answer: {
-		height: 40,
+		minHeight: 40,
 		borderRadius: radii.control,
 		backgroundColor: colors.accent,
 		paddingHorizontal: 20,
@@ -358,4 +366,4 @@ const styles = StyleSheet.create({
 	answerText: { fontSize: 15, fontWeight: "600", color: colors.onAccent },
 	pcTitle: { fontSize: 13, lineHeight: 18, fontWeight: "700", color: colors.text },
 	pcText: { ...typography.body, color: colors.textSecondary, marginTop: 8 },
-});
+}));
