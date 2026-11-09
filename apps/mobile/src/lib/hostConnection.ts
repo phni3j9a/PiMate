@@ -14,13 +14,16 @@ import {
 	type AppMessage,
 	type GitHubQuery,
 	type GitHubResult,
+	type GitHubStatusResult,
 	HOST_PROTOCOL_VERSION,
 	HostCloseCode,
 	type HostInfo,
 	type HostMessage,
+	type HostOperationResult,
 	type InstanceSummary,
 	type PackageUpdateCheck,
 	type PackageUpdateResult,
+	type PairedDevice,
 	type Request,
 	type Response,
 	type SpawnParams,
@@ -58,8 +61,11 @@ export interface ConnectionDeps {
 }
 
 export class RcError extends Error {
-	readonly code: "not_connected" | "outcome_unknown";
-	constructor(code: "not_connected" | "outcome_unknown") {
+	readonly code: "not_connected" | "outcome_unknown" | "unsupported";
+	constructor(
+		code: "not_connected" | "outcome_unknown" | "unsupported",
+		readonly reason?: "timeout",
+	) {
 		super(code);
 		this.code = code;
 	}
@@ -225,6 +231,24 @@ export class HostConnection {
 		return this.hostRequest({ type: "update", requestId });
 	}
 
+	/** Unknown operations are never sent to an older Host. Never retried. */
+	devices(requestId: string): Promise<{ devices: PairedDevice[] }> {
+		if (this.info?.pairedDevices !== true) return Promise.reject(new RcError("unsupported"));
+		return this.hostRequest({ type: "devices", requestId }, 20_000);
+	}
+	revokeDevice(requestId: string, deviceId: string): Promise<HostOperationResult> {
+		if (this.info?.pairedDevices !== true) return Promise.reject(new RcError("unsupported"));
+		return this.hostRequest({ type: "device_revoke", requestId, deviceId }, 20_000);
+	}
+	restartHost(requestId: string): Promise<HostOperationResult> {
+		if (this.info?.hostRestart !== true) return Promise.reject(new RcError("unsupported"));
+		return this.hostRequest({ type: "host_restart", requestId }, 20_000);
+	}
+	githubStatus(requestId: string): Promise<GitHubStatusResult> {
+		if (this.info?.githubStatus !== true) return Promise.reject(new RcError("unsupported"));
+		return this.hostRequest({ type: "github_status", requestId }, 20_000);
+	}
+
 	/** Starts a new Pi on this Host. Never retried: a dropped socket rejects with `outcome_unknown`. */
 	spawn(requestId: string, params: SpawnParams): Promise<SpawnResult> {
 		return this.hostRequest<SpawnResult>({ type: "spawn", requestId, params });
@@ -239,13 +263,32 @@ export class HostConnection {
 		if (this.authed && this.info?.authSession === true) this.send({ type: "auth_session_end", holdId });
 	}
 
-	private hostRequest<T>(msg: Extract<AppMessage, { requestId: string }>): Promise<T> {
+	private hostRequest<T>(msg: Extract<AppMessage, { requestId: string }>, timeoutMs?: number): Promise<T> {
 		if (!this.authed || !this.socket || this.socket.readyState !== OPEN)
 			return Promise.reject(new RcError("not_connected"));
 		return new Promise<T>((resolve, reject) => {
-			this.hostPending.set(msg.requestId, { resolve: resolve as (r: never) => void, reject });
+			const timer = timeoutMs
+				? this.deps.setTimeout(() => {
+						this.hostPending.delete(msg.requestId);
+						reject(new RcError("outcome_unknown", "timeout"));
+					}, timeoutMs)
+				: null;
+			const clear = () => {
+				if (timer !== null) this.deps.clearTimeout(timer);
+			};
+			this.hostPending.set(msg.requestId, {
+				resolve: (value) => {
+					clear();
+					resolve(value);
+				},
+				reject: (error) => {
+					clear();
+					reject(error);
+				},
+			});
 			if (!this.send(msg)) {
 				this.hostPending.delete(msg.requestId);
+				clear();
 				reject(new RcError("not_connected"));
 			}
 		});
@@ -364,6 +407,10 @@ export class HostConnection {
 			case "folders_result":
 			case "dirs_result":
 			case "github_result":
+			case "devices_result":
+			case "device_revoke_result":
+			case "host_restart_result":
+			case "github_status_result":
 			case "update_check_result":
 			case "update_result":
 			case "spawn_result":

@@ -268,3 +268,29 @@ it("negotiates alerts only with capable Hosts and restores opt-in after reconnec
 	expect(current.sentOfType("watch_alerts").at(-1)).toEqual({ type: "watch_alerts", enabled: false });
 	c.stop();
 });
+
+it("times out host settings requests, ignores late replies, and never retries", async () => {
+	const c = connection();
+	c.start();
+	const s = FakeSocket.last();
+	authenticate(s, [], { pairedDevices: true });
+	const pending = c.revokeDevice("r1", "d1");
+	const rejected = expect(pending).rejects.toMatchObject({ code: "outcome_unknown" });
+	vi.advanceTimersByTime(20_000);
+	await rejected;
+	s.receive({ type: "device_revoke_result", requestId: "r1", ok: true });
+	expect(s.sentOfType("device_revoke")).toHaveLength(1);
+	c.stop();
+});
+
+it("guards host settings even when called directly against an older Host", async () => {
+	const c = connection();
+	c.start();
+	const s = FakeSocket.last();
+	authenticate(s);
+	for (const request of [c.devices("1"), c.revokeDevice("2", "d1"), c.restartHost("3"), c.githubStatus("4")])
+		await expect(request).rejects.toMatchObject({ code: "unsupported" });
+	for (const type of ["devices", "device_revoke", "host_restart", "github_status"])
+		expect(s.sentOfType(type)).toHaveLength(0);
+	c.stop();
+});

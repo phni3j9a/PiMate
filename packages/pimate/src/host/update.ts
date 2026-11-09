@@ -23,6 +23,17 @@ export interface UpdateOptions {
 	current?: string;
 }
 
+export function inManagedService(
+	platform: string = process.platform,
+	cgroup = () => readFileSync("/proc/self/cgroup", "utf8"),
+): boolean {
+	try {
+		return platform === "linux" && cgroup().trimEnd().endsWith(`/${SERVICE}`);
+	} catch {
+		return false;
+	}
+}
+
 export class PackageUpdater {
 	private busy = false;
 	private env: NodeJS.ProcessEnv;
@@ -40,13 +51,7 @@ export class PackageUpdater {
 		} catch {
 			return "not_package";
 		}
-		try {
-			const group = (this.options.cgroup ?? (() => readFileSync("/proc/self/cgroup", "utf8")))();
-			if ((this.options.platform ?? process.platform) === "linux" && group.trimEnd().endsWith(`/${SERVICE}`)) return;
-		} catch {
-			/* no managed service */
-		}
-		return "not_service";
+		if (!inManagedService(this.options.platform, this.options.cgroup)) return "not_service";
 	}
 	async check(): Promise<PackageUpdateCheck> {
 		const reason = this.support();

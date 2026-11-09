@@ -35,6 +35,23 @@ describe("HostRegistry", () => {
 		expect([...storage.map.keys()].sort()).toEqual(["pimate.host.b", INDEX_KEY]);
 	});
 
+	it("serializes overlapping writes and continues after a failure", async () => {
+		const storage = new MemoryStorage();
+		const reg = new HostRegistry(storage);
+		await Promise.all([reg.save(host("a")), reg.save(host("b"))]);
+		expect((await reg.load()).map((h) => h.hostId)).toEqual(["a", "b"]);
+		const setItem = storage.setItem.bind(storage);
+		storage.setItem = async (key, value) => {
+			if (key === hostKey("bad")) throw new Error("storage failed");
+			await setItem(key, value);
+		};
+		const failed = reg.save(host("bad"));
+		const removed = reg.remove("a");
+		await expect(failed).rejects.toThrow("storage failed");
+		await removed;
+		expect((await reg.load()).map((h) => h.hostId)).toEqual(["b"]);
+	});
+
 	it("keeps storage keys within the SecureStore charset", async () => {
 		const storage = new MemoryStorage();
 		const reg = new HostRegistry(storage);

@@ -23,10 +23,11 @@ import { AlertTracker } from "./alerts.ts";
 import { AUTH_SESSION_METHODS, AuthSession } from "./auth-session.ts";
 import type { RcClient } from "./client.ts";
 import { atomicWrite, HostConfig, hash, PairingError } from "./config.ts";
-import { queryGitHub, validGitHubQuery } from "./github.ts";
+import { githubStatus, queryGitHub, validGitHubQuery } from "./github.ts";
 import { HostCore } from "./index.ts";
 import { hostHome, listDirs, listFolders, SpawnError, validateSpawn } from "./operations.ts";
-import { PackageUpdater } from "./update.ts";
+import { restartManagedService } from "./service.ts";
+import { inManagedService, PackageUpdater } from "./update.ts";
 import {
 	answeredHere,
 	payload,
@@ -127,6 +128,8 @@ export interface HostServerOptions {
 	pollMs?: number;
 	authTimeoutMs?: number;
 	authSession?: ConstructorParameters<typeof AuthSession>[1];
+	isManagedService?: () => boolean;
+	restartService?: () => Promise<void>;
 }
 export class HostServer {
 	readonly core: HostCore;
@@ -330,6 +333,9 @@ export class HostServer {
 							dirs: true,
 							github: true,
 							packageUpdate: true,
+							pairedDevices: true,
+							hostRestart: (this.options.isManagedService ?? inManagedService)(),
+							githubStatus: true,
 						},
 					});
 					this.send(peer, { type: "instances", instances: this.instances });
@@ -391,6 +397,51 @@ export class HostServer {
 							this.send(peer, { type: "dirs_result", requestId, dirs }),
 						);
 					} else void this.spawn(peer, message.requestId, message.params);
+					return;
+				}
+				if (["devices", "device_revoke", "host_restart", "github_status"].includes(message.type)) {
+					if (
+						typeof message.requestId !== "string" ||
+						!message.requestId ||
+						message.requestId.length > 200 ||
+						Object.keys(message).some(
+							(key) => !["type", "requestId", ...(message.type === "device_revoke" ? ["deviceId"] : [])].includes(key),
+						) ||
+						(message.type === "device_revoke" &&
+							(typeof message.deviceId !== "string" ||
+								!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.deviceId)))
+					)
+						throw new Error("Invalid host settings request");
+					const requestId = message.requestId;
+					if (message.type === "devices") {
+						const devices = this.config.devices().map(({ deviceId, name, createdAt, lastSeenAt }) => ({
+							deviceId,
+							name,
+							createdAt,
+							lastSeenAt,
+							current: deviceId === peer.deviceId,
+						}));
+						this.send(peer, { type: "devices_result", requestId, devices });
+					} else if (message.type === "device_revoke") {
+						try {
+							this.config.revoke(message.deviceId);
+							this.send(peer, { type: "device_revoke_result", requestId, ok: true });
+							this.closeRevokedPeers((id) => id === message.deviceId);
+						} catch {
+							this.send(peer, { type: "device_revoke_result", requestId, ok: false, code: "failed" });
+						}
+					} else if (message.type === "host_restart") {
+						if (!(this.options.isManagedService ?? inManagedService)())
+							this.send(peer, { type: "host_restart_result", requestId, ok: false, code: "unsupported" });
+						else
+							void (this.options.restartService ?? restartManagedService)().then(
+								() => this.send(peer, { type: "host_restart_result", requestId, ok: true }),
+								() => this.send(peer, { type: "host_restart_result", requestId, ok: false, code: "failed" }),
+							);
+					} else
+						void githubStatus(hostHome(this.core.env), this.core.env).then((result) =>
+							this.send(peer, { type: "github_status_result", requestId, ...result }),
+						);
 					return;
 				}
 				if (message.type === "update_check" || message.type === "update") {
@@ -565,15 +616,18 @@ export class HostServer {
 			if (!ready) throw new Error("RC readiness timed out; initial message was not sent");
 		}
 	}
+	private closeRevokedPeers(isRevoked: (id: string) => boolean): void {
+		for (const peer of this.peers) if (peer.deviceId && isRevoked(peer.deviceId)) peer.ws.close(HostCloseCode.revoked);
+	}
 	async refresh(): Promise<void> {
 		if (this.polling || this.stopped) return;
 		this.polling = true;
 		try {
 			const devices = this.config.devices();
+			this.closeRevokedPeers((id) => !devices.some((d) => d.deviceId === id));
 			for (const peer of this.peers) {
 				if (peer.ws.bufferedAmount > MAX_BUFFER) peer.ws.close(1009, "Slow consumer");
-				if (peer.deviceId && !devices.some((d) => d.deviceId === peer.deviceId)) peer.ws.close(HostCloseCode.revoked);
-				else if (peer.deviceId) this.config.touch(peer.deviceId);
+				if (peer.deviceId && devices.some((d) => d.deviceId === peer.deviceId)) this.config.touch(peer.deviceId);
 			}
 			const list = await this.core.list();
 			if (this.stopped) return;

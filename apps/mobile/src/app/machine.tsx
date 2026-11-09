@@ -1,8 +1,9 @@
 /**
  * Machine detail (docs/design/html/Machine-Detail.html), opened from Settings → マシン. One component per section;
- * add new sections to `MachineScreen` above `RemoveSection`, which stays last.
+ * add new sections to `MachineScreen` above `RemoveSection`, which stays last. Sections that need a newer Host hide
+ * themselves until it is connected and advertises the capability.
  */
-import type { PackageUpdateCheck } from "@pimate/protocol";
+import type { GitHubStatus, PackageUpdateCheck, PairedDevice } from "@pimate/protocol";
 import { router, useLocalSearchParams } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
@@ -83,6 +84,11 @@ function PackageSection({ host }: { host: HostRuntime }) {
 	const [message, setMessage] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [notice, setNotice] = useState("");
+	const [restart, setRestart] = useState("");
+	useEffect(() => {
+		// Back online after a restart (or any reconnect): the restart note is done.
+		if (host.state === "connected") setRestart("");
+	}, [host.state]);
 	useEffect(() => {
 		let active = true;
 		setCheck(null);
@@ -148,6 +154,25 @@ function PackageSection({ host }: { host: HostRuntime }) {
 				},
 			],
 		);
+	const confirmRestart = () =>
+		Alert.alert("Host を再起動しますか？", "スマホは一時的に切断されます。", [
+			{ text: "キャンセル", style: "cancel" },
+			{
+				text: "再起動",
+				onPress: () => {
+					setRestart("再起動中…");
+					void appStore.restartHost(host.hostId).then((result) => {
+						setRestart(
+							result.ok
+								? "Host を再起動しました"
+								: result.code === "disconnected"
+									? "Host を再起動しています…"
+									: result.title,
+						);
+					});
+				},
+			},
+		]);
 	return (
 		<Section title="PC の PiMate">
 			<View style={styles.machine}>
@@ -169,6 +194,11 @@ function PackageSection({ host }: { host: HostRuntime }) {
 			) : manual ? (
 				// A dev checkout: `pi update npm:…` would install a second copy, so only point at the PC.
 				<Text style={[styles.sub, styles.commands]}>開発版のため PC で更新してください</Text>
+			) : null}
+			{restart ? (
+				<Text style={[styles.sub, styles.commands]}>{restart}</Text>
+			) : host.state === "connected" && host.hostRestart && !busy && !notice ? (
+				<TextButton label="Host を再起動" weight="400" style={styles.leading} onPress={confirmRestart} />
 			) : null}
 		</Section>
 	);
@@ -200,22 +230,165 @@ function ProviderSection({ host }: { host: HostRuntime }) {
 	);
 }
 
+function GitHubSection({ host }: { host: HostRuntime }) {
+	const styles = useStyles();
+	const enabled = host.state === "connected" && host.githubStatus === true;
+	const [status, setStatus] = useState<GitHubStatus | null>(null);
+	const [error, setError] = useState("");
+	useEffect(() => {
+		if (!enabled) return;
+		let active = true;
+		setStatus(null);
+		setError("");
+		void appStore.githubStatus(host.hostId).then((result) => {
+			if (!active) return;
+			if (result.ok) setStatus(result.value);
+			else setError(result.title);
+		});
+		return () => {
+			active = false;
+		};
+	}, [host.hostId, enabled]);
+	if (!enabled) return null;
+	const text =
+		error ||
+		(!status
+			? "確認中…"
+			: !status.installed
+				? "PC に gh が入っていません"
+				: status.loggedIn
+					? `${status.login ?? "GitHub"} でログイン中`
+					: "ログインしていません。PC で実行してください");
+	return (
+		<Section title="GitHub">
+			<View style={styles.row}>
+				<Text style={[styles.name, styles.flex]}>{text}</Text>
+			</View>
+			{status?.installed && !status.loggedIn ? (
+				<View style={styles.commands}>
+					<ShellCommands commands={["gh auth login"]} />
+				</View>
+			) : null}
+		</Section>
+	);
+}
+
+function DevicesSection({ host }: { host: HostRuntime }) {
+	const styles = useStyles();
+	const enabled = host.state === "connected" && host.pairedDevices === true;
+	const [devices, setDevices] = useState<PairedDevice[] | null>(null);
+	const [error, setError] = useState("");
+	const [reload, setReload] = useState(0);
+	const [busy, setBusy] = useState(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `reload` re-fetches the list after a revoke
+	useEffect(() => {
+		if (!enabled) return;
+		let active = true;
+		void appStore.devices(host.hostId).then((result) => {
+			if (!active) return;
+			if (result.ok) setDevices(result.value);
+			else setError(result.title);
+		});
+		return () => {
+			active = false;
+		};
+	}, [host.hostId, enabled, reload]);
+	if (!enabled) return null;
+	const revoke = (device: PairedDevice) =>
+		Alert.alert(`「${device.name}」の登録を取り消しますか？`, "その端末は再ペアリングするまで接続できなくなります。", [
+			{ text: "キャンセル", style: "cancel" },
+			{
+				text: "取り消す",
+				style: "destructive",
+				onPress: () => {
+					setBusy(true);
+					setError("");
+					void appStore
+						.revokeDevice(host.hostId, device.deviceId)
+						.then((result) => {
+							if (!result.ok) setError(result.title);
+							setReload((n) => n + 1);
+						})
+						.finally(() => setBusy(false));
+				},
+			},
+		]);
+	return (
+		<Section title="ペアリング済みの端末">
+			{devices?.map((device) => {
+				const sub = `${device.current ? "このスマホ · " : ""}最終接続 ${formatDate(device.lastSeenAt)}`;
+				return (
+					<View key={device.deviceId} style={styles.machine}>
+						<View style={styles.flex} accessible accessibilityLabel={`${device.name}、${sub}`}>
+							<Text style={styles.name} numberOfLines={1}>
+								{device.name}
+							</Text>
+							<Text style={styles.sub}>{sub}</Text>
+						</View>
+						{device.current ? null : (
+							<TextButton
+								label="取り消し"
+								tone="destructive"
+								weight="400"
+								disabled={busy}
+								onPress={() => revoke(device)}
+							/>
+						)}
+					</View>
+				);
+			})}
+			{error || !devices ? <Text style={styles.sub}>{error || "確認中…"}</Text> : null}
+		</Section>
+	);
+}
+
 /** Always the last section. The screen goes back by itself once the host is gone. */
 function RemoveSection({ host }: { host: HostRuntime }) {
 	const styles = useStyles();
+	const [busy, setBusy] = useState(false);
+	const revokeFirst = host.state === "connected" && host.pairedDevices === true;
+	const remove = () => void appStore.removeHost(host.hostId);
+	// Revoke this phone on the PC first; if that fails, offer removing it from this phone only.
+	const removeEverywhere = async () => {
+		setBusy(true);
+		const list = await appStore.devices(host.hostId);
+		const self = list.ok ? list.value.find((d) => d.current) : undefined;
+		const result = self
+			? await appStore.revokeDevice(host.hostId, self.deviceId)
+			: list.ok
+				? { ok: false as const, title: "このスマホの登録が見つかりません" }
+				: list;
+		if (result.ok) return remove();
+		setBusy(false);
+		Alert.alert(
+			result.title,
+			"このスマホからだけ削除しますか？PC 側の登録は PC の Pi の /pimate devices で取り消せます。",
+			[
+				{ text: "キャンセル", style: "cancel" },
+				{ text: "このスマホから削除", style: "destructive", onPress: remove },
+			],
+		);
+	};
 	return (
 		<View style={styles.sectionGap}>
 			<TextButton
-				label="このマシンを削除"
+				label={busy ? "削除中…" : "このマシンを削除"}
 				tone="destructive"
+				disabled={busy}
 				style={styles.leading}
 				onPress={() =>
 					Alert.alert(
 						`「${host.hostName}」を削除しますか？`,
-						"このスマホから接続情報を削除します。PC 側の登録は PC の Pi の /pimate devices で取り消してください。",
+						revokeFirst
+							? "このスマホから接続情報を削除し、PC 側の登録も取り消します。"
+							: "このスマホから接続情報を削除します。PC 側の登録は PC の Pi の /pimate devices で取り消してください。",
 						[
 							{ text: "キャンセル", style: "cancel" },
-							{ text: "削除", style: "destructive", onPress: () => void appStore.removeHost(host.hostId) },
+							{
+								text: "削除",
+								style: "destructive",
+								onPress: () => (revokeFirst ? void removeEverywhere() : remove()),
+							},
 						],
 					)
 				}
@@ -246,6 +419,8 @@ export default function MachineScreen() {
 					<StatusSection host={host} />
 					<PackageSection host={host} />
 					<ProviderSection host={host} />
+					<GitHubSection host={host} />
+					<DevicesSection host={host} />
 					<RemoveSection host={host} />
 				</ScrollView>
 			) : null}

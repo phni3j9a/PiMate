@@ -64,6 +64,7 @@ async function setup(
 	fake = false,
 	beforeStart?: (configDir: string) => void,
 	authSession?: HostServerOptions["authSession"],
+	settings: Pick<HostServerOptions, "isManagedService" | "restartService"> = {},
 ) {
 	const dir = temp();
 	const core = new HostCore({ runDir: join(dir, "run"), env: { PIMATE_ABDUCO: "/absent" }, probeTimeoutMs: 100 });
@@ -147,6 +148,11 @@ async function setup(
 		pollMs: 60_000,
 		authTimeoutMs: 60,
 		authSession,
+		isManagedService: () => false,
+		restartService: async () => {
+			throw new Error("real restart forbidden in tests");
+		},
+		...settings,
 	});
 	const [bound] = await server.start();
 	cleanup.push(() => server.close());
@@ -1013,4 +1019,85 @@ it.each(["update_check", "update"])("rejects extra fields and invalid IDs on %s"
 		c.send({ type, ...extra });
 		expect(await c.closed).toBe(4400);
 	}
+});
+
+it("lists only safe device fields and replies before closing all self-revoked sockets", async () => {
+	const { authed, connect, server } = await setup();
+	const a = await authed();
+	const b = await authed();
+	const secondSocket = await connect(a.credentials.token);
+	await secondSocket.box.next("auth_ok");
+	a.send({ type: "devices", requestId: "list" });
+	const list = await a.box.next("devices_result");
+	expect(list.type).toBe("devices_result");
+	if (list.type !== "devices_result") throw new Error("wrong message");
+	expect(list.devices).toHaveLength(2);
+	expect(list.devices).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ deviceId: a.credentials.deviceId, current: true }),
+			expect.objectContaining({ deviceId: b.credentials.deviceId, current: false }),
+		]),
+	);
+	expect(JSON.stringify(list)).not.toContain("tokenHash");
+	expect(JSON.stringify(list)).not.toContain(server.config.devices()[0].tokenHash);
+	a.send({ type: "device_revoke", requestId: "revoke", deviceId: a.credentials.deviceId });
+	expect(await a.box.next("device_revoke_result")).toMatchObject({ requestId: "revoke", ok: true });
+	expect(await a.closed).toBe(4403);
+	expect(await secondSocket.closed).toBe(4403);
+	expect(server.config.authenticate(a.credentials.token)).toBeUndefined();
+	b.send({ type: "devices", requestId: "remaining" });
+	expect(await b.box.next("devices_result")).toMatchObject({
+		devices: [{ deviceId: b.credentials.deviceId, current: true }],
+	});
+});
+
+it("revokes another device and rejects invalid or extra parameters", async () => {
+	const { authed } = await setup();
+	const a = await authed();
+	const b = await authed();
+	a.send({ type: "device_revoke", requestId: "r", deviceId: b.credentials.deviceId });
+	expect(await a.box.next("device_revoke_result")).toMatchObject({ ok: true });
+	expect(await b.closed).toBe(4403);
+	for (const message of [
+		{ type: "devices", requestId: "r", path: "/tmp" },
+		{ type: "device_revoke", requestId: "r", deviceId: "../bad" },
+		{ type: "device_revoke", requestId: "r", deviceId: a.credentials.deviceId, extra: true },
+		{ type: "host_restart", requestId: "r", args: [] },
+		{ type: "github_status", requestId: "r", command: "anything" },
+		{ type: "github_status", requestId: "" },
+	]) {
+		const client = await authed();
+		client.send(message);
+		expect(await client.closed).toBe(4400);
+	}
+});
+
+it("refuses restart outside the managed service and invokes only its injected fixed operation inside", async () => {
+	const restart = vi.fn(async () => {});
+	const outside = await setup(false, undefined, undefined, { isManagedService: () => false, restartService: restart });
+	const a = await outside.authed();
+	a.send({ type: "host_restart", requestId: "outside" });
+	expect(await a.box.next("host_restart_result")).toMatchObject({ ok: false, code: "unsupported" });
+	expect(restart).not.toHaveBeenCalled();
+	const inside = await setup(false, undefined, undefined, { isManagedService: () => true, restartService: restart });
+	const b = await inside.authed();
+	b.send({ type: "host_restart", requestId: "inside" });
+	expect(await b.box.next("host_restart_result")).toMatchObject({ ok: true });
+	expect(restart).toHaveBeenCalledWith();
+});
+
+it("returns sanitized GitHub status through the handler using a fake gh", async () => {
+	const { dir, core, authed } = await setup();
+	const gh = join(dir, "gh");
+	writeFileSync(gh, "#!/bin/sh\nprintf 'alice\\n'\n", { mode: 0o700 });
+	core.env.PATH = dir;
+	core.env.HOME = dir;
+	const client = await authed();
+	client.send({ type: "github_status", requestId: "status" });
+	expect(await client.box.next("github_status_result")).toEqual({
+		type: "github_status_result",
+		requestId: "status",
+		ok: true,
+		status: { installed: true, loggedIn: true, login: "alice" },
+	});
 });

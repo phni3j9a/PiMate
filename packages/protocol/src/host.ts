@@ -75,6 +75,12 @@ export interface PiAlert {
 }
 
 export interface HostInfo {
+	/** Only send device requests when true. */
+	pairedDevices?: boolean;
+	/** True only when a managed Host can be restarted. */
+	hostRestart?: boolean;
+	/** Only send github_status when true. */
+	githubStatus?: boolean;
 	/** Only send update_check / update when true; older Hosts close on unknown messages. */
 	packageUpdate?: boolean;
 	/** Read-only GitHub queries via the PC's gh login; never send to older Hosts. */
@@ -181,6 +187,21 @@ export type GitHubData =
 export type GitHubErrorCode = "gh_missing" | "gh_auth" | "not_github" | "not_found" | "failed";
 export type GitHubResult = { ok: true; data: GitHubData } | { ok: false; code: GitHubErrorCode; message: string };
 
+export interface PairedDevice {
+	deviceId: string;
+	name: string;
+	createdAt: number;
+	lastSeenAt: number;
+	current: boolean;
+}
+export interface GitHubStatus {
+	installed: boolean;
+	loggedIn: boolean;
+	login?: string;
+}
+export type HostOperationResult = { ok: true } | { ok: false; code: "unsupported" | "failed" };
+export type GitHubStatusResult = { ok: true; status: GitHubStatus } | { ok: false; code: "failed" };
+
 export interface PackageUpdateCheck {
 	current: string;
 	latest?: string;
@@ -204,6 +225,8 @@ export type AppMessage =
 	| { type: "ping"; t: number }
 	| { type: "folders"; requestId: string }
 	| { type: "update_check" | "update"; requestId: string }
+	| { type: "devices" | "host_restart" | "github_status"; requestId: string }
+	| { type: "device_revoke"; requestId: string; deviceId: string }
 	| { type: "github"; requestId: string; instanceId: string; query: GitHubQuery }
 	/** Subfolder names of `path` (absolute or `~/...`) for completing the new Pi folder. */
 	| { type: "dirs"; requestId: string; path: string }
@@ -240,6 +263,9 @@ export type HostMessage =
 	| ({ type: "update_check_result"; requestId: string } & PackageUpdateCheck)
 	| ({ type: "update_result"; requestId: string } & PackageUpdateResult)
 	| ({ type: "github_result"; requestId: string } & GitHubResult)
+	| { type: "devices_result"; requestId: string; devices: PairedDevice[] }
+	| ({ type: "device_revoke_result" | "host_restart_result"; requestId: string } & HostOperationResult)
+	| ({ type: "github_status_result"; requestId: string } & GitHubStatusResult)
 	/** Directory names only (no files), sorted; empty when the path is missing or unreadable. */
 	| { type: "dirs_result"; requestId: string; dirs: string[] }
 	| {

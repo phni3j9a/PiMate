@@ -223,3 +223,40 @@ describe("read-only GitHub", () => {
 		}
 	});
 });
+
+it("reads only the github.com login, never raw output or errors", async () => {
+	const { githubStatus } = await import("../src/host/github.ts");
+	const exec = vi.fn<GitHubExec>().mockResolvedValue({ stdout: "alice\n" });
+	expect(await githubStatus("/tmp", { PATH: "/fake" }, exec)).toEqual({
+		ok: true,
+		status: { installed: true, loggedIn: true, login: "alice" },
+	});
+	expect(exec.mock.calls[0][1]).toEqual(["api", "--hostname", "github.com", "user", "--jq", ".login"]);
+	expect(exec.mock.calls[0][2]).toMatchObject({
+		cwd: "/tmp",
+		timeout: 15000,
+		env: { GH_PROMPT_DISABLED: "1", GH_REPO: "" },
+	});
+	for (const output of ["alice\ntoken=secret", "", "-bad", "x".repeat(40)]) {
+		exec.mockResolvedValueOnce({ stdout: output });
+		expect(await githubStatus("/tmp", {}, exec)).toEqual({ ok: false, code: "failed" });
+	}
+	for (const [error, result] of [
+		[{ code: "ENOENT" }, { ok: true, status: { installed: false, loggedIn: false } }],
+		[
+			{ code: 4, stderr: "token=secret" },
+			{ ok: true, status: { installed: true, loggedIn: false } },
+		],
+		[
+			{ code: 1, stderr: "HTTP 401 secret" },
+			{ ok: true, status: { installed: true, loggedIn: false } },
+		],
+		[
+			{ code: 1, stderr: "network secret" },
+			{ ok: false, code: "failed" },
+		],
+	] as const) {
+		exec.mockRejectedValueOnce(error);
+		expect(await githubStatus("/tmp", {}, exec)).toEqual(result);
+	}
+});

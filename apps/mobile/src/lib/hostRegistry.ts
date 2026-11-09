@@ -71,6 +71,7 @@ function parse(text: string | null): unknown {
 
 export class HostRegistry {
 	private readonly storage: KeyValueStorage;
+	private writes: Promise<void> = Promise.resolve();
 
 	constructor(storage: KeyValueStorage) {
 		this.storage = storage;
@@ -91,17 +92,27 @@ export class HostRegistry {
 		return hosts;
 	}
 
-	/** Adds or replaces (same hostId) a host. The record is written before the index. */
-	async save(host: PairedHost): Promise<void> {
-		await this.storage.setItem(hostKey(host.hostId), JSON.stringify(host));
-		const ids = await this.ids();
-		if (!ids.includes(host.hostId)) await this.storage.setItem(INDEX_KEY, JSON.stringify([...ids, host.hostId]));
+	private write(operation: () => Promise<void>): Promise<void> {
+		const result = this.writes.then(operation);
+		this.writes = result.catch(() => {});
+		return result;
 	}
 
-	async remove(hostId: string): Promise<void> {
-		const ids = await this.ids();
-		await this.storage.setItem(INDEX_KEY, JSON.stringify(ids.filter((id) => id !== hostId)));
-		await this.storage.deleteItem(hostKey(hostId));
+	/** Adds or replaces (same hostId) a host. The record is written before the index. */
+	save(host: PairedHost): Promise<void> {
+		return this.write(async () => {
+			await this.storage.setItem(hostKey(host.hostId), JSON.stringify(host));
+			const ids = await this.ids();
+			if (!ids.includes(host.hostId)) await this.storage.setItem(INDEX_KEY, JSON.stringify([...ids, host.hostId]));
+		});
+	}
+
+	remove(hostId: string): Promise<void> {
+		return this.write(async () => {
+			const ids = await this.ids();
+			await this.storage.setItem(INDEX_KEY, JSON.stringify(ids.filter((id) => id !== hostId)));
+			await this.storage.deleteItem(hostKey(hostId));
+		});
 	}
 
 	async loadSelection(): Promise<Selection | null> {
