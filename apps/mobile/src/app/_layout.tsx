@@ -54,6 +54,7 @@ export default function RootLayout() {
 				<Stack.Screen name="pair" />
 				<Stack.Screen name="first-step" />
 				<Stack.Screen name="settings" />
+				<Stack.Screen name="machine" />
 				<Stack.Screen name="provider-auth" />
 				<Stack.Screen name="new" />
 				<Stack.Screen name="review" />

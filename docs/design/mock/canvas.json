@@ -83,7 +83,7 @@
       "radius": 40
     },
     "Tokens.dc.html": {
-      "x": 470,
+      "x": 940,
       "y": 3792,
       "w": 1330,
       "h": 844,
@@ -176,6 +176,14 @@
       "h": 844,
       "title": "最初のペアリング直後 — Pi あり",
       "radius": 40
+    },
+    "Machine-Detail.dc.html": {
+      "x": 470,
+      "y": 3792,
+      "w": 390,
+      "h": 844,
+      "title": "マシン詳細",
+      "radius": 40
     }
   },
   "order": [
@@ -194,6 +202,7 @@
     "Subagent-Detail.dc.html",
     "Subagent-Detail-Readonly.dc.html",
     "Settings.dc.html",
+    "Machine-Detail.dc.html",
     "Tokens.dc.html",
     "Pair.dc.html",
     "Setup-Tailscale.dc.html",
