@@ -67,7 +67,9 @@ node packages/pimate/src/host/cli.ts revoke <deviceId>      # 接続中の端末
 `pimate` bin も同じCLIです。`HostServer` / `HostConfig` は `@pimate/pimate/host` から使用できます。
 `await server.start()` は実際のlistenアドレス/ポートを返します（テストはport:0）。`await server.close()` はPiを終了しません。
 
-### 端末・Host・GitHub の状態（PC パッケージ0.1.19以上）
+### 端末・Host・GitHub の状態（PC パッケージ0.1.19 / アプリ0.1.14以上）
+
+マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態には Android 0.1.14 / PC 0.1.19 以上と Host の再起動が必要です。Host 再起動は systemd の `pimate-host.service` のみ対応します。旧 Host・旧アプリとの組み合わせでも従来の機能は使えます。npm 版 PC 0.1.18 の systemd 常駐 Host はアプリの設定 → マシン詳細 → PC の PiMate → 更新で更新でき、Host は自動で再起動します。それ以外の npm 版は PC で `pi update npm:@phni3j9a/pimate` の後に `/pimate restart` を実行してください。今回の Host 機能には起動中の Pi の `/reload` は不要です。
 
 認証済みアプリは `pairedDevices` capability で `devices` / `device_revoke` を利用でき、一覧には端末名・ID・作成日時・最終接続日時・要求元かどうかのみを返します。token や hash は返しません。すべての登録端末は自身を含めて任意の登録を取り消せます。自身の取り消し結果は切断より先に送信し、切断コードは4403です。切断やタイムアウトで結果が不明な場合は PC で確認し、自動再送しません。
 
@@ -105,7 +107,7 @@ RC は `hello` snapshot の `promptImages: true` と `promptImageLimit: 4` で�
 
 ### アプリからの PC パッケージ更新（アプリ 0.1.12 / PC 0.1.17 以上）
 
-対応 Host・アプリでは設定から最新版を確認できます。公開パッケージと systemd の `pimate-host.service` 上でのみ、確認後に固定コマンド `pi update npm:@phni3j9a/pimate` を実行し、版が変わったときだけ Host を再起動します。旧 Host は最初に PC で更新・再起動してください。実行中の Pi は自動再読み込みせず、各 Pi で `/reload` または再起動が必要です。registry は npmjs.org 固定で npm の registry 設定を参照しません。
+対応 Host・アプリでは設定から最新版を確認できます。公開パッケージと systemd の `pimate-host.service` 上でのみ、確認後に固定コマンド `pi update npm:@phni3j9a/pimate` を実行し、版が変わったときだけ Host を再起動します。旧 Host は最初に PC で更新・再起動してください。実行中の Pi は自動再読み込みせず、RC の新機能には各 Pi で `/reload` または再起動が必要です。今回の Host 機能には不要です。registry は npmjs.org 固定で npm の registry 設定を参照しません。
 
 ## コマンド一覧と実行（#37）
 

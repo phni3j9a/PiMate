@@ -40,10 +40,14 @@ Android 0.1.11 / PCパッケージ0.1.16では、CLI の `pimate spawn`（Grok B
 
 Android 0.1.13 / PCパッケージ0.1.18では、**初回の接続を案内するオンボーディング**を追加しました（[#119](https://github.com/phni3j9a/PiMate/pull/119)）。アプリのペアリング画面に PC の Pi の見本と「Tailscale でつなぐ」「PC に PiMate を入れる」「QR コードを読み取る」の手順を出し、最初のペアリング直後に起動中の Pi・新しい Pi の起動・通知のスイッチを1回だけ示します。PC 側では `/pimate setup`・`/pimate pair` の QR 画面がアプリのボタン名を示し、読み取られると端末名と次の手順に切り替わります。Tailscale のアドレスがない PC では Host を起動する前に知らせ、未ペアリングで Host も動いていない PC では Pi の起動時に `/pimate setup` を1行だけ案内します。あわせて、アプリの主ボタンと1行の入力欄をカプセル型から角丸 12px にしました。アプリの案内は古い PC でも使えます。PC 側の表示には PCパッケージ0.1.18への更新が必要です。
 
+Android 0.1.14 / PCパッケージ0.1.19では、設定を整理し、マシン詳細・通知の3段階（オフ／要対応／すべて）・質問ツールの既定・アプリの更新確認を追加しました（[#127](https://github.com/phni3j9a/PiMate/pull/127)）。保存済み通知設定は近い段階へ移行します。マシン詳細ではペアリング済み端末の一覧・取り消し、マシン削除時の PC 側登録の取り消し、Host の再起動、GitHub のログイン状態に対応しました（[#128](https://github.com/phni3j9a/PiMate/pull/128)）。Android のナビゲーションバーのアイコンもテーマに合わせます（[#126](https://github.com/phni3j9a/PiMate/pull/126)）。ネイティブモジュール追加のため APK の再インストールが必要です。
+
+マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態には Android 0.1.14 / PC 0.1.19 以上と Host の再起動が必要です。Host 再起動は systemd の `pimate-host.service` のみ対応します。旧 Host・旧アプリとの組み合わせでも従来の機能は使えます。npm 版 PC 0.1.18 の systemd 常駐 Host はアプリの設定 → マシン詳細 → PC の PiMate → 更新で更新でき、Host は自動で再起動します。それ以外の npm 版は PC で `pi update npm:@phni3j9a/pimate` の後に `/pimate restart` を実行してください。今回の Host 機能には起動中の Pi の `/reload` は不要です。
+
 ## PCにインストール・スマホとペアリング
 
 Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.13 / PCパッケージ0.1.18。QR 画面のペアリング完了表示・Tailscale の事前チェック・起動時の案内はPCパッケージ0.1.18以上、Grok Bot が起動した Pi の区分表示はPCパッケージ0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.14 / PCパッケージ0.1.19。マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態はアプリ0.1.14 / PCパッケージ0.1.19以上、QR 画面のペアリング完了表示・Tailscale の事前チェック・起動時の案内はPCパッケージ0.1.18以上、Grok Bot が起動した Pi の区分表示はPCパッケージ0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
 
 ```sh
 pi install npm:@phni3j9a/pimate
@@ -73,7 +77,7 @@ APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.m
 - `/pimate devices` — 接続済み端末一覧・失効
 - `/pimate status` — Host/Extensionのバージョン、互換性、公開先、常駐状態、abduco
 - `/pimate start` / `stop` / `restart` — Host制御（Piセッションは終了しません）
-- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。初回は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されず、各 Pi で `/reload` または再起動してください。
+- 更新: `pi update npm:@phni3j9a/pimate` → `/pimate restart` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。旧 Host の初回更新は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されないため、RC の新機能には各 Pi で `/reload` または再起動が必要です。今回の Host 機能には不要です。
 
 ### 削除
 
