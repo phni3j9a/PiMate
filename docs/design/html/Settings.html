@@ -27,7 +27,7 @@ html,body{margin:0;overflow:hidden}
     <h1 style="flex: 1; margin: 0; font-size: 17px; font-weight: 600">設定</h1>
   </header>
 
-  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 8px 20px 30px; display: flex; flex-direction: column">
+  <main style="flex: 1; min-height: 0; overflow: hidden; padding: 8px 20px 24px; display: flex; flex-direction: column">
     <div style="font-size: 12px; font-weight: 600; color: #5E686D">マシン</div>
     <div style="margin-top: 2px; display: flex; flex-direction: column">
       
@@ -56,42 +56,23 @@ html,body{margin:0;overflow:hidden}
     </div>
 
     <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">通知</div>
-    <div style="margin-top: 2px; display: flex; flex-direction: column">
-      
-        <div style="min-height: 60px; display: flex; align-items: center; gap: 16px; padding: 8px 0">
-          <span style="flex: 1; display: flex; flex-direction: column">
-            <span style="font-size: 15px">入力待ち</span>
-            <span style="font-size: 12px; color: #5E686D">Pi が質問や確認を求めたとき</span>
-          </span>
-          <button role="switch" aria-checked="true" aria-label="入力待ち" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #1B6B91; display: flex; justify-content: flex-end">
-            <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
-          </button>
-        </div>
-      
-        <div style="min-height: 60px; display: flex; align-items: center; gap: 16px; padding: 8px 0">
-          <span style="flex: 1; display: flex; flex-direction: column">
-            <span style="font-size: 15px">完了</span>
-            <span style="font-size: 12px; color: #5E686D">作業が終わったとき</span>
-          </span>
-          <button role="switch" aria-checked="true" aria-label="完了" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #1B6B91; display: flex; justify-content: flex-end">
-            <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
-          </button>
-        </div>
-      
-        <div style="min-height: 60px; display: flex; align-items: center; gap: 16px; padding: 8px 0">
-          <span style="flex: 1; display: flex; flex-direction: column">
-            <span style="font-size: 15px">失敗</span>
-            <span style="font-size: 12px; color: #5E686D">エラーで止まったとき</span>
-          </span>
-          <button role="switch" aria-checked="true" aria-label="失敗" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #1B6B91; display: flex; justify-content: flex-end">
-            <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
-          </button>
-        </div>
-      
+    <div style="min-height: 52px; padding: 8px 0; box-sizing: border-box; display: flex; align-items: center; gap: 12px">
+      <span style="flex: 1; font-size: 15px">通知</span>
+      <div role="radiogroup" aria-label="通知" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 192px; border-radius: 10px; background: #E6E9EB">
+        <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">オフ</button>
+        <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 12px; font-weight: 600">要対応</button>
+        <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">すべて</button>
+      </div>
     </div>
-
+    <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">新しい Pi の既定</div>
+    <div style="min-height: 52px; display: flex; align-items: center; gap: 12px">
+      <span style="flex: 1; font-size: 15px">質問ツール（pimate_ask）</span>
+      <button role="switch" aria-checked="false" aria-label="質問ツール（pimate_ask）" style="width: 51px; height: 31px; flex-shrink: 0; border: 0; padding: 2px; box-sizing: border-box; border-radius: 16px; background: #D3D9DC; display: flex; justify-content: flex-start">
+        <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
+      </button>
+    </div>
     <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">表示</div>
-    <div style="margin-top: 2px; padding: 8px 0; display: flex; align-items: center; gap: 12px">
+    <div style="min-height: 52px; padding: 8px 0; box-sizing: border-box; display: flex; align-items: center; gap: 12px">
       <span style="flex: 1; font-size: 15px">テーマ</span>
       <div role="radiogroup" aria-label="テーマ" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 192px; border-radius: 10px; background: #E6E9EB">
         <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 12px; font-weight: 600">システム</button>
@@ -99,7 +80,7 @@ html,body{margin:0;overflow:hidden}
         <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">ダーク</button>
       </div>
     </div>
-    <div style="margin-top: 2px; padding: 8px 0; display: flex; align-items: center; gap: 12px">
+    <div style="min-height: 52px; padding: 8px 0; box-sizing: border-box; display: flex; align-items: center; gap: 12px">
       <span style="flex: 1; font-size: 15px">文字サイズ</span>
       <div role="radiogroup" aria-label="文字サイズ" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 192px; border-radius: 10px; background: #E6E9EB">
         <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">小</button>
@@ -107,19 +88,23 @@ html,body{margin:0;overflow:hidden}
         <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">大</button>
       </div>
     </div>
-
-    <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">互換性</div>
-    <div style="margin-top: 2px">
-      <button style="width: 100%; min-height: 60px; display: flex; align-items: center; gap: 12px; border: 0; padding: 8px 0; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
-        <span style="flex: 1; display: flex; flex-direction: column">
-          <span style="font-size: 15px">Pi の機能と Extension の対応状況</span>
-          <span style="font-size: 12px; color: #5E686D">スマホで使えない操作と、その代わりの方法</span>
-        </span>
-        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M9 6l6 6-6 6"></path></svg>
-      </button>
-    </div>
-
-    <div style="margin-top: auto; padding-top: 16px; text-align: center; font-size: 12px; color: #5E686D">PiMate [VERSION] · Extension [VERSION]</div>
+    <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">情報</div>
+    <button style="min-height: 60px; display: flex; align-items: center; gap: 12px; border: 0; padding: 8px 0; background: transparent; color: #1F2326; font-family: inherit; text-align: left">
+      <img src="../icon-kit/logo/mark-light-1024.png" alt="" width="20" height="20" style="width: 20px; height: 20px; display: block">
+      <span style="flex: 1; display: flex; flex-direction: column">
+        <span style="font-size: 15px">PiMate [VERSION]</span>
+        <span style="font-size: 12px; color: #155A7A">[VERSION] に更新できます</span>
+      </span>
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: #155A7A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"></path></svg>
+    </button>
+    <button style="min-height: 52px; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #1F2326; font-family: inherit; font-size: 15px; text-align: left">
+      <span style="flex: 1">使い方</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"></path></svg>
+    </button>
+    <button style="min-height: 52px; display: flex; align-items: center; gap: 12px; border: 0; padding: 0; background: transparent; color: #1F2326; font-family: inherit; font-size: 15px; text-align: left">
+      <span style="flex: 1">不具合を報告</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: #5E686D; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"></path></svg>
+    </button>
   </main>
 </div>
 
