@@ -2141,3 +2141,60 @@ it("sends /reload as a guarded session operation and refuses while busy", async 
 	expect(store.getState().drafts["h1/i1"]).toBe("");
 	store.dispose();
 });
+
+describe("host settings client", () => {
+	it("never sends new operations to old or disconnected Hosts", async () => {
+		const { store } = await setup();
+		expect((await store.devices("h1")).ok).toBe(false);
+		const s = FakeSocket.last();
+		authenticate(s);
+		for (const result of [
+			await store.devices("h1"),
+			await store.revokeDevice("h1", "id"),
+			await store.restartHost("h1"),
+			await store.githubStatus("h1"),
+		])
+			expect(result.ok).toBe(false);
+		for (const type of ["devices", "device_revoke", "host_restart", "github_status"])
+			expect(s.sentOfType(type)).toHaveLength(0);
+		store.dispose();
+	});
+
+	it("exposes capabilities, matches responses, and reports operation failures", async () => {
+		const { store } = await setup();
+		const s = FakeSocket.last();
+		authenticate(s, [], { pairedDevices: true, hostRestart: true, githubStatus: true });
+		expect(store.getState().hosts[0]).toMatchObject({ pairedDevices: true, hostRestart: true, githubStatus: true });
+		const devices = store.devices("h1");
+		let request = s.sentOfType("devices")[0];
+		s.receive({
+			type: "devices_result",
+			requestId: request.requestId,
+			devices: [{ deviceId: "d1", name: "Phone", createdAt: 1, lastSeenAt: 2, current: true }],
+		});
+		expect(await devices).toMatchObject({ ok: true, value: [{ deviceId: "d1", current: true }] });
+		const revoked = store.revokeDevice("h1", "d1");
+		request = s.sentOfType("device_revoke")[0];
+		expect(request.deviceId).toBe("d1");
+		s.receive({ type: "device_revoke_result", requestId: request.requestId, ok: true });
+		expect(await revoked).toEqual({ ok: true, value: null });
+		const restart = store.restartHost("h1");
+		request = s.sentOfType("host_restart")[0];
+		s.receive({ type: "host_restart_result", requestId: request.requestId, ok: false, code: "failed" });
+		expect(await restart).toMatchObject({ ok: false, code: "failed" });
+		const status = store.githubStatus("h1");
+		request = s.sentOfType("github_status")[0];
+		s.receive({
+			type: "github_status_result",
+			requestId: request.requestId,
+			ok: true,
+			status: { installed: true, loggedIn: true, login: "alice" },
+		});
+		expect(await status).toEqual({ ok: true, value: { installed: true, loggedIn: true, login: "alice" } });
+		const failed = store.githubStatus("h1");
+		request = s.sentOfType("github_status")[1];
+		s.receive({ type: "github_status_result", requestId: request.requestId, ok: false, code: "failed" });
+		expect(await failed).toMatchObject({ ok: false, code: "failed" });
+		store.dispose();
+	});
+});
