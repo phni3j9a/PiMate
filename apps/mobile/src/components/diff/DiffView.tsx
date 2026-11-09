@@ -82,7 +82,7 @@ function Hunks({ hunks, variant }: { hunks: DiffHunk[]; variant: Variant }) {
 
 function Line({ line, compact }: { line: DiffLine; compact: boolean }) {
 	const styles = useStyles();
-	const { colors } = useAppearance();
+	const { colors, scale } = useAppearance();
 	const add = line.kind === "add";
 	const del = line.kind === "del";
 	const color = add ? colors.diffAddText : del ? colors.diffDelText : colors.text;
@@ -96,8 +96,8 @@ function Line({ line, compact }: { line: DiffLine; compact: boolean }) {
 			accessible
 			accessibilityLabel={`${add ? "追加" : del ? "削除" : ""} ${line.newNo ?? line.oldNo ?? ""} 行 ${line.text}`}
 		>
-			<Text style={[styles.line, styles.number, { width: compact ? 30 : 34 }]}>{line.oldNo ?? ""}</Text>
-			<Text style={[styles.line, styles.number, { width: compact ? 30 : 26 }]}>{line.newNo ?? ""}</Text>
+			<Text style={[styles.line, styles.number, { width: scale(compact ? 30 : 34) }]}>{line.oldNo ?? ""}</Text>
+			<Text style={[styles.line, styles.number, { width: scale(compact ? 30 : 26) }]}>{line.newNo ?? ""}</Text>
 			<Text style={[styles.line, styles.sign, { color }]}>{add ? "+" : del ? "-" : " "}</Text>
 			<Text style={[styles.line, { color, paddingRight: compact ? 12 : 20 }]}>
 				{line.text}
