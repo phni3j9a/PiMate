@@ -83,7 +83,7 @@ function StatusSection({ host }: { host: HostRuntime }) {
 					<Text style={styles.valueText}>{host.instances.length} 件</Text>
 				</InfoRow>
 			) : null}
-			{host.state === "offline" || host.state === "idle" ? (
+			{host.state === "offline" ? (
 				<TextButton
 					label="今すぐ再接続"
 					weight="400"
