@@ -92,8 +92,16 @@ html,body{margin:0;overflow:hidden}
 
     <div style="margin-top: 28px; font-size: 12px; font-weight: 600; color: #5E686D">表示</div>
     <div style="margin-top: 2px; padding: 8px 0; display: flex; align-items: center; gap: 12px">
+      <span style="flex: 1; font-size: 15px">テーマ</span>
+      <div role="radiogroup" aria-label="テーマ" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 192px; border-radius: 10px; background: #E6E9EB">
+        <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 12px; font-weight: 600">システム</button>
+        <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">ライト</button>
+        <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">ダーク</button>
+      </div>
+    </div>
+    <div style="margin-top: 2px; padding: 8px 0; display: flex; align-items: center; gap: 12px">
       <span style="flex: 1; font-size: 15px">文字サイズ</span>
-      <div role="radiogroup" aria-label="文字サイズ" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 168px; border-radius: 10px; background: #E6E9EB">
+      <div role="radiogroup" aria-label="文字サイズ" style="height: 36px; box-sizing: border-box; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 192px; border-radius: 10px; background: #E6E9EB">
         <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">小</button>
         <button role="radio" aria-checked="true" style="height: 30px; border: 0; border-radius: 7px; background: #FFFFFF; color: #1F2326; font-family: inherit; font-size: 12px; font-weight: 600">標準</button>
         <button role="radio" aria-checked="false" style="height: 30px; border: 0; border-radius: 7px; background: transparent; color: #5E686D; font-family: inherit; font-size: 12px">大</button>
