@@ -59,7 +59,9 @@ opaque cursor はファイル識別子とbyte offsetを持ち、縮小・inode�
 - backend不明・status artifactの未知versionは推測しない。RPC snapshotだけでは
   model/token/cost/pathが不足するため、観測前に開始されたrunは情報が限定される。
 - supervisor質問は未回答requestファイルからbest-effort取得する。回答ファイルの直接書込みはしない。
-  `waiting` には `needs_attention`（長い無出力toolなど）も含む。質問本文がない場合は質問中と断定せず「要対応」と表示する。
+  `needs_attention`（長いtoolや無出力）は親（Main）向けの通知で、作業再開後も解除されないため `waiting` にしない。
+  `waiting` は未回答の質問がある子、またはbackendが明示的に `waiting` / `supervisor_request` を示す子に限る。
+  後者で質問本文が取れない場合は「要対応」と表示する。
 - stoppedの再開はバックエンドが明示的にresumable、またはrunがpausedの場合のみ提供する。
 - チェーン表示はbackendの `currentStep` / `chainStepCount` に従う。
   workflow内部の多段グラフ全体や成果受入れ判定はこのDTOでは展開しない。

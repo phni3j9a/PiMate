@@ -340,7 +340,9 @@ export class SubagentRegistry {
 				d.mode === "workflow" && d.workflow?.resource?.name === "tasks" && d.workflow?.resource?.invocation === "named";
 			const run = normalizeStatus(d, this.runs.get(id));
 			for (const child of run.children) {
-				if (child.state === "waiting") child.question = await this.question(source.dir, id, child.agent, child.index);
+				if (child.state !== "running" && child.state !== "waiting") continue;
+				child.question = await this.question(source.dir, id, child.agent, child.index);
+				if (child.question) child.state = "waiting";
 			}
 			if (this.disposed) return;
 			this.put(run);

@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -78,6 +78,7 @@ describe("subagent normalization", () => {
 	it("maps waiting and terminal states; does not count run totals twice", () => {
 		expect(state("running", "supervisor_request")).toBe("waiting");
 		expect(state("complete", "needs_attention")).toBe("complete");
+		expect(state("running", "needs_attention")).toBe("running");
 		expect(state("partial")).toBe("failed");
 		expect(normalizeStatus({ ...status, mode: "chain" }).stage).toEqual({ index: 0, count: 2 });
 		expect(normalizeStatus(status)).toMatchObject({
@@ -241,6 +242,56 @@ it("registry learns async-started id, watches atomic status replacements, gates 
 		);
 		expect(writes).toBeGreaterThan(1);
 		expect(events.length).toBeGreaterThan(0);
+	} finally {
+		registry.dispose();
+	}
+});
+
+it("marks a child waiting only for an unanswered supervisor question, not for a sticky needs_attention", async () => {
+	const { SubagentRegistry } = await import("../src/extension/subagents/registry.ts");
+	const root = await mkdtemp(join(tmpdir(), "pimate-attention-"));
+	dirs.push(root);
+	const dir = join(root, "async", status.runId);
+	const channel = join(root, "supervisor-channels", `${status.runId}-scout-0`);
+	await mkdir(dir, { recursive: true });
+	await mkdir(join(channel, "requests"), { recursive: true });
+	await mkdir(join(channel, "replies"), { recursive: true });
+	const write = async (value: unknown) => {
+		await writeFile(join(dir, "next"), JSON.stringify(value));
+		await rename(join(dir, "next"), join(dir, "status.json"));
+	};
+	const attention = { ...status, activityState: "needs_attention" };
+	attention.steps = [{ ...status.steps[0], activityState: "needs_attention" } as (typeof status.steps)[0]];
+	await write(attention);
+	const hub = {
+		session: { id: "parent", file: "/parent" },
+		writeMeta: () => {},
+		emit: () => {},
+		pi: { appendEntry: () => {}, events: { on: () => () => {}, emit: () => {} } },
+	};
+	const registry = new SubagentRegistry(hub as unknown as import("../src/extension/hub.ts").Hub);
+	const child = () => registry.snapshot().runs[0]?.children[0];
+	const wait = async (accept: () => boolean) => {
+		const end = Date.now() + 2000;
+		while (!accept()) {
+			if (Date.now() > end) throw Error("Registry did not update");
+			await new Promise((r) => setTimeout(r, 10));
+		}
+	};
+	try {
+		registry.bus("subagent:async-started", { id: status.runId, asyncDir: dir, sessionId: "parent" });
+		await wait(() => child()?.state === "running");
+		await writeFile(
+			join(channel, "requests", "q1.json"),
+			JSON.stringify({ runId: status.runId, expectsReply: true, createdAt: Date.now(), message: "Which API?" }),
+		);
+		await write({ ...attention, lastUpdate: 1 });
+		await wait(() => child()?.state === "waiting");
+		expect(child()?.question).toBe("Which API?");
+		await writeFile(join(channel, "replies", "q1.json"), "{}");
+		await write({ ...attention, lastUpdate: 2 });
+		await wait(() => child()?.state === "running");
+		expect(child()?.question).toBeUndefined();
 	} finally {
 		registry.dispose();
 	}
