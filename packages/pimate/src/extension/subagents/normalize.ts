@@ -47,8 +47,9 @@ export function state(value: unknown, activity?: unknown): SubagentState {
 	if (["failed", "error", "partial", "rejected"].includes(String(value))) return "failed";
 	if (["stopped", "cancelled", "aborted"].includes(String(value))) return "stopped";
 	if (value === "paused" || value === "stopping") return value;
-	if ([value, activity].some((v) => ["needs_attention", "supervisor_request", "waiting"].includes(String(v))))
-		return "waiting";
+	// needs_attention is a sticky notice for the parent (e.g. a long bash), not a child waiting on anyone.
+	// The registry marks a child waiting when it has an unanswered supervisor question.
+	if ([value, activity].some((v) => ["supervisor_request", "waiting"].includes(String(v)))) return "waiting";
 	if (["running", "started", "active"].includes(String(value))) return "running";
 	if (["queued", "pending"].includes(String(value))) return "queued";
 	return "unknown";
