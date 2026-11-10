@@ -148,4 +148,4 @@ pimate attach pimate-01234567    # その Pi に PC からつなぐ（Ctrl+\ で
 
 [MIT License](LICENSE)
 
-Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。アプリでは利用枠がどのプロバイダーのものかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。
+Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。Grok・Grok Bot と Grok Bot のマークは xAI の商標です。アプリでは利用枠がどのプロバイダーのものか、一覧のどの Pi が Grok Bot から起動したかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。Grok Bot のマークの図形は [LobeHub Icons](https://github.com/lobehub/lobe-icons)（MIT License, © 2023 LobeHub）のものです。

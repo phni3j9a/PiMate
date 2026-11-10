@@ -150,4 +150,4 @@ The following documents are in Japanese.
 
 [MIT License](LICENSE)
 
-Claude is a trademark of Anthropic, PBC. OpenAI, Codex and the OpenAI logo are trademarks of OpenAI. The app uses each company's logo unmodified solely to indicate which provider a quota belongs to; this does not imply any affiliation or endorsement.
+Claude is a trademark of Anthropic, PBC. OpenAI, Codex and the OpenAI logo are trademarks of OpenAI. Grok, Grok Bot and the Grok Bot mark are trademarks of xAI. The app uses each company's logo unmodified solely to indicate which provider a quota belongs to, or which Pi in the list was started by Grok Bot; this does not imply any affiliation or endorsement. The Grok Bot mark's shape comes from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT License, © 2023 LobeHub).

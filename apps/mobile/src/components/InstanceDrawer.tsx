@@ -12,7 +12,7 @@ import type { HostRuntime } from "@/lib/store";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { fontFamily, radii } from "@/theme/tokens";
 
-import { BellIcon, GearIcon, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
+import { BellIcon, GearIcon, GrokBotLogo, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
 import { TextButton } from "./ui";
 
@@ -110,14 +110,17 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 							<HostHeader host={host} />
 							{rows.map(renderRow)}
 							{bots.length > 0 ? (
-								<Text
+								<View
 									style={styles.subTitle}
+									accessible
 									accessibilityRole="header"
 									accessibilityLabel={`${host.hostName}: Grok Bot`}
-									numberOfLines={1}
 								>
-									Grok Bot
-								</Text>
+									<GrokBotLogo />
+									<Text style={styles.subTitleText} numberOfLines={1}>
+										Grok Bot
+									</Text>
+								</View>
 							) : null}
 							{bots.map(renderRow)}
 							<HostEmpty host={host} filtered={!!query.trim()} empty={empty} />
@@ -270,11 +273,10 @@ const useStyles = makeStyles(({ colors, typography }) => ({
 		gap: 6,
 	},
 	groupTitle: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.textSecondary },
-	// Subsection under a host: same type as the host title, aligned with the row text (12 + mark 14 + gap 10).
-	subTitle: {
-		marginTop: 12,
-		paddingLeft: 36,
-		paddingRight: 12,
+	// Subsection under a host: mark in the rows' status column, title aligned with the row text (12 + 14 + gap 10).
+	subTitle: { marginTop: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+	subTitleText: {
+		flex: 1,
 		fontSize: 12,
 		lineHeight: 28,
 		fontWeight: "600",
