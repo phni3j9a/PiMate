@@ -1,113 +1,151 @@
 # PiMate
 
-Pi Coding Agentを、iOS/AndroidのネイティブUIから操作するためのプロジェクトです。
+[English](README.en.md) | 日本語
 
-## プロダクト方針
+PC で動いている [Pi Coding Agent](https://github.com/earendil-works/pi) を、スマホのアプリから使うためのツールです。ターミナル画面を遠隔表示するのではなく、スマホ向けのチャット画面で同じ Pi を操作します。
 
-**[docs/SPEC.md — 合意済みの要件と開発方針](docs/SPEC.md)**
+- **PC で始めた作業をスマホで続ける** — PC で普段どおり `pi` を起動すれば、その Pi をスマホから見て、指示を送れます。
+- **スマホで始めた作業を PC で続ける** — スマホから PC 上に新しい Pi を起動し、あとで PC のターミナルからつなげます（`pimate attach`）。
+- **複数の Pi をまとめて管理** — 複数の PC・フォルダの Pi を一覧にし、入力待ちの Pi を上にまとめて表示します。
+- **切断に強い** — アプリの切り替えや回線断があっても PC の Pi は止まらず、再接続すると今の状態に戻ります。
 
-仕様書は意図的に簡潔にしています。ユーザー体験と技術的な前提だけを定め、詳細設計・実装・テスト計画はCodex / Claude Codeなどのコーディングエージェントに任せます。
+Pi 本体は改造しません。会話の履歴・設定・認証は PC の Pi のものをそのまま使います。
 
-画面の見た目の基準は **[docs/design/ — 画面モック](docs/design/README.md)** にあります（[一覧ページ](docs/design/index.html)をブラウザで開けます）。
+<p>
+  <img src="docs/design/png/Drawer.png" width="180" alt="Pi の一覧">
+  <img src="docs/design/png/Chat-Waiting.png" width="180" alt="チャットと Pi からの質問">
+  <img src="docs/design/png/Review.png" width="180" alt="変更の確認">
+  <img src="docs/design/png/Chat-Subagents.png" width="180" alt="サブエージェントの状況">
+</p>
 
-## 現在の段階
+<sub>画像はデザインのモックです。実際のアプリとは細部が異なることがあります。</sub>
 
-Linuxでの技術検証（PoC）を終え、MVP（Android優先、React Native + Expo）を作っています。進め方は [#4 MVPロードマップ](https://github.com/phni3j9a/PiMate/issues/4) にあります。
+## できること
 
-- PoCの結果・制限・MVPへの推奨: [docs/poc-report.md](docs/poc-report.md)（検証コードは [poc/](poc/README.md)）
-- M5a: PC側の配布パッケージ生成・初回セットアップ・Host常駐/削除に対応（Linux x64で検証）。
-- M5b: 署名済み Android APK のローカルビルド・実機検証に対応（Android 7.0 / API 24 以上）。
-- M5c: 接続中のローカル通知（親の入力待ち・完了・失敗、子の要対応・失敗・一時停止）と設定に対応。[対象・制限・検証記録](docs/notifications.md)。通知にはアプリ / Host 0.1.1 が必要です。
-- arm64 Linuxはrelease CIでビルド、実機未検証。macOSの常駐登録・Windowsは未対応。
+- **チャット**: 回答の逐次表示、Markdown（表・コード・リンク）、部分選択してコピー、画像の添付（最大4枚）と閲覧。作業中に送ると、その場で指示を割り込ませます。
+- **Pi からの質問に回答**: 確認・選択・入力の要求がチャット内のカードに出ます。PC とスマホの先に答えた方が使われます。
+- **変更の確認**: ファイルの変更をターンごと・セッション全体で差分表示し、「この変更について依頼」できます。
+- **モデルと Thinking**: 切り替え、お気に入り、新しい Pi の既定の保存。コンテキストと Claude / Codex の利用枠をゲージで表示します。
+- **セッション操作**: 新しいセッション、過去のセッションを開く、分岐、圧縮、セッションツリー、`/` コマンドの候補。
+- **サブエージェント**: 実行中の子の一覧・作業記録・停止・割り込み（pi-subagents など）。
+- **新しい Pi を起動**: PC・フォルダ・モデル・最初のメッセージを選んでスマホから起動します。
+- **通知**: 入力待ち・完了・失敗をスマホに通知します（アプリが PC とつながっている間だけ）。
+- **プロバイダーのログイン**: OpenAI・Anthropic・OpenCode へのログイン／ログアウトをアプリから行えます。
+- **GitHub の Issue / PR を読む**: その Pi のリポジトリの Open な Issue と PR を表示します（PC の `gh` を使用）。
+- **PC の PiMate の更新**: 常駐させた Host なら、アプリの設定から更新できます。
 
-Android 0.1.4 / PCパッケージ0.1.6では、スラッシュコマンド候補・セッションツリー・Mtアイコンを追加しました。アプリの作業中の送信は「割り込む」のみになり、停止後の未確認メッセージは「下書きへ戻す」で編集できます。詳細は [mobile README](apps/mobile/README.md) を参照してください。
+## 必要なもの
 
-Android 0.1.5 / PCパッケージ0.1.7では、設定から OpenAI・OpenAI Codex・Anthropic へログイン／ログアウトできるようになり（[プロバイダー認証](docs/provider-auth.md)）、モデル・Thinking シートに Codex / Claude のサブスク利用枠（5時間・週間の使用率とリセット日時）を表示します。どちらも PC パッケージ0.1.7以上が必要で、ログインには Host の再起動も必要です。
+| | 条件 |
+|---|---|
+| PC | Linux x64（動作確認済み）。Linux arm64 はビルドのみで未確認です。macOS は常駐登録に未対応、Windows は非対応です。 |
+| PC のソフト | Node.js 22 以上、Pi 1.2.0 以上 |
+| スマホ | Android 7.0 以上（Tailscale アプリの都合で、実際は Android 8.0 以上）。iOS 版は配布していません。 |
+| ネットワーク | PC とスマホを、同じアカウントの [Tailscale](https://tailscale.com/) につなぐ |
+| 任意 | GitHub の Issue / PR 表示には、PC に [GitHub CLI](https://cli.github.com/)（`gh auth login` 済み） |
 
-Android 0.1.6 / PCパッケージ0.1.8では、入力欄のモデル名の横にコンテキスト・Claude・Codex の使用率を円形ゲージで常時表示し、タップで「使用状況」シート（コンテキストと利用枠の詳細）を開きます（[#59](https://github.com/phni3j9a/PiMate/issues/59)）。PC 0.1.8 以上では、利用枠に同じ PC の Pi（バックグラウンドのサブエージェントを含む）で最も新しく観測した値を使います。OpenAI（`openai`）の ChatGPT ログインは削除して API キーのみとし、Codex・Anthropic のログインは維持しています（[#57](https://github.com/phni3j9a/PiMate/issues/57)）。
+## はじめかた
 
-Android 0.1.7 / PCパッケージ0.1.9では、会話中の画像をアプリで見られるようにしました（[#66](https://github.com/phni3j9a/PiMate/issues/66)）。サムネイルをタップすると全画面ビューア（ピンチ・ダブルタップで拡大、左右にめくる）で開きます。ツール結果の画像（`read` した png など）、メッセージの2枚目以降の画像、回答中の Markdown 画像（`https://`・`data:`・PC 上のパス）も表示します。画像は最大4枚まで送れます。いずれも PC パッケージ0.1.9以上が必要です。
-
-Android 0.1.8 / PCパッケージ0.1.10では、回答の**部分選択・コピー**、モデル／Thinkingの既定保存、新しい Pi のフォルダ補完、質問ツール `pimate_ask`（複数問の質問カード・起動時のオンオフ）、スマホで信頼したフォルダの判断を PC の Pi に保存する機能を追加しました。部分コピー以外の新機能には PC 0.1.10 以上が必要です。質問ツールは既定でオフで、スマホの質問カードにはアプリ0.1.8以上が必要です。更新後は対象の Pi と Host の両方を再読み込み／再起動してください（[使い方](apps/mobile/README.md)）。
-
-Android 0.1.9 / PCパッケージ0.1.11では、選択中の Pi のリポジトリの **GitHub Issue / PR** をスマホで読めるようにしました（[#88](https://github.com/phni3j9a/PiMate/issues/88)）。セッションメニューの「Issue と PR」から、Open の一覧と詳細（本文・コメント・PR のレビュー状態と CI）を見られます。「Piに依頼」で参照を入力欄に入れられます。PC の Host が PC の `gh` のログインを使って読み取り専用で取得するので、PC に GitHub CLI（`gh`）を入れて `gh auth login` を済ませ、更新後に **Host を再起動**してください。アプリ0.1.9とPCパッケージ0.1.11の両方が必要です。あわせて、メッセージ末尾の1回分のコスト表示を削除しました（[#87](https://github.com/phni3j9a/PiMate/pull/87)）。セッション全体のコストは引き続き表示します。
-
-PCパッケージ0.1.12では、**Grok Bot** から PC の Pi を動かせるようにしました（[#91](https://github.com/phni3j9a/PiMate/issues/91)）。`pimate` CLI の `prompt --wait` / `wait` / `history --last` / `ui --answers`、指定した Pi の質問と完了を Grok Bot の Routine に送る `pimate webhook`、Bot 用の Skill（パッケージの `grok-bot/skills/`）を追加しました。アプリの更新は不要です。設定方法は [packages/pimate/README.md](packages/pimate/README.md#grok-bot-skills任意) を参照してください。Grok Bot のテンプレート **[PiMate](https://x.ai/bot/EL8LzPmNquZTjEawTxAI1)** を追加すると、すぐに始められます。PCパッケージ0.1.13では、Bot が起動した Pi を終了させる `pimate shutdown` を追加しました。PCパッケージ0.1.14では、新しい PC でも Bot が確認から PiMate のインストール・Skill の保存まで案内できるようにしました（[#100](https://github.com/phni3j9a/PiMate/issues/100)）。
-
-Android 0.1.10 / PCパッケージ0.1.15では、**プロバイダーのログインを専用の Pi に分離**しました（[#104](https://github.com/phni3j9a/PiMate/issues/104)・[#105](https://github.com/phni3j9a/PiMate/issues/105)）。設定の「プロバイダー」で PC を選ぶと Host がログイン用の Pi を起動するため、チャットで Pi を開いておく必要はありません。OpenAI は API キーと ChatGPT ログイン（従来の Codex デバイスコード方式）を1行にまとめ、OpenCode は Zen / Go のキー入力を横に並べました。ログアウトは保存先ごとに別々です。**アプリと PC の両方を更新し、Host を再起動**してください。起動中のほかの Pi に新しい認証を反映するには `/reload` または再起動が必要です（[プロバイダー認証](docs/provider-auth.md)）。
-
-Android 0.1.11 / PCパッケージ0.1.16では、CLI の `pimate spawn`（Grok Bot）で起動した Pi を、各 PC の一覧の「**Grok Bot**」区画に分けました（[#110](https://github.com/phni3j9a/PiMate/issues/110)）。質問待ちは起動元によらず最上段の「要対応」にまとめます。**アプリと PC の両方を更新し、Host を再起動**してください。対象は更新後に起動した Pi です。あわせて、設定・プロバイダーのログイン・使用状況の説明文と、回答の下のモデル名・トークン数の行を削除しました（使用量は「使用状況」シートで確認できます）。
-
-Android 0.1.13 / PCパッケージ0.1.18では、**初回の接続を案内するオンボーディング**を追加しました（[#119](https://github.com/phni3j9a/PiMate/pull/119)）。アプリのペアリング画面に PC の Pi の見本と「Tailscale でつなぐ」「PC に PiMate を入れる」「QR コードを読み取る」の手順を出し、最初のペアリング直後に起動中の Pi・新しい Pi の起動・通知のスイッチを1回だけ示します。PC 側では `/pimate setup`・`/pimate pair` の QR 画面がアプリのボタン名を示し、読み取られると端末名と次の手順に切り替わります。Tailscale のアドレスがない PC では Host を起動する前に知らせ、未ペアリングで Host も動いていない PC では Pi の起動時に `/pimate setup` を1行だけ案内します。あわせて、アプリの主ボタンと1行の入力欄をカプセル型から角丸 12px にしました。アプリの案内は古い PC でも使えます。PC 側の表示には PCパッケージ0.1.18への更新が必要です。
-
-Android 0.1.14 / PCパッケージ0.1.19では、設定を整理し、マシン詳細・通知の3段階（オフ／要対応／すべて）・質問ツールの既定・アプリの更新確認を追加しました（[#127](https://github.com/phni3j9a/PiMate/pull/127)）。保存済み通知設定は近い段階へ移行します。マシン詳細ではペアリング済み端末の一覧・取り消し、マシン削除時の PC 側登録の取り消し、Host の再起動、GitHub のログイン状態に対応しました（[#128](https://github.com/phni3j9a/PiMate/pull/128)）。Android のナビゲーションバーのアイコンもテーマに合わせます（[#126](https://github.com/phni3j9a/PiMate/pull/126)）。ネイティブモジュール追加のため APK の再インストールが必要です。
-
-マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態には Android 0.1.14 / PC 0.1.19 以上と Host の再起動が必要です。Host 再起動は systemd の `pimate-host.service` のみ対応します。旧 Host・旧アプリとの組み合わせでも従来の機能は使えます。npm 版 PC 0.1.18 の systemd 常駐 Host はアプリの設定 → マシン詳細 → PC の PiMate → 更新で更新でき、Host は自動で再起動します。それ以外の npm 版は PC で `pi update npm:@phni3j9a/pimate` の後に `/pimate restart` を実行してください。今回の Host 機能には起動中の Pi の `/reload` は不要です。
-
-## PCにインストール・スマホとペアリング
-
-Node.js 22以上と Pi 1.2.0以上が必要です。PCとAndroidを同じTailscaleネットワークに接続してください。
-公開名は **`@phni3j9a/pimate`**（内部workspace名 `@pimate/pimate` とは別）。次の手順で導入できます（Androidアプリ0.1.14 / PCパッケージ0.1.19。マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態はアプリ0.1.14 / PCパッケージ0.1.19以上、QR 画面のペアリング完了表示・Tailscale の事前チェック・起動時の案内はPCパッケージ0.1.18以上、Grok Bot が起動した Pi の区分表示はPCパッケージ0.1.16・アプリ0.1.11以上、ログイン専用 Pi・OpenCode 認証はPCパッケージ0.1.15以上（専用 Pi の入口はアプリ0.1.10以上も必要）、Grok Bot 連携はPCパッケージ0.1.12以上（`pimate shutdown` は0.1.13以上）、GitHub の Issue / PR 表示はPCパッケージ0.1.11以上と PC の `gh` ログイン、モデル既定保存・フォルダ補完・質問ツールなどはPCパッケージ0.1.10以上、画像の閲覧・複数画像送信はPCパッケージ0.1.9以上、利用枠の PC 内共有はPCパッケージ0.1.8以上、プロバイダーのログイン・利用枠はPCパッケージ0.1.7以上、スラッシュコマンド・セッションツリーはPCパッケージ0.1.6以上、画像添付は0.1.4以上、モデルのお気に入りは0.1.3以上が必要）。
+### 1. PC に PiMate を入れる
 
 ```sh
 pi install npm:@phni3j9a/pimate
 pi
 ```
 
-1. Android で [GitHub Releases](https://github.com/phni3j9a/PiMate/releases) の **`app-v…`** リリースから `pimate-….apk` をダウンロードしてインストール。
-   Android に確認されたら、ダウンロードに使ったブラウザ／ファイルアプリの「不明なアプリのインストール」を許可します（インストール後に許可を戻して構いません）。APK はこのリポジトリの Releases から取得してください。
-2. PCのPi TUIで **`/pimate setup`** を実行。
-3. Hostの起動を確認し、常駐する場合のみ **systemd user service登録** に同意。
-   `pimate-host.service` をログイン時に起動します。断ると一時起動し、Piを閉じてもHostは動き続けます。
-   linger状態は表示するだけで変更しません。ログアウト後の生存はOS側設定に依存します。
-   続けて、同意した場合のみ（PCパッケージ0.1.5以上）`pimate` コマンド（`pimate attach` など）のリンクを `$XDG_BIN_HOME` → `$XDG_DATA_HOME/../bin` → `~/.local/bin` の最初のディレクトリに作ります（Pi公式インストーラーの `~/.local/bin/pi` と同じ場所）。
-   そのディレクトリがPATHに無ければ追記する行を表示します。シェルの設定ファイルは変更しません。既存の別ファイルは上書きしません。導入済みの場合も `/pimate setup` を再実行すると追加できます。
-4. PiMate の「QRコードを読み取る」でカメラを許可し、PC の **`/pimate setup` が表示した QR** を読み取る。
-   マシン名・アドレスを確認してペアリングします。`pimate://` リンクの貼り付けも使えます。コードは10分・1回限りです。
-   アプリの最初の画面にも Tailscale と PC 側の準備の手順があり、PC 側のコマンドをコピー・共有できます。
+### 2. Pi で初回セットアップ
 
-複数画像の送信（最大4枚・各512 KiB・合計600 KiB）と、履歴のユーザー / ツール画像の自動取得には、Android 0.1.7 / PC パッケージ0.1.9以上が必要です。古い RC では従来の1枚添付を維持します。画像添付を使うには PC 側も更新し、対象の **Pi を再起動**してください。古い RC は画像を受け付けません（Host の再起動だけでは更新されません）。
+起動した Pi で次を実行します。
 
-APK のビルド・署名・更新方法は [mobile README](apps/mobile/README.md#android-apk-のビルドと配布m5b) を参照してください。同じ署名の新しい APK は既存アプリに上書きインストールできます。
-
-既定の公開先は **loopback + Tailscaleのみ**。Tailscaleがなければ警告しloopbackのみです。
-登録や新しいペアリングはPCのTUIだけから行えます。ペアリングはPiの操作権限を与えるため、リンクを共有しないでください。
-
-- `/pimate pair` — QRを再表示（新しいコード）
-- `/pimate devices` — 接続済み端末一覧・失効
-- `/pimate status` — Host/Extensionのバージョン、互換性、公開先、常駐状態、abduco
-- `/pimate start` / `stop` / `restart` — Host制御（Piセッションは終了しません）
-- 更新: `pi update npm:@phni3j9a/pimate` → Pi再起動または `/reload` → `/pimate status`。旧Hostとの不一致時に再起動を提案します。アプリ0.1.12 / PC 0.1.17以上の両方に更新後、systemd 常駐 Host はアプリの設定から更新できます。初回は PC で更新・Host 再起動が必要です。起動中の Pi は自動更新されず、各 Pi で `/reload` または再起動してください（0.1.19 の新機能は Host 側だけなので、Host の再起動だけで使えます）。
-
-### 削除
-
-PCのPiで `/pimate uninstall` → ターミナルで `pi remove npm:@phni3j9a/pimate`。
-Host停止・今回のuser unit削除と、PiMateが作った `pimate` リンクの削除だけを行い、設定・他のサービス・lingerは変更しません。
-ペアリングも忘れる場合は `~/.config/pimate`（環境変数で変更した場合はその場所）を手動削除します。
-開発/未公開tarballからの導入とリリース方法は [packages/pimate/README.md](packages/pimate/README.md#配布パッケージとリリースm5a) を参照してください。
-
-## 構成
-
-npm workspacesのmonorepoです。
-
-| パス | 内容 |
-|---|---|
-| [packages/protocol](packages/protocol/src/index.ts) | RC Extension・Host・アプリが共有するプロトコル v1 の型 |
-| [packages/pimate](packages/pimate/README.md) | Piパッケージ。Remote Control Extension（Pi内で動く）とHost（別プロセス） |
-| [apps/mobile](apps/mobile/README.md) | Expoアプリ（Android優先） |
-
-## 開発
-
-Node 22.18以上が必要です（Hostは型の除去で `.ts` を直接実行します）。
-
-```bash
-npm install
-npm run lint && npm run typecheck && npm test
-npm run test:e2e -w @pimate/pimate   # 実Pi + abduco（LLMは使わない）
+```
+/pimate setup
 ```
 
-## 商標
+PC 側の待ち受け（Host）が起動し、ペアリング用の QR コードが表示されます。途中で次の2つを聞かれます。
+
+- **ログイン時に Host を自動起動するか**（systemd のユーザーサービス `pimate-host.service`）。断った場合も Host は今回だけ起動し、Pi を閉じても動き続けます。
+- **`pimate` コマンドを使えるようにするか**。`~/.local/bin` などにリンクを作ります。PATH に入っていない場合は追加する行を表示します（シェルの設定ファイルは書き換えません）。
+
+### 3. スマホにアプリを入れる
+
+[GitHub Releases](https://github.com/phni3j9a/PiMate/releases) の **`PiMate Android …`（タグ `app-v…`）** から `pimate-….apk` をダウンロードしてインストールします。「不明なアプリのインストール」の許可を求められたら、ダウンロードに使ったブラウザ／ファイルアプリに許可してください（インストール後に戻して構いません）。
+
+### 4. ペアリング
+
+アプリの「QR コードを読み取る」で、PC に表示された QR を読み取ります。マシン名とアドレスを確認すれば完了です。
+
+- QR のコードは **10分間・1回限り** です。期限が切れたら PC の Pi で `/pimate pair` を実行して出し直します。
+- アプリの最初の画面にも、Tailscale と PC 側の準備の手順があります。
+
+あとは PC で `pi` を起動すれば、その Pi がアプリの一覧に出ます。アプリの「新しい Pi を起動」から PC に Pi を立ち上げることもできます。
+
+## PC 側のコマンド
+
+Pi の中で使うコマンドです。
+
+| コマンド | 内容 |
+|---|---|
+| `/pimate setup` | 初回セットアップ（再実行も可） |
+| `/pimate pair` | ペアリング用の QR を出し直す（別のスマホの追加にも） |
+| `/pimate devices` | ペアリング済みの端末の一覧と取り消し |
+| `/pimate status` | バージョン、接続先、常駐の状態などを表示 |
+| `/pimate start` / `stop` / `restart` | Host の起動・停止・再起動（Pi は終了しません） |
+| `/pimate uninstall` | 削除の準備（下記） |
+
+ターミナルで使うコマンド（`/pimate setup` で `pimate` コマンドを有効にした場合）:
+
+```sh
+pimate attach                    # スマホから起動した Pi の一覧
+pimate attach pimate-01234567    # その Pi に PC からつなぐ（Ctrl+\ で離れる）
+```
+
+アプリのセッションメニューに、その Pi の `attach` コマンドが表示されます。
+
+## 更新
+
+**アプリ**: 設定の「情報」で新しい版を確認できます。Releases から新しい APK を入れると、上書きで更新されます。
+
+**PC の PiMate**:
+
+- 常駐させた Host なら、アプリの **設定 → マシン → PC の PiMate → 更新** で更新できます（Host は自動で再起動します）。
+- それ以外は PC で次を実行します。
+
+  ```sh
+  pi update npm:@phni3j9a/pimate
+  ```
+
+  そのあと Pi で `/pimate restart` を実行します。
+
+起動中の Pi は自動では更新されません。新しい機能を使うには、各 Pi で `/reload` するか Pi を起動し直してください。新しい機能にはアプリと PC の両方の更新が必要なことがあります。各版の変更は [CHANGELOG.md](CHANGELOG.md) にあります。
+
+## 削除
+
+1. PC の Pi で `/pimate uninstall` を実行します（Host を止め、PiMate が作った自動起動の設定と `pimate` コマンドのリンクを消します）。
+2. ターミナルで `pi remove npm:@phni3j9a/pimate` を実行します。
+3. ペアリングの情報も消す場合は `~/.config/pimate` を削除します。
+
+## セキュリティと注意
+
+- **ペアリングは、スマホに PC の Pi を操作する権限を与えます。** QR やペアリング用リンク（`pimate://…`）を他人に共有しないでください。新しいペアリングは PC の Pi からしか始められません。
+- Host が待ち受けるのは、PC 自身（loopback）と Tailscale のアドレスだけです。Tailscale がない場合は PC 自身からしか接続できません。
+- 信頼できない `pimate://` リンクは開かないでください。アプリが使っているライブラリに、不正な URL で応答しなくなる既知の問題があります（[#85](https://github.com/phni3j9a/PiMate/issues/85)）。
+- 通知はアプリが PC とつながっている間だけ届きます。アプリを終了したり、OS が休止させたりすると届きません（[詳細](docs/notifications.md)）。
+- PC でしか操作できない画面（一部の Extension の独自画面など）は、アプリに `pimate attach` の案内が出ます。
+
+## もっと詳しく
+
+- [アプリの機能の詳細](apps/mobile/README.md)
+- [PC パッケージ（Host・`pimate` CLI）の詳細](packages/pimate/README.md)
+- [プロバイダーのログイン](docs/provider-auth.md)
+- [通知](docs/notifications.md)
+- [サブエージェント](docs/subagents.md)
+- [Grok Bot から PC の Pi を動かす（任意）](packages/pimate/README.md#grok-bot-skills任意) — テンプレート **[PiMate](https://x.ai/bot/EL8LzPmNquZTjEawTxAI1)** を追加すると始められます
+- [変更履歴](CHANGELOG.md)
+- 不具合の報告・要望は [Issues](https://github.com/phni3j9a/PiMate/issues) へ
+- 開発に参加する方は [CONTRIBUTING.md](CONTRIBUTING.md)
+
+## ライセンス・商標
+
+[MIT License](LICENSE)
 
 Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。アプリでは利用枠がどのプロバイダーのものかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。
-
-以前の詳細仕様書はGit履歴から参照できますが、**現在の設計方針の正本は [docs/SPEC.md](docs/SPEC.md)** です。
