@@ -12,7 +12,7 @@ import type { HostRuntime } from "@/lib/store";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { fontFamily, radii } from "@/theme/tokens";
 
-import { BellIcon, GearIcon, GrokBotLogo, LaptopIcon, PencilIcon, SearchIcon, ServerIcon } from "./icons";
+import { BellIcon, GearIcon, GrokBotLogo, MonitorIcon, PencilIcon, SearchIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
 import { TextButton } from "./ui";
 
@@ -149,10 +149,9 @@ function HostHeader({ host }: { host: HostRuntime }) {
 	const styles = useStyles();
 	const { colors } = useAppearance();
 	const label = hostConnectionLabel(host);
-	const Icon = host.platform === "darwin" ? LaptopIcon : ServerIcon;
 	return (
 		<View style={styles.groupHeader} accessibilityRole="header">
-			<Icon />
+			<MonitorIcon />
 			<Text style={styles.groupTitle} numberOfLines={1}>
 				{host.hostName}
 			</Text>
@@ -267,22 +266,26 @@ const useStyles = makeStyles(({ colors, typography }) => ({
 	groupHeader: {
 		marginTop: 22,
 		paddingHorizontal: 12,
+		paddingVertical: 3,
+		minHeight: 32,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+	},
+	// Headers put their 14px icon in the rows' status column and the title on the row text (12 + 14 + gap 10).
+	groupTitle: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 20, fontWeight: "600", color: colors.text },
+	// Subsection under a host (origin): quieter than the host title.
+	subTitle: {
+		marginTop: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 3,
 		minHeight: 28,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 6,
+		gap: 10,
 	},
-	groupTitle: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.textSecondary },
-	// Subsection under a host: mark in the rows' status column, title aligned with the row text (12 + 14 + gap 10).
-	subTitle: { marginTop: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 10 },
-	subTitleText: {
-		flex: 1,
-		fontSize: 12,
-		lineHeight: 28,
-		fontWeight: "600",
-		color: colors.textSecondary,
-	},
-	connection: { flexDirection: "row", alignItems: "center", gap: 5 },
+	subTitleText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "500", color: colors.textSecondary },
+	connection: { flexShrink: 0, flexDirection: "row", alignItems: "center", gap: 5 },
 	connectionText: { fontSize: 11, color: colors.textSecondary },
 	row: {
 		marginTop: 2,

@@ -126,6 +126,18 @@ export const ServerIcon = ({ size = 15, color: inputColor }: IconProps) => {
 		</Svg>
 	);
 };
+/** A PC running the Host (drawer host headers): filled, to weigh the same as the Grok Bot mark. One for every OS. */
+export const MonitorIcon = ({ size = 14, color: inputColor }: IconProps) => {
+	const { colors } = useAppearance();
+	return (
+		<Svg width={size} height={size} viewBox="0 0 24 24">
+			<Path
+				d="M4.5 3h15A2.5 2.5 0 0 1 22 5.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 14.5v-9A2.5 2.5 0 0 1 4.5 3zM9 19h6l.8 2H8.2z"
+				fill={inputColor ?? colors.textSecondary}
+			/>
+		</Svg>
+	);
+};
 export const LaptopIcon = ({ size = 15, color: inputColor }: IconProps) => {
 	const { colors } = useAppearance();
 	const color = inputColor ?? colors.textSecondary;
