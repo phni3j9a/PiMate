@@ -4,11 +4,11 @@ Expo（SDK 57、expo-router）のアプリです。Android優先で作ってい�
 
 アイコン類は [icon kit](../../docs/design/icon-kit/README.md) の書き出し済み素材を `assets/brand/` にコピーして使います（正本はキット側）。Android はライト版の adaptive icon＋テーマアイコン用の単色、iOS は Light / Dark / Tinted。スプラッシュはアプリの背景色にマークを載せ、ライト / ダークで配色を切り替えます。通知は白いシルエット。アプリ内ではペアリングの最初の画面と設定のバージョン表示だけにマークを置きます。差し替えには APK の再ビルドが必要です（OTA では変わりません）。
 
-現在の配布版は Android 0.1.14 / PCパッケージ0.1.20 です（PC 0.1.20 はサブエージェントの「待ち」表示の修正のみで、アプリの変更はありません）。設定の整理、マシン詳細、通知の3段階と保存済み設定の移行、質問ツールの既定、アプリの更新確認に対応しました。Android のナビゲーションバーのアイコンはテーマに合わせます（ネイティブモジュール追加のため APK の再インストールが必要）。マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態には Android 0.1.14 / PC 0.1.19 以上と Host の再起動が必要です。Host 再起動は systemd の `pimate-host.service` のみ対応します。旧 Host・旧アプリとの組み合わせでも従来の機能は使えます。npm 版 PC 0.1.18 の systemd 常駐 Host はアプリの設定 → マシン詳細 → PC の PiMate → 更新で更新でき、Host は自動で再起動します。それ以外の npm 版は PC で `pi update npm:@phni3j9a/pimate` の後に `/pimate restart` を実行してください。今回の Host 機能には起動中の Pi の `/reload` は不要です。
+現在の配布版は Android 0.1.15 / PCパッケージ0.1.20 です。Android 0.1.15 は一覧の見出しの整理（「Grok Bot」区画のマーク、PC の見出しの共通アイコン）のみで、PC の更新は不要です。PC 0.1.20 はサブエージェントの「待ち」表示の修正のみで、アプリの更新は不要です。Android 0.1.14 / PC 0.1.19 で設定の整理、マシン詳細、通知の3段階と保存済み設定の移行、質問ツールの既定、アプリの更新確認に対応しました。Android のナビゲーションバーのアイコンはテーマに合わせます（ネイティブモジュール追加のため APK の再インストールが必要）。マシン詳細の端末一覧・登録の取り消し・Host 再起動・GitHub のログイン状態には Android 0.1.14 / PC 0.1.19 以上と Host の再起動が必要です。Host 再起動は systemd の `pimate-host.service` のみ対応します。旧 Host・旧アプリとの組み合わせでも従来の機能は使えます。npm 版 PC 0.1.18 の systemd 常駐 Host はアプリの設定 → マシン詳細 → PC の PiMate → 更新で更新でき、Host は自動で再起動します。それ以外の npm 版は PC で `pi update npm:@phni3j9a/pimate` の後に `/pimate restart` を実行してください。今回の Host 機能には起動中の Pi の `/reload` は不要です。
 
 Android 0.1.13 では初回の接続の案内（下記の「初回の案内」）を追加し、主ボタン・1行の入力欄・コマンド表示をカプセル型から角丸 12px にしました。PC 側のペアリング案内（QR 画面の完了表示など）には PC 0.1.18 以上が必要です（アプリの案内は古い PC でも使えます）。Android 0.1.12 / PC 0.1.17 で設定から PC の PiMate を更新でき、`/reload` に対応しました（下記）。Grok Bot が起動した Pi を一覧で分けて表示し（下記。アプリ0.1.11・PC 0.1.16以上の両方と Host の再起動が必要）、設定・プロバイダーのログイン・使用状況の説明文と回答の下のモデル名・トークン数の行を削除しました。Android 0.1.10 / PC 0.1.15 でプロバイダー認証を Host が起動するログイン専用の Pi に分離し、OpenAI の行の統合と OpenCode Zen / Go の API キー認証を追加しました（下記）。新しい認証画面にはアプリ0.1.10・PC 0.1.15以上の両方と Host の再起動が必要です。GitHub の Issue / PR の表示（下記）を追加し、メッセージ末尾の1回分のコスト表示を削除しました。GitHub の表示には PC 0.1.11 以上と PC の `gh` ログイン、Host の再起動が必要です。Android 0.1.8 で回答の部分コピーを追加しました。モデル／Thinkingの既定保存、フォルダ補完、質問ツール `pimate_ask` のカード・起動時のオンオフ、フォルダの信頼判断の保存には PC 0.1.10 以上が必要です。質問ツールは初期値オフで、質問カードにはアプリ0.1.8以上が必要です。画像の閲覧（履歴・ツール結果・Markdown 画像）と複数画像送信には PC 0.1.9 以上、利用枠の PC 内共有には PC 0.1.8 以上、プロバイダーのログイン・利用枠には PC 0.1.7 以上、スラッシュコマンド・セッションツリーには PC 0.1.6 以上が必要です。RC の新機能を反映するときは Pi を再起動または `/reload` し、必要に応じて Host を再起動してください。
 
-依存監査の警告も未解消です（0.1.14リリース準備時の `npm audit`: high 7 / moderate 10 / low 1、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
+依存監査の警告も未解消です（0.1.15リリース準備時の `npm audit`: high 7 / moderate 10 / low 1、ビルドツール経由を含む）。URL 解析依存には悪意ある不正エンコード入力で応答不能になる DoS の警告があり、信頼できない `pimate://` リンクは開かないでください。対応範囲と追跡は [#85](https://github.com/phni3j9a/PiMate/issues/85) を参照してください。
 
 ## プロバイダーへのログイン／ログアウト（Android 0.1.10 / PC 0.1.15 以上）
 
@@ -163,7 +163,7 @@ npm run build:android -w @pimate/mobile
 
 スクリプトは `expo prebuild --platform android --clean --no-install` → Gradle `:app:assembleRelease` を実行し、署名検証結果・証明書 SHA-256・APK SHA-256 を表示します。初回は SDK/Gradle/Maven のダウンロードと全 ABI のコンパイルに時間がかかります。既定の Gradle 並列数は 2（`PIMATE_GRADLE_WORKERS` で変更可）。R8/resource shrink は現時点では有効化していません。
 
-出力は `apps/mobile/dist/pimate-0.1.14.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
+出力は `apps/mobile/dist/pimate-0.1.15.apk`。`versionName` は `app.json` の `expo.version`、`versionCode` は `major * 1_000_000 + minor * 1_000 + patch`（0.1.0 → 1000、各要素 0〜999 の安定版のみ）です。更新ごとに version を増やします。ソース・依存 lockfile・JDK/SDK・同じ署名鍵から再構築できますが、APK のバイト単位の一致を保証するものではありません。
 
 ### 署名鍵を必ずバックアップする
 
@@ -183,14 +183,14 @@ npm run build:android -w @pimate/mobile
 開発者の実機インストール:
 
 ```sh
-adb -s <serial> install -r apps/mobile/dist/pimate-0.1.14.apk
+adb -s <serial> install -r apps/mobile/dist/pimate-0.1.15.apk
 ```
 
 公開担当者は検証済み commit を push し、APK と SHA-256・署名証明書 fingerprint を確認してから Release を作ります。
 
 ```sh
-gh release create app-v0.1.14 apps/mobile/dist/pimate-0.1.14.apk \
-  --target <検証済みcommit> --title 'PiMate Android 0.1.14' --notes-file <リリースノート>
+gh release create app-v0.1.15 apps/mobile/dist/pimate-0.1.15.apk \
+  --target <検証済みcommit> --title 'PiMate Android 0.1.15' --notes-file <リリースノート>
 ```
 
 タグは必ず **`app-v`** 接頭辞にします。PC パッケージ用 `v*` タグの release workflow を起動させないためです。新規版を出す前に既存 `app-v…` Release と署名を確認し、同じ version/tag の APK を黙って差し替えないでください。
