@@ -12,7 +12,7 @@ import type { HostRuntime } from "@/lib/store";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { fontFamily, radii } from "@/theme/tokens";
 
-import { BellIcon, GearIcon, GrokBotLogo, MonitorIcon, PencilIcon, SearchIcon } from "./icons";
+import { BellIcon, GearIcon, GrokBotLogo, MonitorIcon, PlusIcon, SearchIcon } from "./icons";
 import { StatusMark } from "./StatusMark";
 import { TextButton } from "./ui";
 
@@ -62,19 +62,6 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 					/>
 				</View>
 			</View>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="新しい Pi を起動"
-				onPress={() => {
-					navigation.closeDrawer();
-					router.push("/new");
-				}}
-				style={({ pressed }) => [styles.settings, styles.newPi, pressed && styles.rowPressed]}
-			>
-				<PencilIcon />
-				<Text style={styles.settingsText}>新しい Pi を起動</Text>
-			</Pressable>
-
 			<ScrollView style={styles.list} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled">
 				{groups.attention.length > 0 ? (
 					<View>
@@ -129,18 +116,32 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 				})}
 			</ScrollView>
 
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="設定"
-				onPress={() => {
-					navigation.closeDrawer();
-					router.push("/settings");
-				}}
-				style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
-			>
-				<GearIcon />
-				<Text style={styles.settingsText}>設定</Text>
-			</Pressable>
+			{/* Footer like Claude/ChatGPT: quiet settings on the left, the one filled action on the right (thumb side). */}
+			<View style={styles.footer}>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="設定"
+					onPress={() => {
+						navigation.closeDrawer();
+						router.push("/settings");
+					}}
+					style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
+				>
+					<GearIcon size={20} color={colors.text} />
+				</Pressable>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="新しい Pi を起動"
+					onPress={() => {
+						navigation.closeDrawer();
+						router.push("/new");
+					}}
+					style={({ pressed }) => [styles.newPi, pressed && styles.pressed]}
+				>
+					<PlusIcon size={18} color={colors.onAccent} />
+					<Text style={styles.newPiText}>新しい Pi</Text>
+				</Pressable>
+			</View>
 		</View>
 	);
 }
@@ -309,15 +310,30 @@ const useStyles = makeStyles(({ colors, typography }) => ({
 	rowRight: { flexShrink: 0, fontSize: 11, lineHeight: 21, color: colors.textSecondary },
 	emptyRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 12 },
 	emptyText: { ...typography.caption, color: colors.textSecondary, paddingHorizontal: 12, paddingVertical: 8 },
-	settings: {
-		minHeight: 52,
+	footer: {
+		marginTop: 8,
+		paddingHorizontal: 4,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 12,
-		paddingHorizontal: 12,
-		borderRadius: 12,
-		marginTop: 12,
+		justifyContent: "space-between",
 	},
-	settingsText: { fontSize: 14, color: colors.text },
-	newPi: { marginTop: 6 },
+	settings: {
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		backgroundColor: colors.surface,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	newPi: {
+		minHeight: 48,
+		borderRadius: radii.control,
+		backgroundColor: colors.accent,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+		paddingLeft: 18,
+		paddingRight: 22,
+	},
+	newPiText: { fontSize: 15, fontWeight: "600", color: colors.onAccent },
 }));
