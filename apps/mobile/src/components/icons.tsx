@@ -1,4 +1,38 @@
-/** Line icons transcribed from the design mock SVGs (docs/design/html/*.html, 24×24 viewBox). */
+/** UI icons: Lucide (ISC, see README "ライセンス・商標"), imported one file each so Metro bundles only these. */
+import type { LucideProps } from "lucide-react-native";
+import ArrowDown from "lucide-react-native/icons/arrow-down";
+import ArrowLeftRight from "lucide-react-native/icons/arrow-left-right";
+import ArrowUp from "lucide-react-native/icons/arrow-up";
+import Bell from "lucide-react-native/icons/bell";
+import Check from "lucide-react-native/icons/check";
+import ChevronDown from "lucide-react-native/icons/chevron-down";
+import ChevronLeft from "lucide-react-native/icons/chevron-left";
+import ChevronRight from "lucide-react-native/icons/chevron-right";
+import ChevronUp from "lucide-react-native/icons/chevron-up";
+import CircleAlert from "lucide-react-native/icons/circle-alert";
+import CircleStop from "lucide-react-native/icons/circle-stop";
+import Clock from "lucide-react-native/icons/clock";
+import Copy from "lucide-react-native/icons/copy";
+import Ellipsis from "lucide-react-native/icons/ellipsis";
+import ExternalLink from "lucide-react-native/icons/external-link";
+import Laptop from "lucide-react-native/icons/laptop";
+import Layers from "lucide-react-native/icons/layers";
+import Lightbulb from "lucide-react-native/icons/lightbulb";
+import Menu from "lucide-react-native/icons/menu";
+import Monitor from "lucide-react-native/icons/monitor";
+import Pencil from "lucide-react-native/icons/pencil";
+import Plus from "lucide-react-native/icons/plus";
+import Reply from "lucide-react-native/icons/reply";
+import Search from "lucide-react-native/icons/search";
+import Server from "lucide-react-native/icons/server";
+import Settings from "lucide-react-native/icons/settings";
+import Share from "lucide-react-native/icons/share";
+import Smartphone from "lucide-react-native/icons/smartphone";
+import SquareTerminal from "lucide-react-native/icons/square-terminal";
+import Star from "lucide-react-native/icons/star";
+import WifiOff from "lucide-react-native/icons/wifi-off";
+import X from "lucide-react-native/icons/x";
+import type { ComponentType } from "react";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { useAppearance } from "@/theme/appearance";
@@ -9,229 +43,75 @@ interface IconProps {
 	strokeWidth?: number;
 }
 
-function Line({ d, size = 22, color: inputColor, strokeWidth = 2 }: IconProps & { d: string }) {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.text;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Path d={d} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
-		</Svg>
-	);
+/** A Lucide icon with this app's default size, theme color and stroke; props still override each. */
+function icon(
+	Icon: ComponentType<LucideProps>,
+	size: number,
+	defaultColor: "text" | "textSecondary" | "textCode" | "accent" | "statusFailedText" = "text",
+	strokeWidth = 2,
+) {
+	return ({ size: s = size, color, strokeWidth: w = strokeWidth }: IconProps) => {
+		const { colors } = useAppearance();
+		return <Icon size={s} color={color ?? colors[defaultColor]} strokeWidth={w} />;
+	};
 }
 
-/** Drawer button: two left-aligned strokes. */
-export const MenuIcon = (p: IconProps) => <Line d="M4 8h16M4 16h10" strokeWidth={1.9} size={22} {...p} />;
-export const ArrowUpIcon = (p: IconProps) => <Line d="M12 19V5M6 11l6-6 6 6" strokeWidth={2.2} size={18} {...p} />;
-export const ArrowDownIcon = (p: IconProps) => <Line d="M12 5v14M6 13l6 6 6-6" strokeWidth={2.2} size={18} {...p} />;
-export const ChevronDownIcon = (p: IconProps) => <Line d="M6 9l6 6 6-6" size={14} {...p} />;
-export const ChevronUpIcon = (p: IconProps) => <Line d="M6 15l6-6 6 6" size={14} {...p} />;
-export const ChevronRightIcon = (p: IconProps) => <Line d="M9 6l6 6-6 6" size={16} {...p} />;
-export const BackIcon = (p: IconProps) => <Line d="M15 5l-7 7 7 7" size={22} {...p} />;
-export const CloseIcon = (p: IconProps) => <Line d="M6 6l12 12M18 6L6 18" size={22} {...p} />;
-export const PlusIcon = (p: IconProps) => <Line d="M12 5v14M5 12h14" strokeWidth={2.2} size={16} {...p} />;
-export const BulbIcon = (p: IconProps) => (
-	<Line
-		d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"
-		size={13}
-		{...p}
-	/>
-);
-export const BellIcon = (p: IconProps) => (
-	<Line d="M12 3a6 6 0 0 0-6 6c0 5-2 7-2 7h16s-2-2-2-7a6 6 0 0 0-6-6zM10 20a2 2 0 0 0 4 0" size={14} {...p} />
-);
-export const SwapIcon = (p: IconProps) => <Line d="M4 7h14l-3-3M20 17H6l3 3" size={14} {...p} />;
+export const MenuIcon = icon(Menu, 22, "text", 1.9);
+export const ArrowUpIcon = icon(ArrowUp, 18, "text", 2.2);
+export const ArrowDownIcon = icon(ArrowDown, 18, "text", 2.2);
+export const ChevronDownIcon = icon(ChevronDown, 14);
+export const ChevronUpIcon = icon(ChevronUp, 14);
+export const ChevronRightIcon = icon(ChevronRight, 16);
+export const BackIcon = icon(ChevronLeft, 22);
+export const CloseIcon = icon(X, 22);
+export const PlusIcon = icon(Plus, 16, "text", 2.2);
+export const BulbIcon = icon(Lightbulb, 13);
+export const BellIcon = icon(Bell, 14);
+export const SwapIcon = icon(ArrowLeftRight, 14);
 /** "Send after the current turn" (queued follow-up). */
-export const QueuedIcon = (p: IconProps) => <Line d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 5 5v3" size={14} {...p} />;
-export const WifiOffIcon = (p: IconProps) => (
-	<Line
-		d="M2 8.8a15 15 0 0 1 5-2.9M10.6 5.1A15 15 0 0 1 22 8.8M5 12.3a10 10 0 0 1 4.4-2.4M17.3 10.5a10 10 0 0 1 1.7 1.8M8.5 15.8a5 5 0 0 1 7 0M12 19.5h.01M3 3l18 18"
-		size={15}
-		{...p}
-	/>
-);
-export const SearchIcon = ({ size = 16, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Circle cx={11} cy={11} r={6.5} stroke={color} strokeWidth={2} />
-			<Path d="M20 20l-4.2-4.2" stroke={color} strokeWidth={2} strokeLinecap="round" />
-		</Svg>
-	);
-};
-export const ClockIcon = ({ size = 12, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
-			<Path d="M12 7v5l3 2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-		</Svg>
-	);
-};
-export const AlertIcon = ({ size = 16, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.statusFailedText;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={2} />
-			<Path d="M12 7.5v5.5M12 16.5h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
-		</Svg>
-	);
-};
+export const QueuedIcon = icon(Reply, 14);
+export const WifiOffIcon = icon(WifiOff, 15);
+export const SearchIcon = icon(Search, 16, "textSecondary");
+export const ClockIcon = icon(Clock, 12, "textSecondary");
+export const AlertIcon = icon(CircleAlert, 16, "statusFailedText");
 /** Opens outside the app (store, browser). */
-export const ExternalIcon = (p: IconProps) => (
-	<Line
-		d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"
-		size={14}
-		{...p}
-	/>
-);
-export const ShareIcon = (p: IconProps) => (
-	<Line d="M12 15V4M8 8l4-4 4 4M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" size={16} {...p} />
-);
-export const StopIcon = ({ size = 22, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.text;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.8} />
-			<Rect x={9} y={9} width={6} height={6} rx={1} fill={color} />
-		</Svg>
-	);
-};
-export const GearIcon = ({ size = 18, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.8} />
-			<Path
-				d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"
-				stroke={color}
-				strokeWidth={1.8}
-				strokeLinecap="round"
-			/>
-		</Svg>
-	);
-};
-export const ServerIcon = ({ size = 15, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Rect x={3} y={4} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
-			<Rect x={3} y={13} width={18} height={7} rx={2} stroke={color} strokeWidth={1.9} />
-			<Path d="M7 7.5h.01M7 16.5h.01" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-		</Svg>
-	);
-};
-/** A PC running the Host (drawer host headers): filled, to weigh the same as the Grok Bot mark. One for every OS. */
-export const MonitorIcon = ({ size = 14, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24">
-			<Path
-				d="M4.5 3h15A2.5 2.5 0 0 1 22 5.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 14.5v-9A2.5 2.5 0 0 1 4.5 3zM9 19h6l.8 2H8.2z"
-				fill={inputColor ?? colors.textSecondary}
-			/>
-		</Svg>
-	);
-};
-export const LaptopIcon = ({ size = 15, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Rect x={4} y={5} width={16} height={11} rx={1.5} stroke={color} strokeWidth={1.9} />
-			<Path d="M2 19h20" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-		</Svg>
-	);
-};
+export const ExternalIcon = icon(ExternalLink, 14);
+export const ShareIcon = icon(Share, 16);
+export const GearIcon = icon(Settings, 18, "textSecondary", 1.8);
+export const ServerIcon = icon(Server, 15, "textSecondary", 1.9);
+export const LaptopIcon = icon(Laptop, 15, "textSecondary", 1.9);
 /** This phone (first-connection drawings). */
-export const PhoneIcon = ({ size = 20, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textCode;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Rect x={7} y={3} width={10} height={18} rx={2.5} stroke={color} strokeWidth={1.9} />
-			<Path d="M11 18h2" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
-		</Svg>
-	);
-};
+export const PhoneIcon = icon(Smartphone, 20, "textCode", 1.9);
+export const MoreIcon = icon(Ellipsis, 20);
+export const CopyIcon = icon(Copy, 18, "text", 1.9);
+export const TerminalIcon = icon(SquareTerminal, 16, "text", 1.9);
+export const CheckIcon = icon(Check, 18, "accent", 2.4);
+export const PencilIcon = icon(Pencil, 22, "text", 1.9);
+/** Context: stacked layers, the shape that still reads at 12px inside the composer gauge (Issue #138). */
+export const ContextIcon = icon(Layers, 12, "text", 2.2);
 
-export const MoreIcon = ({ size = 20, color: inputColor }: IconProps) => {
+/** A PC running the Host (drawer host headers): filled, to weigh the same as the Grok Bot mark. One for every OS. */
+export const MonitorIcon = ({ size = 14, color }: IconProps) => {
 	const { colors } = useAppearance();
-	const color = inputColor ?? colors.text;
+	const c = color ?? colors.textSecondary;
+	return <Monitor size={size} color={c} fill={c} strokeWidth={2} />;
+};
+/** Stop the turn: the square is filled so the button reads at a glance. */
+export const StopIcon = ({ size = 22, color }: IconProps) => {
+	const { colors } = useAppearance();
+	const c = color ?? colors.text;
 	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-			<Circle cx={5} cy={12} r={1.6} />
-			<Circle cx={12} cy={12} r={1.6} />
-			<Circle cx={19} cy={12} r={1.6} />
-		</Svg>
+		<CircleStop size={size} color={c} strokeWidth={1.8}>
+			<Rect x={9} y={9} width={6} height={6} rx={1} fill={c} />
+		</CircleStop>
 	);
 };
-export const CopyIcon = ({ size = 18, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.text;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
-			<Rect x={9} y={9} width={11} height={11} rx={2} strokeLinejoin="round" />
-			<Path d="M5 15V6a2 2 0 0 1 2-2h9" strokeLinecap="round" strokeLinejoin="round" />
-		</Svg>
-	);
-};
-export const TerminalIcon = ({ size = 16, color: inputColor }: IconProps) => {
-	const { colors } = useAppearance();
-	const color = inputColor ?? colors.text;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9}>
-			<Rect x={3} y={4} width={18} height={13} rx={2} strokeLinejoin="round" />
-			<Path d="M8 21h8M7 9l3 2-3 2M12 13h4" strokeLinecap="round" strokeLinejoin="round" />
-		</Svg>
-	);
-};
-export const CheckIcon = (p: IconProps) => {
-	const { colors } = useAppearance();
-	return <Line d="M5 12.5l4.5 4.5L19 7.5" size={18} strokeWidth={2.4} color={colors.accent} {...p} />;
-};
-export const FolderIcon = (p: IconProps) => (
-	<Line
-		d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"
-		size={18}
-		strokeWidth={1.9}
-		{...p}
-	/>
-);
-export const PencilIcon = (p: IconProps) => (
-	<Line d="M12 20h8M4 20l1-4L16 5l3 3L8 19z" size={22} strokeWidth={1.9} {...p} />
-);
 /** Favorite model (Pi's scoped models): outline, filled when on. */
-export const StarIcon = ({ size = 20, color: inputColor, filled }: IconProps & { filled?: boolean }) => {
+export const StarIcon = ({ size = 20, color, filled }: IconProps & { filled?: boolean }) => {
 	const { colors } = useAppearance();
-	const color = inputColor ?? colors.textSecondary;
-	return (
-		<Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-			<Path
-				d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z"
-				stroke={color}
-				strokeWidth={1.8}
-				strokeLinejoin="round"
-				fill={filled ? color : "none"}
-			/>
-		</Svg>
-	);
+	const c = color ?? colors.textSecondary;
+	return <Star size={size} color={c} fill={filled ? c : "none"} strokeWidth={1.8} />;
 };
-
-/** Context: a page filling with lines (Issue #59 composer gauges). */
-export const ContextIcon = (p: IconProps) => (
-	<Line
-		d="M7 3h10a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9.5 8h5M9.5 12h5M9.5 16h3"
-		size={12}
-		strokeWidth={2.4}
-		{...p}
-	/>
-);
 
 // Brand marks: unmodified shapes (simple-icons 16.35.0 traces of the official logos), used only to label which
 // provider an allowance belongs to. Trademarks of Anthropic / OpenAI; see README "商標".
