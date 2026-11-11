@@ -150,4 +150,4 @@ pimate attach pimate-01234567    # その Pi に PC からつなぐ（Ctrl+\ で
 
 アプリのアイコンは [Lucide](https://lucide.dev)（ISC License, © Lucide Contributors）を使っています。
 
-Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。Grok・Grok Bot と Grok Bot のマークは xAI の商標です。アプリでは利用枠がどのプロバイダーのものか、一覧のどの Pi が Grok Bot から起動したかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。Grok Bot のマークの図形は [LobeHub Icons](https://github.com/lobehub/lobe-icons)（MIT License, © 2023 LobeHub）のものです。
+Claude は Anthropic, PBC の、OpenAI・Codex・OpenAI のロゴは OpenAI の商標です。Grok・Grok Bot と Grok Bot のマークは xAI の、GitHub と GitHub のロゴは GitHub, Inc. の商標です。アプリでは利用枠がどのプロバイダーのものか、一覧のどの Pi が Grok Bot から起動したか、設定のどの行が GitHub のリポジトリへのリンクかを示すためだけに各社のロゴを改変せずに使っており、提携・推薦を意味するものではありません。Grok Bot のマークの図形は [LobeHub Icons](https://github.com/lobehub/lobe-icons)（MIT License, © 2023 LobeHub）のものです。

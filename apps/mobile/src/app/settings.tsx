@@ -2,11 +2,11 @@ import { appearance, makeStyles, useAppearance } from "@/theme/appearance";
 /** Settings (docs/design/html/Settings.html): machines, notifications, new-Pi defaults, display and about. */
 
 import { router } from "expo-router";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { Linking, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ChevronRightIcon, ExternalIcon, PlusIcon } from "@/components/icons";
+import { ChevronRightIcon, ExternalIcon, GitHubLogo, PlusIcon } from "@/components/icons";
 import { StatusMark } from "@/components/StatusMark";
 import { BrandMark, ScreenHeader, TextButton, styles as ui } from "@/components/ui";
 import { useAppState } from "@/lib/hooks";
@@ -16,7 +16,7 @@ import { appStore, appVersion, notificationCenter } from "@/lib/runtime";
 import { type AppUpdate, checkAppUpdate } from "@/lib/updates";
 import { spacing } from "@/theme/tokens";
 
-const GUIDE_URL = "https://github.com/phni3j9a/PiMate/blob/main/apps/mobile/README.md";
+const REPO_URL = "https://github.com/phni3j9a/PiMate";
 const ISSUE_URL = "https://github.com/phni3j9a/PiMate/issues/new";
 
 const open = (url: string) => {
@@ -60,7 +60,7 @@ function SegmentedRow<T extends string>({
 	);
 }
 
-function LinkRow({ label, url }: { label: string; url: string }) {
+function LinkRow({ label, url, icon }: { label: string; url: string; icon?: ReactNode }) {
 	const styles = useStyles();
 	const { colors } = useAppearance();
 	return (
@@ -70,6 +70,7 @@ function LinkRow({ label, url }: { label: string; url: string }) {
 			onPress={() => open(url)}
 			style={({ pressed }) => [styles.row, pressed && ui.pressed]}
 		>
+			{icon}
 			<Text style={[styles.machineName, styles.flex]}>{label}</Text>
 			<ExternalIcon color={colors.textSecondary} />
 		</Pressable>
@@ -291,7 +292,7 @@ function AboutSection() {
 				</View>
 				{available ? <ExternalIcon color={colors.accentText} /> : null}
 			</Pressable>
-			<LinkRow label="使い方" url={GUIDE_URL} />
+			<LinkRow label="GitHub" url={REPO_URL} icon={<GitHubLogo />} />
 			<LinkRow label="不具合を報告" url={ISSUE_URL} />
 		</>
 	);
