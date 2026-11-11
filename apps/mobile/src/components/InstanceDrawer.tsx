@@ -138,7 +138,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 					}}
 					style={({ pressed }) => [styles.newPi, pressed && styles.pressed]}
 				>
-					<PlusIcon size={17} color={colors.background} />
+					<PlusIcon size={17} color={colors.onAccent} />
 					<Text style={styles.newPiText}>新しい Pi</Text>
 				</Pressable>
 			</View>
@@ -318,16 +318,15 @@ const useStyles = makeStyles(({ colors, typography }) => ({
 		justifyContent: "space-between",
 	},
 	settings: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-	// Inverted (text-colored) instead of accent: a quiet, Claude-like action that fits both themes.
 	newPi: {
 		minHeight: 44,
 		borderRadius: radii.control,
-		backgroundColor: colors.text,
+		backgroundColor: colors.accent,
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 6,
 		paddingLeft: 14,
 		paddingRight: 18,
 	},
-	newPiText: { fontSize: 14, fontWeight: "600", color: colors.background },
+	newPiText: { fontSize: 14, fontWeight: "600", color: colors.onAccent },
 }));
