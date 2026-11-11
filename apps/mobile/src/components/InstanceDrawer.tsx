@@ -127,7 +127,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 					}}
 					style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
 				>
-					<GearIcon size={20} color={colors.text} />
+					<GearIcon size={22} />
 				</Pressable>
 				<Pressable
 					accessibilityRole="button"
@@ -138,7 +138,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 					}}
 					style={({ pressed }) => [styles.newPi, pressed && styles.pressed]}
 				>
-					<PlusIcon size={18} color={colors.onAccent} />
+					<PlusIcon size={17} color={colors.background} />
 					<Text style={styles.newPiText}>新しい Pi</Text>
 				</Pressable>
 			</View>
@@ -317,23 +317,17 @@ const useStyles = makeStyles(({ colors, typography }) => ({
 		alignItems: "center",
 		justifyContent: "space-between",
 	},
-	settings: {
-		width: 48,
-		height: 48,
-		borderRadius: 24,
-		backgroundColor: colors.surface,
-		alignItems: "center",
-		justifyContent: "center",
-	},
+	settings: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+	// Inverted (text-colored) instead of accent: a quiet, Claude-like action that fits both themes.
 	newPi: {
-		minHeight: 48,
+		minHeight: 44,
 		borderRadius: radii.control,
-		backgroundColor: colors.accent,
+		backgroundColor: colors.text,
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
-		paddingLeft: 18,
-		paddingRight: 22,
+		gap: 6,
+		paddingLeft: 14,
+		paddingRight: 18,
 	},
-	newPiText: { fontSize: 15, fontWeight: "600", color: colors.onAccent },
+	newPiText: { fontSize: 14, fontWeight: "600", color: colors.background },
 }));
