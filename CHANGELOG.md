@@ -4,6 +4,13 @@ Android アプリ（タグ `app-v…`）と PC パッケージ `@phni3j9a/pimate
 
 新しい機能を使うには、アプリと PC の両方の更新、Host の再起動（`/pimate restart`）、起動中の Pi の `/reload` または再起動が必要なことがあります。各項目の「必要」の記載を確認してください。
 
+## Android 0.1.16
+
+- アプリ内のアイコンを [Lucide](https://lucide.dev) に統一しました。入力欄の横にあるコンテキストのゲージのマークは重なった層の形になり、ターミナル・送信待ち・戻る・メニューのアイコンも少し形が変わります（[#138](https://github.com/phni3j9a/PiMate/issues/138)）。
+- 設定の「情報」にあった「使い方」を、GitHub のロゴ付きの「GitHub」に変えました。PiMate のリポジトリのトップを開き、使い方・リリース・Issue にたどり着けます（[#140](https://github.com/phni3j9a/PiMate/pull/140)）。
+
+必要: APK の更新だけです。PC 側の更新は不要で、どの PC パッケージにもそのまま接続できます。
+
 ## Android 0.1.15
 
 - 一覧の「Grok Bot」区画の見出しに Grok Bot のマークを付けました。PC の見出しは OS によらず共通のモニターのアイコンにし、見出しのアイコンと文字を各行の状態マーク・タイトルの位置に揃えました（[#132](https://github.com/phni3j9a/PiMate/issues/132)）。
