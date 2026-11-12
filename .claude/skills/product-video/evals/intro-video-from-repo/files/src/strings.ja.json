@@ -1,0 +1,20 @@
+{
+	"request.title": "希望休を出す",
+	"request.deadline": "締切まであと {days} 日",
+	"request.submit": "提出する",
+	"request.submitted": "提出しました",
+	"myshift.title": "自分のシフト",
+	"status.confirmed": "確定",
+	"status.draft": "下書き",
+	"swap.ask": "交代を募集する",
+	"swap.accept": "引き受ける",
+	"swap.pending": "店長の承認待ち",
+	"admin.autofill": "下書きを自動で作る",
+	"admin.shortage": "人数が足りません",
+	"admin.publish": "シフトを確定する",
+	"admin.approve": "承認する",
+	"admin.export": "CSV で書き出す",
+	"notify.deadline": "希望休の締切は明日です",
+	"notify.published": "{month} のシフトが確定しました",
+	"notify.swap": "{name} さんが交代を引き受けました"
+}

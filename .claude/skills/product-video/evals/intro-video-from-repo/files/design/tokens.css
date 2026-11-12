@@ -1,0 +1,20 @@
+/* Shiftly デザイントークン */
+:root {
+	--color-bg: #ffffff;
+	--color-surface: #f5f6f8;
+	--color-line: #e3e6ea;
+	--color-text: #1b2430;
+	--color-text-sub: #5f6b7a;
+	--color-primary: #0f8a6c; /* 主ボタン、選択中、確定 */
+	--color-primary-soft: #e3f4ef;
+	--color-warn: #d9822b; /* 締切が近い、承認待ち */
+	--color-danger: #d64545; /* 人数が足りない */
+	--color-brand-navy: #16324f; /* ロゴ、紙もの */
+	--color-brand-yellow: #f2b63c; /* ロゴのアクセント */
+	--radius-card: 16px;
+	--radius-button: 12px;
+	--font-sans: "Inter", "Noto Sans JP", sans-serif;
+	--font-size-body: 15px;
+	--font-size-caption: 12px;
+	--row-height: 56px;
+}

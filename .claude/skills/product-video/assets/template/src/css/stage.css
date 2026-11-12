@@ -192,6 +192,7 @@ svg {
 	gap: 14px;
 	height: 64px;
 	white-space: nowrap;
+	visibility: hidden;
 }
 .pts .dot {
 	width: 14px;
@@ -460,6 +461,8 @@ svg {
 	position: absolute;
 	left: 0;
 	top: 0;
+	width: 520px;
+	height: 430px;
 	box-sizing: border-box;
 	border-radius: 32px;
 	background: var(--card);
