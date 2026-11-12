@@ -1,7 +1,7 @@
 // 全シーンの動き。時刻は秒、120 BPM（1 拍 0.5 秒・1 小節 2 秒）に合わせてある。
 import { cue, T } from "./cues.js";
 import { $, $$, closeNow, closeRow, ease, el, growIn, gsap, label, lerp, mmss, onFrame, openRow, prog, rng, stream, tl, toggle, typed } from "./engine.js";
-import { capIn, capOut, extraText, H, linkDraw, linkShape, mount, packet, parts, pose, status, tap, theme, toolMark, W, wipe } from "./stage.js";
+import { capIn, capOut, extraText, flash, H, linkDraw, linkShape, mount, packet, parts, pose, status, tap, theme, toolMark, W, wipe } from "./stage.js";
 import { stage as SP } from "./tokens.js";
 
 export { extraText, mount };
@@ -84,7 +84,6 @@ function problem() {
 	cue("timelapse", 3.6, { dur: 2.8 });
 	tl.to("#vignette", { opacity: 1, duration: 2.8, ease: "sine.inOut" }, 3.6);
 	tl.to("#term-dim", { opacity: 0.42, duration: 2.8, ease: "sine.inOut" }, 3.6);
-	tl.to(term, { scale: S * 0.965, x: (W - 900 * S * 0.965) / 2, y: 68, duration: 7.4, ease: "none" }, 0.2);
 
 	// 見出し
 	const c = parts("c1");
@@ -122,6 +121,8 @@ function reveal() {
 	const cy = 440;
 	gsap.set(m, { x: cx - 230, y: cy - 204, scale: 1, transformOrigin: "50% 50%" });
 	show(m, 7.4);
+	// 暗い場面の上を飛んでくる間も、紙の上の色で描く
+	toggle(m, "paper", [0, T.reveal + 0.02]);
 
 	// 5 つの形が 16 分音符ごとにはまる
 	const pieces = {
@@ -161,6 +162,16 @@ function reveal() {
 	show(word, 9.12);
 	tl.fromTo($("span", word), { xPercent: -104 }, { xPercent: 0, duration: 0.85, ease: "swift" }, 9.12);
 	cue("swell", 9.0);
+	// 名前は、動いているマークの右端より右だけを見せる（マークの陰から出てくる）
+	onFrame((t) => {
+		if (t < 9 || t > 10.2) {
+			if (word.style.clipPath) word.style.clipPath = "";
+			return;
+		}
+		const right = gsap.getProperty(m, "x") + 230 + 230 * gsap.getProperty(m, "scaleX");
+		const cut = Math.max(0, right + 16 - gsap.getProperty(word, "x"));
+		word.style.clipPath = `inset(0px 0px 0px ${cut.toFixed(2)}px)`;
+	});
 
 	// ひとこと
 	gsap.set(tag, { y: 640 });
@@ -256,8 +267,10 @@ function samePi() {
 	];
 	rows.forEach(([t, a, b], i) => {
 		openRow($(`#${a}`), t, { dur: 0.28 });
+		flash($(`#${a}`), t, { color: "124,190,222", peak: 0.3 });
 		packet(t + 0.02, { color: i, dur: 0.34 });
 		openRow($(`#${b}`), t + 0.16, { dur: 0.36 });
+		flash($(`#${b}`), t + 0.3);
 		cue("row", t);
 		cue("rowPhone", t + 0.2);
 	});
@@ -465,8 +478,10 @@ function handoff() {
 	];
 	rows.forEach(([t, a, b], i) => {
 		openRow($(`#${a}`), t, { dur: 0.28 });
+		flash($(`#${a}`), t, { color: "124,190,222", peak: 0.3 });
 		packet(t + 0.02, { color: i + 1, dur: 0.34 });
 		openRow($(`#${b}`), t + 0.16, { dur: 0.36 });
+		flash($(`#${b}`), t + 0.3);
 		cue("row", t);
 		cue("rowPhone", t + 0.2);
 	});
@@ -586,6 +601,7 @@ function resilient() {
 	tl.to("#trB", { opacity: 1, duration: 0.3 }, 69.82);
 	["b-t5", "b-t6", "b-t7"].forEach((id, i) => {
 		openRow($(`#${id}`), 69.9 + i * 0.15, { dur: 0.26 });
+		flash($(`#${id}`), 69.95 + i * 0.15, { peak: 0.4, dur: 1.2 });
 		cue("rowPhone", 69.92 + i * 0.15);
 	});
 	openRow($("#tb-8"), 70.8, { dur: 0.28 });
@@ -652,12 +668,12 @@ function privacy() {
 
 function setup() {
 	const t0 = T.setup;
-	capIn("c11", t0, { y: 112 });
+	capIn("c11", t0, { y: 124 });
 	const steps = $$(".step");
 	const xs = [150, 700, 1250];
 	steps.forEach((s, i) => {
-		gsap.set(s, { x: xs[i], y: 400 });
-		ft(s, { autoAlpha: 0, y: 460, scale: 0.94 }, { autoAlpha: 1, y: 400, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, t0 + 0.5 + i * 0.5);
+		gsap.set(s, { x: xs[i], y: 420 });
+		ft(s, { autoAlpha: 0, y: 480, scale: 0.94 }, { autoAlpha: 1, y: 420, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, t0 + 0.5 + i * 0.5);
 		cue("pop", t0 + 0.5 + i * 0.5, { i: i * 2 });
 	});
 	const a = "pi install npm:@phni3j9a/pimate";
@@ -675,8 +691,12 @@ function setup() {
 	ft("#st3-ok svg", { scale: 0 }, { scale: 1, duration: 0.5, ease: "back.out(2.4)" }, t0 + 4.0);
 	cue("success", t0 + 4.0);
 
+	gsap.set("#setup-note", { y: 908 });
+	ft("#setup-note", { opacity: 0, y: 924 }, { opacity: 1, y: 908, duration: 0.6 }, t0 + 2.2);
+
 	capOut("c11", 83.1);
-	tl.to(steps, { autoAlpha: 0, y: 360, duration: 0.35, ease: "power2.in", stagger: 0.05 }, 83.1);
+	tl.to("#setup-note", { opacity: 0, duration: 0.3, ease: "power2.in" }, 83.05);
+	tl.to(steps, { autoAlpha: 0, y: 380, duration: 0.35, ease: "power2.in", stagger: 0.05 }, 83.1);
 	tl.to("#chapters", { opacity: 0, duration: 0.3 }, 83.1);
 }
 

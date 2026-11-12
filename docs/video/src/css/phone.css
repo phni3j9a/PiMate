@@ -259,6 +259,9 @@ code,
 	flex-direction: column;
 }
 .tool {
+	margin: 0 -8px;
+	padding: 0 8px;
+	border-radius: 8px;
 	height: 32px;
 	display: flex;
 	align-items: center;

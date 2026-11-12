@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "render": "node render.mjs",
+    "render": "node render.mjs --scale 2",
     "shot": "node render.mjs --shot"
   },
   "devDependencies": {

@@ -113,7 +113,11 @@ svg {
 	position: absolute;
 	left: 128px;
 	top: 0;
-	width: 900px;
+	width: 1500px;
+}
+.cap .sp {
+	display: inline-block;
+	width: 0.3em;
 }
 .cap-meta {
 	display: flex;
@@ -161,7 +165,6 @@ svg {
 }
 .ln-in {
 	display: inline-block;
-	will-change: transform;
 }
 .cap-en {
 	margin-top: 26px;
@@ -211,7 +214,13 @@ svg {
 	width: 1920px;
 	height: 1080px;
 }
+#logo-mark.paper {
+	--blue: #4c93bc;
+	--coral: #f38c7b;
+	--yellow: #f5c15e;
+}
 #logo-mark {
+	z-index: 2;
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -220,6 +229,7 @@ svg {
 	overflow: visible;
 }
 #logo-word {
+	z-index: 1;
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -562,10 +572,11 @@ svg {
 #fine {
 	position: absolute;
 	left: 0;
-	bottom: 36px;
+	bottom: 30px;
 	width: 1920px;
 	text-align: center;
-	font-size: 15px;
+	line-height: 1.7;
+	font-size: 14px;
 	letter-spacing: 0.04em;
 	color: var(--ink3);
 	opacity: 0;
@@ -583,7 +594,7 @@ svg {
 	display: flex;
 	align-items: center;
 	gap: 14px;
-	height: 54px;
+	height: 47px;
 	font-size: 20px;
 	font-weight: 500;
 	color: var(--text);
@@ -629,7 +640,7 @@ svg {
 	color: var(--text2);
 }
 .think {
-	margin-top: 34px;
+	margin-top: 22px;
 	height: 52px;
 	box-sizing: border-box;
 	padding: 4px;
@@ -694,10 +705,10 @@ svg {
 	display: flex;
 	align-items: center;
 	gap: 14px;
-	height: 48px;
-	margin-bottom: 8px;
+	height: 44px;
+	margin-bottom: 7px;
 	padding: 0 16px;
-	border-radius: 14px;
+	border-radius: 13px;
 	background: var(--surface);
 	font-size: 17px;
 	color: var(--text);
@@ -711,7 +722,7 @@ svg {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	height: 50px;
+	height: 44px;
 	font-size: 18px;
 	color: var(--text);
 	white-space: nowrap;
@@ -726,7 +737,7 @@ svg {
 	color: var(--text2);
 }
 .gh-st {
-	margin-top: 14px;
+	margin-top: 8px;
 	display: flex;
 	gap: 18px;
 	font-size: 14px;
@@ -994,4 +1005,21 @@ svg {
 	stroke-width: 3;
 	stroke-linecap: round;
 	opacity: 0;
+}
+
+#setup-note {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1920px;
+	text-align: center;
+	font-size: 25px;
+	font-weight: 500;
+	color: var(--ink2);
+	letter-spacing: 0.02em;
+	opacity: 0;
+}
+#setup-note b {
+	color: var(--ink);
+	font-weight: 700;
 }

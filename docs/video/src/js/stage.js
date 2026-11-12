@@ -20,7 +20,7 @@ const CAPS = {
 	c7: { no: "05", tag: "HANDOFF", lines: ["スマホで始めて、", "PC で続ける。"], en: "START ON YOUR PHONE. PICK IT UP ON YOUR PC." },
 	c8: { no: "06", tag: "TOOLKIT", size: "sm", lines: ["必要なものは、ぜんぶ手の中に。"], en: "EVERYTHING ELSE YOU NEED, BUILT IN." },
 	c9: { no: "07", tag: "RESILIENT", lines: ["切れても、", "Pi は止まらない。"], en: "CONNECTIONS DROP. YOUR PI KEEPS WORKING." },
-	c10: { no: "08", tag: "PRIVATE", cls: "center", size: "sm", lines: ["Pi はそのまま。データは PC のまま。"], en: "NO FORK. NO CLOUD RELAY. YOUR DATA STAYS ON YOUR PC." },
+	c10: { no: "08", tag: "PRIVATE", cls: "center", size: "sm", lines: ['Pi はそのまま。<i class="sp"></i>データは PC のまま。'], en: "NO FORK. NO CLOUD RELAY. YOUR DATA STAYS ON YOUR PC." },
 	c11: { no: "09", tag: "SETUP", cls: "center", size: "sm", lines: ["はじめるのは、3 ステップ。"], en: "UP AND RUNNING IN THREE STEPS." },
 };
 export const CHAPTERS = 9;
@@ -145,6 +145,11 @@ export function toolMark(id, state, at) {
 	tl.set($(".mk .spin", row), { autoAlpha: state === "run" ? 1 : 0 }, at);
 }
 
+/** 行が届いた瞬間に、うっすら光らせる。 */
+export function flash(node, at, { color = "77,154,191", peak = 0.28, dur = 0.9 } = {}) {
+	tl.fromTo(node, { boxShadow: `inset 0 0 0 100px rgba(${color},${peak})` }, { boxShadow: `inset 0 0 0 100px rgba(${color},0)`, duration: dur, ease: "power2.out", immediateRender: false }, at);
+}
+
 /* ---------------- タップ ---------------- */
 
 /** target の中央をタップする印を出す。位置はその時刻の配置から求める。 */
@@ -239,24 +244,29 @@ const tilesHTML = `
 		<div class="sa"><span class="mk">${spin(16)}</span><span>正しさのレビュー</span><em data-sa="252">4:12</em></div>
 		<div class="sa"><span class="mk">${spin(16)}</span><span>テストのレビュー</span><em data-sa="252">4:12</em></div>
 		<div class="sa" id="sa3"><span class="mk"><i class="dot done"></i>${spin(16)}</span><span>複雑さのレビュー</span><em id="sa3t">2:38</em></div>
+		<div class="im-cap">子の作業記録を見て、止めて、割り込める</div>
 	</div></div>
 	<div class="tile"><div class="tile-h"><b>モデルと Thinking</b><span>MODEL</span></div><div class="tile-b">
 		<div class="md"><b>Claude Opus 5.5</b><span>${ic.check(22, 2.4)}</span></div>
 		<div class="md-id">anthropic/claude-opus-5-5 · 200K</div>
 		<div class="think"><i class="pill" id="think-pill"></i><span>off</span><span>min</span><span>low</span><span>med</span><span>high</span><span>xhigh</span></div>
+		<div class="im-cap">切り替えは、PC の Pi にもそのまま反映</div>
 	</div></div>
 	<div class="tile"><div class="tile-h"><b>コンテキストと利用枠</b><span>USAGE</span></div><div class="tile-b">
 		<div class="ugs">${bigRing("ug1", "コンテキスト")}${bigRing("ug2", "Claude")}${bigRing("ug3", "Codex")}</div>
+		<div class="im-cap">使った量とリセットまでの時間を、ひと目で</div>
 	</div></div>
 	<div class="tile"><div class="tile-h"><b>通知</b><span>NOTIFICATIONS</span></div><div class="tile-b">
 		<div class="nt"><i class="dot wait"></i>Pi が入力を待っています</div>
 		<div class="nt"><i class="dot done"></i>Pi の作業が完了しました</div>
 		<div class="nt"><i class="dot fail"></i>Pi の処理に失敗しました</div>
+		<div class="im-cap">アプリが PC とつながっている間に届く</div>
 	</div></div>
 	<div class="tile"><div class="tile-h"><b>Issue と PR</b><span>GITHUB</span></div><div class="tile-b">
 		<div class="gh"><span class="i">${ic.issue(20)}</span><em>#128</em><span>リダイレクト先が戻らない</span></div>
 		<div class="gh"><span class="i">${ic.pr(20)}</span><em>#131</em><span>メールリンク認証を追加</span></div>
 		<div class="gh-st"><span>${ic.check(16, 2.6)}CI 成功</span><span>+103 −9</span><span>レビュー待ち</span></div>
+		<div class="im-cap">その Pi のリポジトリを読んで、Pi に依頼</div>
 	</div></div>
 	<div class="tile"><div class="tile-h"><b>画像の添付</b><span>IMAGES</span></div><div class="tile-b">
 		<div class="imgs"><i class="im im1"></i><i class="im im2"></i><i class="im im3"></i><i class="im add">${ic.plus(26)}</i></div>
@@ -292,7 +302,8 @@ const stepsHTML = `
 <div class="step" id="step2"><span class="n" style="background:var(--coral)">2</span><div class="t">Pi の中でセットアップ</div><div class="e">SET UP</div>
 	<div class="v"><div class="pi-hd">${piLogo()}<span class="dim">pi</span></div><div class="t-rule"></div><div style="height:46px;display:flex;align-items:center"><span id="st2-a"></span><i class="t-caret" style="height:19px"></i></div><div class="t-rule"></div></div></div>
 <div class="step" id="step3"><span class="n" style="background:var(--yellow)">3</span><div class="t">スマホで QR を読み取る</div><div class="e">PAIR</div>
-	<div class="v" style="align-items:center"><div id="st3-qr">${qrSVG()}<i id="st3-scan"></i></div><div id="st3-ok">${ic.check(30, 2.8)}<span>ペアリング完了</span></div></div></div>`;
+	<div class="v" style="align-items:center"><div id="st3-qr">${qrSVG()}<i id="st3-scan"></i></div><div id="st3-ok">${ic.check(30, 2.8)}<span>ペアリング完了</span></div></div></div>
+<div id="setup-note">はじめに、PC とスマホを<b>同じアカウントの Tailscale</b> につないでおきます</div>`;
 
 export const extraText =
 	"テストは vitest に合わせて トップページを速くして pimate attach pimate-4f2a91c0 ~/work/site pi install npm:@phni3j9a/pimate /pimate setup このターンの変更（src/auth/LoginForm.tsx ほか 2 ファイル）について： Pi にメッセージ 0123456789:%秒";
@@ -314,7 +325,7 @@ export function mount() {
 	world.insertAdjacentHTML("beforeend", tilesHTML + diagramHTML + stepsHTML);
 	world.insertAdjacentHTML(
 		"beforeend",
-		`<ul class="pts" id="pts6"><li><i class="dot" style="background:var(--yellow)"></i><i class="dot" style="background:var(--coral)"></i>入力待ち・失敗は、いちばん上に。</li><li><i class="dot" style="background:var(--blue)"></i>PC ごと、フォルダごとに並ぶ。</li></ul>`,
+		`<ul class="pts" id="pts6"><li><i class="dot" style="background:var(--yellow)"></i><i class="dot" style="background:var(--coral)"></i>入力待ち・失敗は、いちばん上に。</li><li><i class="dot" style="background:var(--blue)"></i>PC ごとにまとまり、フォルダもひと目で。</li></ul>`,
 	);
 
 	$("#wipe").innerHTML = Array.from({ length: COLS * ROWS }, (_, i) => `<i style="left:${(i % COLS) * 120}px;top:${Math.floor(i / COLS) * 120}px"></i>`).join("");
@@ -326,7 +337,7 @@ export function mount() {
 		<div id="end-url"><span>github.com/</span>phni3j9a/PiMate</div>
 		<div id="end-meta"><span>Android アプリ</span><span>Pi 1.2.0 以上</span><span>Linux の PC</span><span>MIT License</span></div></div>
 		<div id="chapters">${"<i></i>".repeat(CHAPTERS)}</div>
-		<div id="fine">画面はデザインモックをもとにしたイメージです。実際のアプリとは細部が異なることがあります。</div>`,
+		<div id="fine">画面はデザインモックをもとにしたイメージです。実際のアプリとは細部が異なることがあります。<br>記載の会社名・製品名は、各社の商標または登録商標です。</div>`,
 	);
 
 	for (const id of Object.keys(CAPS)) {
@@ -335,6 +346,13 @@ export function mount() {
 	}
 	applyPalette($("#tiles"), app.dark, app.dark, 0);
 
+	// 背景の光だけを、ゆっくり動かす（文字は動かさない）
+	const glow = $("#bg-glow");
+	onFrame((t) => {
+		const x = Math.sin(t * 0.21) * 70;
+		const y = Math.cos(t * 0.17) * 40;
+		glow.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(1.12)`;
+	});
 	onFrame(applyTheme);
 	onFrame(drawWipes);
 	onFrame(drawPackets);

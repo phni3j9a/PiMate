@@ -59,8 +59,9 @@ window.__video = {
 	ready: true,
 	duration,
 	seek,
-	renderAudio: async () => {
+	renderAudio: async (only) => {
 		const audio = await import("./audio.js");
-		return audio.render(duration);
+		return audio.render(duration, only);
 	},
+	audioChunk: async (offset, size) => (await import("./audio.js")).chunk(offset, size),
 };

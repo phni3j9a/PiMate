@@ -5,8 +5,10 @@
 //   node render.mjs --shot 3.5,12,40    指定した時刻（秒）の静止画を out/shots に書き出す
 //   node render.mjs --sheet 0:30:2      0〜30 秒を 2 秒おきに並べた一覧を out/sheet.png に書き出す
 //   node render.mjs --from 14 --to 26   一部だけ書き出す（音声なし）
+//   node render.mjs --audio             音だけを out/audio.wav に書き出す（--stems pad,bass,… で系統ごと）
 //
-// 主なオプション: --fps 60  --scale 1（2 で 4K）  --workers 4  --crf 16  --out <file>  --no-audio
+// 主なオプション: --fps 60  --scale 2（撮影の倍率。2 倍で撮って縮小すると、輪郭と動きが滑らかになる）
+//   --size 1920:1080（出力の大きさ。--scale 2 --size 3840:2160 で 4K）  --workers 4  --crf 16  --out <file>  --no-audio
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -79,7 +81,52 @@ function ffmpeg(args, { quiet = true } = {}) {
 	if (r.status !== 0) throw new Error("ffmpeg failed");
 }
 
+/** 音を合成して WAV に保存する。stem を渡すと 1 系統だけ（pad / bass / drums / arp / melody / fx / sfx）。 */
+async function renderAudio(page, file, stem) {
+	const t0 = Date.now();
+	const { size, peak } = await page.evaluate((only) => window.__video.renderAudio(only), stem);
+	const parts = [];
+	const step = 3 * 1024 * 1024;
+	for (let o = 0; o < size; o += step) parts.push(Buffer.from(await page.evaluate(([a, b]) => window.__video.audioChunk(a, b), [o, step]), "base64"));
+	fs.writeFileSync(file, Buffer.concat(parts));
+	console.log(`audio  ${file}  ${((Date.now() - t0) / 1000).toFixed(1)}s  peak ${(20 * Math.log10(peak)).toFixed(1)} dBFS`);
+	return file;
+}
+
+/** 番組の音量（LUFS）を測る。 */
+function loudness(file) {
+	const r = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", file, "-af", "ebur128=peak=true", "-f", "null", "-"], { encoding: "utf8" });
+	const tail = r.stderr.slice(r.stderr.lastIndexOf("Summary:"));
+	return { lufs: Number(tail.match(/I:\s+(-?[\d.]+) LUFS/)[1]), peak: Number(tail.match(/Peak:\s+(-?[\d.]+) dBFS/)[1]) };
+}
+
+/** 音量を target（LUFS）にそろえ、ピークは -1 dBTP を超えないようにした WAV を作る。 */
+function master(file, target = -15) {
+	const before = loudness(file);
+	const out = file.replace(/\.wav$/, "-master.wav");
+	let gain = target - before.lufs;
+	let after = before;
+	// リミッターで少し下がるぶんを、測り直して詰める
+	for (let pass = 0; pass < 4; pass++) {
+		const chain = `lowshelf=f=140:g=-1.5,highshelf=f=6500:g=3,volume=${gain.toFixed(2)}dB,alimiter=limit=0.8:level=false:attack=2:release=80:asc=1,afade=t=in:d=0.02,afade=t=out:st=89.2:d=0.78,aresample=48000`;
+		ffmpeg(["-i", file, "-af", chain, "-c:a", "pcm_s24le", out]);
+		after = loudness(out);
+		if (Math.abs(target - after.lufs) < 0.15) break;
+		gain += target - after.lufs;
+	}
+	console.log(`master ${before.lufs} LUFS / ${before.peak} dBTP  →  ${after.lufs} LUFS / ${after.peak} dBTP`);
+	return out;
+}
+
 async function main() {
+	if (flag("audio")) {
+		const page = await openPage();
+		const stems = opt("stems", "").split(",").filter(Boolean);
+		if (!stems.length) master(await renderAudio(page, opt("out", path.join(outDir, "audio.wav"))));
+		for (const stem of stems) await renderAudio(page, path.join(outDir, `stem-${stem}.wav`), stem);
+		return;
+	}
+
 	if (flag("shot")) {
 		const dir = path.join(outDir, "shots");
 		fs.mkdirSync(dir, { recursive: true });
@@ -121,13 +168,8 @@ async function main() {
 	fs.mkdirSync(frames, { recursive: true });
 
 	let audio = null;
-	if (!flag("no-audio") && !partial) {
-		const t0 = Date.now();
-		const b64 = await probe.evaluate(() => window.__video.renderAudio());
-		audio = path.join(outDir, "audio.wav");
-		fs.writeFileSync(audio, Buffer.from(b64, "base64"));
-		console.log(`audio  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-	}
+	if (flag("reuse-audio")) audio = path.join(outDir, "audio-master.wav");
+	else if (!flag("no-audio") && !partial) audio = master(await renderAudio(probe, path.join(outDir, "audio.wav")));
 	await probe.close();
 
 	const started = Date.now();
@@ -157,13 +199,13 @@ async function main() {
 	const args = ["-framerate", String(fps), "-i", path.join(frames, "%06d.png")];
 	if (audio) args.push("-i", audio);
 	args.push(
-		"-vf", "scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos+accurate_rnd+full_chroma_int,format=yuv420p",
+		"-vf", `scale=${opt("size", "1920:1080")}:in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos+accurate_rnd+full_chroma_int,format=yuv420p`,
 		"-c:v", "libx264", "-preset", opt("preset", "slow"), "-crf", crf, "-tune", "animation",
 		"-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
 		"-movflags", "+faststart",
 	);
 	if (audio) args.push("-c:a", "aac", "-b:a", "256k", "-shortest");
-	args.push(out);
+	args.push("-metadata", "title=PiMate 紹介動画", out);
 	await new Promise((resolve, reject) => {
 		const p = spawn("ffmpeg", ["-hide_banner", "-loglevel", "error", "-stats", "-y", ...args], { stdio: "inherit" });
 		p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error("ffmpeg failed"))));
