@@ -1,0 +1,1071 @@
+/* スマホの筐体と、アプリの画面の部品。寸法は docs/design の画面モックに合わせる。 */
+
+.phone {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 414px;
+	height: 868px;
+	transform-origin: 0 0;
+}
+.phone-body {
+	position: absolute;
+	inset: 0;
+	border-radius: 58px;
+	background: #0b0d10;
+	box-shadow:
+		0 0 0 1.5px var(--phoneEdge),
+		0 2px 4px var(--shadow),
+		0 40px 80px -20px var(--shadow),
+		0 90px 140px -60px var(--shadow);
+}
+.phone-screen {
+	position: absolute;
+	left: 12px;
+	top: 12px;
+	width: 390px;
+	height: 844px;
+	border-radius: 46px;
+	overflow: hidden;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--f-ui);
+	font-size: 14px;
+	line-height: 1.5;
+	isolation: isolate;
+}
+.phone-cam {
+	position: absolute;
+	left: 50%;
+	top: 26px;
+	width: 13px;
+	height: 13px;
+	margin-left: -6.5px;
+	border-radius: 50%;
+	background: #0b0d10;
+	z-index: 30;
+}
+
+.statusbar {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 20;
+	height: 47px;
+	box-sizing: border-box;
+	padding: 6px 26px 0 30px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	color: var(--text);
+}
+.statusbar .time {
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: -0.1px;
+	font-variant-numeric: tabular-nums;
+}
+.statusbar .sys {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.statusbar svg {
+	fill: currentColor;
+	display: block;
+}
+
+.screen {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	padding-top: 47px;
+	box-sizing: border-box;
+}
+
+/* ---- ヘッダー ---- */
+.hd {
+	height: 52px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 6px;
+}
+.ib {
+	width: 44px;
+	height: 44px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text);
+}
+.ib.dim {
+	color: var(--text2);
+}
+.hd-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 22px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.hd-sub {
+	font-size: 11px;
+	line-height: 15px;
+	color: var(--text2);
+	font-weight: 400;
+}
+.hd-status {
+	flex-shrink: 0;
+	display: grid;
+	padding: 0 6px;
+	font-size: 12px;
+	color: var(--text2);
+	justify-items: end;
+}
+.hd-status > span {
+	grid-area: 1 / 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.st-wait {
+	color: var(--waitingText);
+	font-weight: 600;
+}
+.dot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+.dot.wait {
+	background: var(--waiting);
+}
+.dot.fail {
+	background: var(--failed);
+}
+.dot.done {
+	background: var(--done);
+}
+.dot.idle {
+	width: 5px;
+	height: 5px;
+	background: var(--text2);
+	opacity: 0.5;
+}
+.spin {
+	display: block;
+	flex-shrink: 0;
+	transform-origin: 50% 50%;
+}
+.spin .trk {
+	stroke: var(--surfaceStrong);
+}
+.spin .arc {
+	stroke: var(--text2);
+	stroke-linecap: round;
+}
+
+/* ---- 会話 ---- */
+.tr {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	padding: 0 20px 12px;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	font-size: 15px;
+	line-height: 22.5px;
+}
+.tr > * {
+	flex-shrink: 0;
+}
+.u {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 32px;
+}
+.u.first {
+	margin-top: 0;
+}
+.u > div {
+	max-width: 280px;
+	background: var(--selected);
+	border-radius: 18px;
+	padding: 10px 14px;
+}
+.sum {
+	align-self: flex-start;
+	margin-top: 10px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 0;
+	color: var(--text2);
+	font-size: 12px;
+	line-height: 18px;
+}
+.asst {
+	margin-top: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.asst p {
+	margin: 0;
+}
+.asst ul {
+	margin: 0;
+	padding-left: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+code,
+.mono {
+	font-family: var(--f-mono);
+}
+.asst code,
+.chip {
+	font-family: var(--f-mono);
+	font-size: 12.5px;
+	background: var(--surface);
+	border-radius: 5px;
+	padding: 1px 5px;
+}
+.meta {
+	margin-top: 6px;
+	font-size: 11px;
+	line-height: 16.5px;
+	color: var(--text2);
+}
+.tools {
+	margin-top: 12px;
+	display: flex;
+	flex-direction: column;
+}
+.tool {
+	height: 32px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	line-height: 18px;
+}
+.tool .mk {
+	width: 14px;
+	height: 14px;
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+}
+.tool .mk > * {
+	grid-area: 1 / 1;
+}
+.tool .mk .dot {
+	width: 6px;
+	height: 6px;
+}
+.tool .nm {
+	font-family: var(--f-mono);
+	font-weight: 600;
+}
+.tool .arg {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--f-mono);
+	color: var(--text2);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.tool .st {
+	font-size: 11px;
+	color: var(--text2);
+	font-variant-numeric: tabular-nums;
+}
+.add {
+	color: var(--addText);
+}
+.del {
+	color: var(--delText);
+}
+.tool .chev {
+	color: var(--text2);
+	flex-shrink: 0;
+}
+.out {
+	margin: 4px 0 0 22px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: var(--surface);
+	font-family: var(--f-mono);
+	font-size: 11px;
+	line-height: 18px;
+	color: var(--textCode);
+	white-space: pre;
+	overflow: hidden;
+}
+
+/* ---- Pi からの質問 ---- */
+.q {
+	margin-top: 24px;
+	padding: 16px 16px 12px;
+	border-radius: 16px;
+	background: var(--surface);
+	font-size: 14px;
+	line-height: 21px;
+}
+.q-lb {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	line-height: 18px;
+	font-weight: 600;
+	color: var(--waitingText);
+}
+.q-t {
+	margin-top: 8px;
+	font-weight: 600;
+}
+.q-opts {
+	margin-top: 4px;
+	display: flex;
+	flex-direction: column;
+}
+.q-opt {
+	min-height: 52px;
+	box-sizing: border-box;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 10px 0;
+}
+.radio {
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+	margin-top: 1px;
+	box-sizing: border-box;
+	border-radius: 50%;
+	border: 1.5px solid var(--text3);
+	position: relative;
+}
+.radio::after {
+	content: "";
+	position: absolute;
+	inset: -1.5px;
+	border-radius: 50%;
+	border: 5px solid var(--accent);
+	opacity: var(--on, 0);
+	transform: scale(calc(0.6 + 0.4 * var(--on, 0)));
+}
+.q-opt span span {
+	display: block;
+}
+.q-opt .d {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--text2);
+}
+.q-in {
+	margin-top: 6px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	padding: 0 14px;
+	border-radius: 12px;
+	background: var(--bg);
+	color: var(--text3);
+}
+.q-act {
+	margin-top: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+}
+.tb {
+	height: 40px;
+	display: flex;
+	align-items: center;
+	padding: 0 14px;
+	color: var(--text2);
+}
+.pb {
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 20px;
+	border-radius: 12px;
+	background: var(--accent);
+	color: var(--onAccent);
+	font-weight: 600;
+}
+.pb.big {
+	height: 48px;
+	font-size: 15px;
+}
+.q-done {
+	margin-top: 16px;
+	padding: 12px 16px;
+	border-radius: 16px;
+	background: var(--surface);
+	font-size: 13px;
+	line-height: 19.5px;
+	color: var(--text2);
+}
+.q-done b {
+	display: block;
+	color: var(--text);
+	font-size: 14px;
+	line-height: 21px;
+	font-weight: 600;
+}
+
+/* ---- 入力欄 ---- */
+.ft {
+	flex-shrink: 0;
+	padding: 6px 16px 30px;
+	background: var(--bg);
+}
+.queued {
+	height: 40px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 12px;
+	margin-bottom: 6px;
+}
+.queued .lb {
+	flex-shrink: 0;
+	font-size: 12px;
+	color: var(--text2);
+}
+.queued .tx {
+	flex: 1;
+	min-width: 0;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sub-row {
+	height: 40px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 12px;
+	margin-bottom: 6px;
+	font-size: 13px;
+}
+.sub-row b {
+	font-weight: 600;
+}
+.sub-row .ct {
+	flex: 1;
+	font-size: 12px;
+	color: var(--text2);
+}
+.comp {
+	padding: 12px 8px 6px 14px;
+	border-radius: 24px;
+	background: var(--surface);
+}
+.comp-in {
+	min-height: 22px;
+	font-size: 15px;
+	line-height: 22px;
+	display: grid;
+}
+.comp-in > * {
+	grid-area: 1 / 1;
+}
+.comp-in .ph {
+	color: var(--text2);
+}
+.caret {
+	display: inline-block;
+	width: 2px;
+	height: 18px;
+	margin-left: 1px;
+	vertical-align: -3px;
+	border-radius: 1px;
+	background: var(--accent);
+}
+.comp-row {
+	margin-top: 6px;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 36px;
+}
+.cb {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text2);
+}
+.cb.plus {
+	margin-left: -8px;
+}
+.cb.stop {
+	color: var(--text);
+}
+.model {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 0 6px;
+	color: var(--text2);
+	font-size: 13px;
+	white-space: nowrap;
+}
+.gauges {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 4px;
+}
+.ring {
+	position: relative;
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	color: var(--text2);
+}
+.ring > svg {
+	grid-area: 1 / 1;
+}
+.ring .trk {
+	stroke: var(--surfaceStrong);
+}
+.ring .val {
+	stroke: var(--text2);
+	stroke-linecap: round;
+}
+.send {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--surfaceStrong);
+	color: var(--text2);
+}
+.send.on {
+	background: var(--accent);
+	color: var(--onAccent);
+}
+.grow {
+	flex: 1;
+}
+
+/* ---- 変更の確認 ---- */
+.seg {
+	height: 36px;
+	box-sizing: border-box;
+	padding: 3px;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	border-radius: 10px;
+	background: var(--surfaceStrong);
+	position: relative;
+}
+.seg .pill {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	height: 30px;
+	width: calc(50% - 3px);
+	border-radius: 7px;
+	background: var(--bg);
+}
+.seg > span {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 13px;
+	color: var(--text2);
+}
+.seg > span.on {
+	color: var(--text);
+	font-weight: 600;
+}
+.rv {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	padding: 4px 20px 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.rv > * {
+	flex-shrink: 0;
+}
+.file {
+	height: 52px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.file .k {
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 5px;
+	background: var(--surface);
+	color: var(--text2);
+	font-size: 11px;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.file .k.a {
+	background: var(--addBg);
+	color: var(--addText);
+}
+.file .p {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--f-mono);
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.file .n {
+	font-family: var(--f-mono);
+	font-size: 11px;
+}
+.file .chev {
+	color: var(--text2);
+}
+.diff {
+	margin: 0 -20px 12px;
+	padding: 4px 0;
+	overflow: hidden;
+	font-family: var(--f-mono);
+	font-size: 11px;
+	line-height: 20px;
+}
+.diff .hunk {
+	padding: 0 20px;
+	color: var(--text2);
+	white-space: nowrap;
+}
+.dl {
+	display: flex;
+	white-space: pre;
+	color: var(--text);
+}
+.dl.plus {
+	background: var(--addBg);
+	color: var(--addText);
+}
+.dl.minus {
+	background: var(--delBg);
+	color: var(--delText);
+}
+.dl i {
+	font-style: normal;
+	flex-shrink: 0;
+	text-align: right;
+	color: var(--text3);
+}
+.dl i:nth-child(1) {
+	width: 34px;
+}
+.dl i:nth-child(2) {
+	width: 26px;
+}
+.dl b {
+	width: 14px;
+	flex-shrink: 0;
+	text-align: center;
+	font-weight: 400;
+}
+.dl span {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+.rv-ft {
+	flex-shrink: 0;
+	padding: 12px 20px 30px;
+}
+
+/* ---- Pi の一覧 ---- */
+.scrim {
+	position: absolute;
+	inset: 0;
+	background: var(--scrim);
+	z-index: 10;
+}
+.drawer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 11;
+	width: 330px;
+	height: 844px;
+	box-sizing: border-box;
+	padding: 47px 12px 26px;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+}
+.search {
+	margin: 6px 2px 0;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 14px;
+	border-radius: 12px;
+	background: var(--surface);
+	color: var(--text2);
+	font-size: 14px;
+}
+.dw-list {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	padding-top: 4px;
+}
+.dw-list > * {
+	flex-shrink: 0;
+}
+.grp {
+	margin-top: 22px;
+	padding: 0 12px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text2);
+}
+.grp.att {
+	color: var(--waitingText);
+}
+.grp > span:first-of-type {
+	flex: 1;
+}
+.grp .conn {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-weight: 400;
+	font-size: 11px;
+}
+.grp .conn .dot {
+	width: 6px;
+	height: 6px;
+}
+.inst {
+	margin-top: 2px;
+	min-height: 60px;
+	box-sizing: border-box;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	position: relative;
+}
+.inst .hl {
+	position: absolute;
+	inset: 0;
+	border-radius: 12px;
+	background: var(--selected);
+	opacity: 0;
+}
+.inst.sel .hl {
+	opacity: 1;
+}
+.inst > * {
+	position: relative;
+}
+.inst .mk {
+	width: 14px;
+	height: 21px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.inst .mk .dot {
+	width: 8px;
+	height: 8px;
+}
+.inst .mk .dot.idle {
+	width: 5px;
+	height: 5px;
+}
+.inst .bd {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.inst .t {
+	font-size: 14px;
+	line-height: 21px;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.inst.att .t {
+	font-weight: 600;
+}
+.inst .s {
+	margin-top: 1px;
+	font-size: 11px;
+	line-height: 17px;
+	color: var(--text2);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.inst .s.w {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--waitingText);
+}
+.inst .s.f {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--failedText);
+}
+.inst .tm {
+	flex-shrink: 0;
+	font-size: 11px;
+	line-height: 21px;
+	color: var(--text2);
+}
+.dw-ft {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 4px 0;
+}
+.newpi {
+	height: 44px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 18px 0 14px;
+	border-radius: 12px;
+	background: var(--accent);
+	color: var(--onAccent);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+/* ---- 新しい Pi ---- */
+.np {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	padding: 4px 20px 0;
+	display: flex;
+	flex-direction: column;
+}
+.np > * {
+	flex-shrink: 0;
+}
+.lbl {
+	font-size: 12px;
+	line-height: 18px;
+	font-weight: 600;
+	color: var(--text2);
+}
+.mrow {
+	height: 52px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 15px;
+}
+.mrow span:nth-child(2) {
+	flex: 1;
+}
+.mrow .ck {
+	color: var(--accent);
+	display: grid;
+}
+.mrow .ck > * {
+	grid-area: 1 / 1;
+}
+.fld {
+	margin-top: 8px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	padding: 0 0 0 14px;
+	border-radius: 12px;
+	background: var(--surface);
+	font-family: var(--f-mono);
+	font-size: 13px;
+}
+.fld span:first-child {
+	flex: 1;
+}
+.recent {
+	height: 44px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.recent .mono {
+	flex: 1;
+	font-size: 13px;
+}
+.recent .r {
+	font-size: 12px;
+	color: var(--text2);
+}
+.trust {
+	margin-top: 20px;
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+.trust > div {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+.trust .t1 {
+	font-size: 15px;
+	line-height: 22.5px;
+}
+.trust .t2 {
+	font-size: 12px;
+	line-height: 17px;
+	color: var(--text2);
+}
+.sw {
+	width: 51px;
+	height: 31px;
+	flex-shrink: 0;
+	padding: 2px;
+	box-sizing: border-box;
+	border-radius: 16px;
+	background: var(--accent);
+	display: flex;
+	justify-content: flex-end;
+}
+.sw i {
+	width: 27px;
+	height: 27px;
+	border-radius: 50%;
+	background: #fff;
+}
+.nav-row {
+	margin-top: 16px;
+	height: 52px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 15px;
+}
+.nav-row span:first-child {
+	flex: 1;
+}
+.nav-row .v {
+	font-size: 14px;
+	color: var(--text2);
+}
+.ta {
+	margin-top: 8px;
+	height: 72px;
+	box-sizing: border-box;
+	padding: 12px 14px;
+	border-radius: 18px;
+	background: var(--surface);
+	font-size: 15px;
+	line-height: 22px;
+	display: grid;
+	align-content: start;
+}
+.ta > * {
+	grid-area: 1 / 1;
+}
+.ta .ph {
+	color: var(--text2);
+}
+.np-ft {
+	flex-shrink: 0;
+	padding: 12px 20px 30px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.np-ft .hint {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--text2);
+	text-align: center;
+}
+
+/* ---- タップの印 ---- */
+.touch {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 44px;
+	height: 44px;
+	margin: -22px 0 0 -22px;
+	border-radius: 50%;
+	z-index: 40;
+	pointer-events: none;
+	opacity: 0;
+}
+.touch i {
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	background: rgba(27, 107, 145, 0.26);
+	box-shadow:
+		0 0 0 1.5px rgba(255, 255, 255, 0.75),
+		0 4px 14px rgba(20, 28, 43, 0.28);
+}
+.touch b {
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	border: 2px solid rgba(27, 107, 145, 0.55);
+	opacity: 0;
+}
