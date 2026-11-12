@@ -1,7 +1,7 @@
 // 全シーンの動き。時刻は秒、120 BPM（1 拍 0.5 秒・1 小節 2 秒）に合わせてある。
 import { cue, T } from "./cues.js";
 import { $, $$, closeNow, closeRow, ease, el, growIn, gsap, label, lerp, mmss, onFrame, openRow, prog, rng, stream, tl, toggle, typed } from "./engine.js";
-import { capIn, capOut, extraText, flash, H, linkDraw, linkShape, mount, packet, parts, pose, status, tap, theme, toolMark, W, wipe } from "./stage.js";
+import { capIn, capOut, extraText, flash, linkDraw, linkShape, mount, packet, parts, pose, status, tap, theme, toolMark, W, wipe } from "./stage.js";
 import { stage as SP } from "./tokens.js";
 
 export { extraText, mount };
@@ -736,6 +736,3 @@ function end() {
 
 	tl.to("#blackout", { opacity: 1, duration: 1.1, ease: "power2.inOut" }, T.total - 1.3);
 }
-
-// 未使用の値を参照（将来の調整用の寸法）
-void H;

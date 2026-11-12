@@ -6,6 +6,7 @@
 //   node render.mjs --sheet 0:30:2      0〜30 秒を 2 秒おきに並べた一覧を out/sheet.png に書き出す
 //   node render.mjs --from 14 --to 26   一部だけ書き出す（音声なし）
 //   node render.mjs --audio             音だけを out/audio.wav に書き出す（--stems pad,bass,… で系統ごと）
+//   node render.mjs --resume            途中で止まった撮影を続きから行う（--reuse-audio で音も使い回す）
 //
 // 主なオプション: --fps 60  --scale 2（撮影の倍率。2 倍で撮って縮小すると、輪郭と動きが滑らかになる）
 //   --size 1920:1080（出力の大きさ。--scale 2 --size 3840:2160 で 4K）  --workers 4  --crf 16  --out <file>  --no-audio
@@ -73,8 +74,13 @@ async function openPage(query = "") {
 	return page;
 }
 
-const shoot = (page, t, file) =>
-	page.evaluate((time) => window.__video.seek(time), t).then(() => page.screenshot({ path: file, type: "png" }));
+async function shoot(page, t, file) {
+	await page.evaluate((time) => window.__video.seek(time), t);
+	// 書きかけのファイルを残さないよう、別名で書いてから置き換える
+	const tmp = file.replace(/\.png$/, ".part.png");
+	await page.screenshot({ path: tmp, type: "png" });
+	fs.renameSync(tmp, file);
+}
 
 function ffmpeg(args, { quiet = true } = {}) {
 	const r = spawnSync("ffmpeg", ["-hide_banner", "-loglevel", quiet ? "error" : "info", "-y", ...args], { stdio: "inherit" });
@@ -164,8 +170,11 @@ async function main() {
 	const total = last - first;
 	const partial = from > 0 || to < duration;
 	const frames = path.join(outDir, "frames");
-	fs.rmSync(frames, { recursive: true, force: true });
+	// --resume: 途中で止まった撮影を、撮れているフレームを残して続きから行う
+	if (!flag("resume")) fs.rmSync(frames, { recursive: true, force: true });
 	fs.mkdirSync(frames, { recursive: true });
+	for (const f of fs.readdirSync(frames)) if (f.endsWith(".part.png")) fs.rmSync(path.join(frames, f));
+	const have = new Set(fs.readdirSync(frames));
 
 	let audio = null;
 	if (flag("reuse-audio")) audio = path.join(outDir, "audio-master.wav");
@@ -184,7 +193,8 @@ async function main() {
 				const b = Math.min(last, a + chunk);
 				next = b;
 				for (let f = a; f < b; f++) {
-					await shoot(page, f / fps, path.join(frames, `${String(f - first).padStart(6, "0")}.png`));
+					const name = `${String(f - first).padStart(6, "0")}.png`;
+					if (!have.has(name)) await shoot(page, f / fps, path.join(frames, name));
 					done++;
 				}
 				const el = (Date.now() - started) / 1000;

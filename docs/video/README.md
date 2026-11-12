@@ -37,7 +37,7 @@ Node.js 22.18 以降と ffmpeg が必要です。依存はこのフォルダだ�
 cd docs/video
 npm install --ignore-scripts
 npx playwright install chromium   # Chromium が未導入のときだけ
-npm run render                    # out/pimate-intro.mp4 を書き出す（2 倍で撮影して縮小。40 分ほどかかる）
+npm run render                    # out/pimate-intro.mp4 を書き出す（2 倍で撮影して縮小。4 コアで 30 分ほど）
 node render.mjs                   # 等倍で撮影する（15 分ほど。確認用）
 ```
 
@@ -49,15 +49,28 @@ node render.mjs --sheet 14:26:1        # 14〜26 秒を 1 秒おきに並べた�
 node render.mjs --from 14 --to 26      # 一部だけを動画にする（音声なし）
 node render.mjs --audio                # 音だけを書き出す（--stems pad,bass,drums,arp,melody,fx,sfx で系統ごと）
 node render.mjs --scale 2 --size 3840:2160   # 4K で書き出す
+node render.mjs --scale 2 --keep-frames --resume --reuse-audio   # 途中で止まった撮影を続きから行う
 ```
 
-生成物は `out/`（Git の管理外）に出ます。完成した動画を差し替えるときは、`out/pimate-intro.mp4` をこのフォルダへコピーして、ソースと一緒にコミットしてください。
+撮影したフレームを残しておけば（`--keep-frames`）、軽量版・静止画・4K 版をそこから作れます。
+
+```sh
+node tools/extras.mjs web            # out/pimate-intro-web.mp4（1280×720・30fps・10 MB 未満）
+node tools/extras.mjs poster 15.9    # out/poster.png（15.9 秒の 1 枚）
+node tools/extras.mjs uhd            # out/pimate-intro-4k.mp4（3840×2160・60fps）
+```
+
+生成物は `out/`（Git の管理外）に出ます。完成した動画を差し替えるときは、`out/` の `pimate-intro.mp4`・`pimate-intro-web.mp4`・`poster.png` をこのフォルダへコピーして、ソースと一緒にコミットしてください。
+
+音量は書き出し時に -15 LUFS へそろえ、ピークを抑えます（`render.mjs` の `master`）。
 
 ## ファイル構成
 
 | パス | 内容 |
 |---|---|
 | `render.mjs` | 撮影・音の書き出し・エンコードを行うスクリプト |
+| `tools/extras.mjs` | 撮影済みのフレームから、軽量版・静止画・4K 版を作るスクリプト |
+| `tools/gen-qr.mjs` | `src/js/qr.js` を作り直すスクリプト |
 | `src/index.html` | 舞台（1920×1080）の土台 |
 | `src/css/` | `base.css`（舞台・見出し・タイル）、`phone.css`（スマホとアプリの画面）、`term.css`（PC のターミナル） |
 | `src/js/cues.js` | 場面の開始時刻と、効果音の合図 |
