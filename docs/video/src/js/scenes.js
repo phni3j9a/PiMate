@@ -395,7 +395,8 @@ function resilient() {
 	cue("drop", drop);
 	tl.to("#link-line", { stroke: SP.light.coral, opacity: 0.8, duration: 0.2 }, drop);
 	ft("#link-x", { autoAlpha: 0, scale: 0.4 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, drop);
-	tl.to(phone, { x: PH_SIDE.x + 7, duration: 0.05, yoyo: true, repeat: 3, ease: "sine.inOut" }, drop);
+	// 小さく揺れて収まる（1 往復を 0.2 秒にして、30fps の軽量版でもちらつかないようにする）
+	tl.to(phone, { keyframes: { x: [8, -6, 4, -2, 0].map((d) => PH_SIDE.x + d), easeEach: "sine.inOut" }, duration: 0.5 }, drop);
 	status("B", "reconn", drop + 0.12);
 	tl.to("#trB", { opacity: 0.42, duration: 0.35 }, drop + 0.12);
 
@@ -479,7 +480,7 @@ function grok() {
 	ft(term, { x: 1940, y: G_TERM.y, scale: 1, autoAlpha: 1 }, { x: G_TERM.x, duration: 0.8, ease: "swift" }, spawn);
 	cue("whoosh", spawn);
 	cue("launch", spawn + 0.1, RIGHT);
-	linkShape(G_TERM.x - 10, lineY, G_CHAT.x + G_CHAT.w + 10, lineY);
+	linkShape(G_TERM.x - 10, lineY, G_CHAT.x + G_CHAT.w + 10, lineY, t0);
 	linkDraw(spawn + 0.6, { dur: 0.4 });
 	pill(1, spawn + 0.65);
 	openRow($("#g-b1"), spawn + 0.75, { dur: 0.36 });

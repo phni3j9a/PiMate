@@ -178,14 +178,35 @@ export function tap(target, at, { dx = 0, dy = 0, press = true, sound = true, ro
 const packets = [];
 let linkLen = 0;
 
-/** PC とスマホを結ぶ線の形を決める（x1,y1 が PC 側）。 */
-export function linkShape(x1, y1, x2, y2) {
+const shapes = [];
+let shapeNow = null;
+
+/**
+ * PC とスマホを結ぶ線の形を決める（x1,y1 が PC 側）。
+ * 線は 1 本を使い回している。場面によって形を変えるときは、その形を使い始める時刻を from に渡す。
+ */
+export function linkShape(x1, y1, x2, y2, from = 0) {
 	const dx = (x2 - x1) * 0.5;
-	const d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
-	for (const p of $$("#link path")) p.setAttribute("d", d);
-	linkLen = $("#link-line").getTotalLength();
-	$("#link-mask").setAttribute("stroke-dasharray", `${linkLen} ${linkLen}`);
-	return linkLen;
+	const shape = { from, d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`, len: 0 };
+	for (const p of $$("#link path")) p.setAttribute("d", shape.d);
+	shape.len = $("#link-line").getTotalLength();
+	shapes.push(shape);
+	setShape(shape);
+	return shape.len;
+}
+
+function setShape(shape) {
+	for (const p of $$("#link path")) p.setAttribute("d", shape.d);
+	$("#link-mask").setAttribute("stroke-dasharray", `${shape.len} ${shape.len}`);
+	linkLen = shape.len;
+	shapeNow = shape;
+}
+
+/** その時刻の形にする。どの時刻へ飛んでも同じ絵になるように、毎フレーム確かめる。 */
+function applyShape(t) {
+	let cur = shapes[0];
+	for (const sh of shapes) if (t >= sh.from) cur = sh;
+	if (cur && cur !== shapeNow) setShape(cur);
 }
 
 /** 線を PC 側から描く（reverse で消す）。 */
@@ -348,6 +369,7 @@ export function mount() {
 	});
 	onFrame(applyTheme);
 	onFrame(drawWipes);
+	onFrame(applyShape);
 	onFrame(drawPackets);
 	// 回転する印とカーソルの点滅は、時刻だけで決める。
 	const spins = $$(".spin");
