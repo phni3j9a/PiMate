@@ -15,8 +15,9 @@ const ft = (sel, from, to, at) => tl.fromTo(sel, from, { ...to, immediateRender:
 const TERM = { x: 128, y: 492 };
 const CAP_TOP = 116;
 const PH_SIDE = pose(1500, 540, 1.1);
+const PH_NEAR = pose(1470, 540, 1.24);
 // Grok Bot の場面: 左に会話、右に PC のターミナル
-const G_CHAT = { x: 128, y: 318, w: 520 };
+const G_CHAT = { x: 128, y: 368, w: 520 };
 const G_TERM = { x: 900, y: 398 };
 
 let phone;
@@ -265,6 +266,9 @@ function connect() {
 function launch() {
 	const t0 = T.launch;
 	capIn("c3", t0, { y: 318 });
+	// スマホに寄って、操作を読みやすくする（次の場面の前に戻す）
+	tl.to(phone, { ...PH_NEAR, duration: 0.9, ease: "glide" }, t0 - 0.1);
+	tl.to(phone, { ...PH_SIDE, duration: 0.8, ease: "glide" }, T.sync - 1.1);
 
 	// 左端から一覧を引き出す
 	const sw = el('<div class="touch"><i></i><b></b></div>');
@@ -324,7 +328,7 @@ function launch() {
 	toolMark("b-t2", "run", 0);
 	label($("#b-t2 [data-st]"), (t) => `${Math.min(14, Math.max(0, Math.floor((t - (go + 1.8)) * 4)))}秒`);
 
-	capOut("c3", T.sync - 0.75);
+	capOut("c3", T.sync - 1.05);
 }
 
 /* ================= 03. PC と同期 ================= */

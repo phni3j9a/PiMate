@@ -288,7 +288,7 @@ const grokHTML = `
 		<div class="gc-u" id="g-u1"><div>週次レポートを作って</div></div>
 		<div class="gc-b" id="g-b1"><div>dev-laptop で Pi を起動しました。</div></div>
 		<div class="gc-q" id="g-q"><div class="gc-card"><div class="lb"><i></i>Pi からの質問</div><div class="qt">どの期間をまとめますか？</div><div class="ops"><span id="g-o1">先週</span><span id="g-o2">今月</span></div></div></div>
-		<div class="gc-b" id="g-b2"><div>終わりました。<code>reports/weekly.md</code> にまとめました。</div></div>
+		<div class="gc-b" id="g-b2"><div>終わりました。<br><code>reports/weekly.md</code> にまとめました。</div></div>
 	</div>
 	<div class="gc-ft"><span>メッセージ</span><i>${ic.send}</i></div>
 </div>
