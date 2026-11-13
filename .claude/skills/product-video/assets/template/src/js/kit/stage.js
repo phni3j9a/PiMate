@@ -394,7 +394,11 @@ export function connector(id) {
 
 /* ---------------- 通知 ---------------- */
 
-/** スマホの通知を置く。 notification("n1", { title: "…", body: "…" }) → tl.fromTo("#n1", { y: -240 }, { y: 40, … }, at) で落とす。 */
+/**
+ * スマホの通知を置く。
+ * notification("n1", { title: "…", body: "…" });  set("#n1", { x: 650, y: 40 });
+ * tl.in("#n1", { y: -280 }, at, { duration: 0.6, ease: "settle" });  cue("notify", at);   // 上から落ちてくる
+ */
 export function notification(id, { app = brand.name, title, body = "", when = "今" }) {
 	const node = el(`<div class="notif" id="${id}"><div class="notif-hd"><span class="notif-ic">${brand.logo.mono ?? ""}</span><span>${app}</span><span>·</span><span>${when}</span></div><div class="notif-t">${title}</div>${body ? `<div class="notif-b">${body}</div>` : ""}</div>`);
 	$("#world").appendChild(node);

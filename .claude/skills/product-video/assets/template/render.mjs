@@ -29,6 +29,8 @@ const opt = (name, fallback) => {
 	return i < 0 ? fallback : argv[i + 1];
 };
 const flag = (name) => argv.includes(`--${name}`);
+/** 使い方の誤りなど、説明だけ出して止めたいとき。 */
+class Stop extends Error {}
 
 const fps = Number(opt("fps", 60));
 const scale = Number(opt("scale", 1));
@@ -245,15 +247,23 @@ async function main() {
 	const total = last - first;
 	const partial = from > 0 || to < duration;
 	const frames = path.join(outDir, partial ? "frames-part" : "frames");
+	// 撮影の条件を控えておく（続きから撮るときの食い違いを防ぐ。tools/extras.mjs もここから fps を読む）
+	const metaFile = path.join(outDir, "frames.json");
 	// --resume: 途中で止まった撮影を、撮れているフレームを残して続きから行う
-	if (!flag("resume") || partial) fs.rmSync(frames, { recursive: true, force: true });
+	if (flag("resume") && !partial) {
+		const old = fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, "utf8")) : null;
+		if (old && (old.fps !== fps || old.scale !== scale)) throw new Stop(`撮影済みのフレームは --fps ${old.fps} --scale ${old.scale} で撮られています。同じ指定で --resume するか、--resume を外して最初から撮り直してください`);
+	} else fs.rmSync(frames, { recursive: true, force: true });
 	fs.mkdirSync(frames, { recursive: true });
+	if (!partial) fs.writeFileSync(metaFile, JSON.stringify({ fps, scale }));
 	for (const f of fs.readdirSync(frames)) if (f.endsWith(".part.png")) fs.rmSync(path.join(frames, f));
 	const have = new Set(fs.readdirSync(frames));
 
 	let audio = null;
-	if (flag("reuse-audio")) audio = path.join(outDir, "audio-master.wav");
-	else if (!flag("no-audio") && !partial) audio = master(await renderAudio(probe, path.join(outDir, "audio.wav")), duration);
+	const mastered = path.join(outDir, "audio-master.wav");
+	if (partial || flag("no-audio")) audio = null;
+	else if (flag("reuse-audio") && fs.existsSync(mastered)) audio = mastered;
+	else audio = master(await renderAudio(probe, path.join(outDir, "audio.wav")), duration);
 	await probe.close();
 
 	const started = Date.now();
@@ -302,6 +312,9 @@ async function main() {
 
 try {
 	await main();
+} catch (e) {
+	console.error(e instanceof Stop ? e.message : e);
+	process.exitCode = 1;
 } finally {
 	await browser.close();
 	server.close();

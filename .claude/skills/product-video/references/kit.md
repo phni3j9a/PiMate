@@ -206,7 +206,8 @@ endCard(T.end);                 // 左上のロゴが中央へ戻り、T.end で
 ```js
 const grid = tiles("more", { cols: 3, w: 540, h: 330, y: 440, items: [{ title: "通知", tag: "NOTIFICATIONS", body: `<div …>`, foot: "ひとこと" }, …] });
 const at = tilesIn(grid, t0 + 0.5, 0.5);     // 0.5 秒（1 拍）おきに 1 枚ずつ。at(i) は i 枚めが出る時刻
-tl.to($$(".row", grid.items[0]), { opacity: 1, x: 0, stagger: 0.18 }, at(0) + 0.2);   // 中身も少し動かす
+set($$(".row", grid.items[0]), { opacity: 0, x: 30 });                                 // 中身も少し動かす（最初の状態を set で決めてから）
+tl.to($$(".row", grid.items[0]), { opacity: 1, x: 0, stagger: 0.18 }, at(0) + 0.2);
 tilesOut(grid, T.end - 0.75);
 ```
 
