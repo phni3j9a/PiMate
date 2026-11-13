@@ -171,7 +171,10 @@ function add(kind, targets, from, to, at, extra = {}) {
 	};
 	const a = from ? split(from) : null;
 	const b = to ? split(to) : null;
-	nodes(targets).forEach((node, i) => {
+	const list = nodes(targets);
+	// $() が何も見つけられなかった（null）ときに、黙って何も起きないのを防ぐ
+	if (!list.length && typeof targets !== "string") console.warn(`[kit] 動かす対象が空です（${at} 秒の ${JSON.stringify(to ?? from)}）。$() のセレクターを確かめてください`);
+	list.forEach((node, i) => {
 		specs.push({ kind, node, from: a, to: b, start: at + (opts.stagger ?? 0) * i, opts, order: order++, ...extra });
 	});
 }

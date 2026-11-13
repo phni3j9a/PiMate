@@ -129,7 +129,8 @@ export function capIn(id, at, { x, y } = {}) {
 export function capOut(id, at, { dur = 0.4 } = {}) {
 	const c = caps[id];
 	tl.to(c.lines, { yPercent: -112, duration: dur, ease: "in3", stagger: 0.04 }, at);
-	tl.to([c.meta, c.en].filter(Boolean), { opacity: 0, duration: dur * 0.8, ease: "in2" }, at);
+	const extras = [c.meta, c.en].filter(Boolean);
+	if (extras.length) tl.to(extras, { opacity: 0, duration: dur * 0.8, ease: "in2" }, at);
 	tl.hide(c.node, at + dur + 0.1);
 }
 
@@ -571,10 +572,13 @@ export function endCard(at, { cy = 370 } = {}) {
 	tl.fromTo($$("#logo-tag > *"), { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.7, ease: "swift", stagger: 0.3 }, at + 0.5);
 	set("#end-url", { y: cy + 402 });
 	tl.in("#end-url", { y: 20 }, at + 1.5, { duration: 0.6 });
-	set("#end-meta", { y: cy + 488 });
-	tl.show("#end-meta", at + 1.9);
-	set("#end-meta span", { opacity: 0, y: 14 });
-	tl.to("#end-meta span", { opacity: 1, y: 0, duration: 0.45, stagger: 0.08 }, at + 1.9);
+	const metas = $$("#end-meta span");
+	if (metas.length) {
+		set("#end-meta", { y: cy + 488 });
+		tl.show("#end-meta", at + 1.9);
+		set(metas, { opacity: 0, y: 14 });
+		tl.to(metas, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08 }, at + 1.9);
+	}
 	tl.to("#fine", { opacity: 1, duration: 0.6 }, at + 2.4);
 	cue("tag", at + 0.5);
 }
