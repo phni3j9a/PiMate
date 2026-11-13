@@ -1,6 +1,7 @@
 // 音楽と効果音を OfflineAudioContext で合成する。素材は使わず、発振器とノイズだけで作る。
-// 曲は 120 BPM・ニ長調。効果音はシーンが積んだ合図（cues）の時刻で鳴らす。
-import { BAR, BEAT, cues } from "./cues.js";
+// 曲は 120 BPM・ニ長調。cues.js の「区間の並び」（music.sections）から編曲する。
+// 効果音はシーンが積んだ合図（cues）の時刻で鳴らす。
+import { BAR, BEAT, cues, music } from "./cues.js";
 import { rng } from "./engine.js";
 
 const SR = 48000;
@@ -9,49 +10,24 @@ const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
 // コンプレッサーの先読みぶん（2 段で約 12 ms）を、書き出すときに前へ詰める
 const LATENCY = 0.012;
 
-/* ---------------- 和音と構成 ---------------- */
+/* ---------------- 和音（ニ長調） ---------------- */
 
 const CH = {
-	G: { bass: 43, pad: [59, 62, 66, 69], arp: [71, 74, 78, 81, 83] },
-	A: { bass: 45, pad: [61, 64, 66, 71], arp: [69, 73, 76, 78, 83] },
-	Bm: { bass: 47, pad: [57, 62, 66, 69], arp: [71, 74, 78, 81, 86] },
-	Df: { bass: 42, pad: [57, 62, 64, 69], arp: [69, 74, 76, 78, 81] },
-	Em: { bass: 40, pad: [55, 59, 62, 66], arp: [67, 71, 74, 78, 83] },
-	Ac: { bass: 37, pad: [57, 61, 64, 69], arp: [69, 73, 76, 81, 85] },
-	D: { bass: 38, pad: [57, 62, 64, 66, 69], arp: [69, 74, 76, 78, 81] },
+	IV: { bass: 43, pad: [59, 62, 66, 69], arp: [71, 74, 78, 81, 83] },
+	V: { bass: 45, pad: [61, 64, 66, 71], arp: [69, 73, 76, 78, 83] },
+	vi: { bass: 47, pad: [57, 62, 66, 69], arp: [71, 74, 78, 81, 86] },
+	I3: { bass: 42, pad: [57, 62, 64, 69], arp: [69, 74, 76, 78, 81] },
+	ii: { bass: 40, pad: [55, 59, 62, 66], arp: [67, 71, 74, 78, 83] },
+	V3: { bass: 37, pad: [57, 61, 64, 69], arp: [69, 73, 76, 81, 85] },
+	I: { bass: 38, pad: [57, 62, 64, 66, 69], arp: [69, 74, 76, 78, 81] },
 };
-
-/** [開始, 終了, 和音] */
-const CHORDS = [
-	[8, 12, "G"], [12, 14, "A"],
-	[14, 18, "G"], [18, 22, "A"], [22, 26, "Bm"], [26, 30, "Df"],
-	[30, 34, "G"], [34, 38, "A"], [38, 42, "Bm"], [42, 46, "Df"],
-	[46, 50, "G"], [50, 54, "A"], [54, 56, "Bm"], [56, 58, "Ac"],
-	[58, 60, "G"], [60, 62, "A"], [62, 64, "Bm"], [64, 66, "Df"],
-	[66, 70, "Em"], [70, 72, "A"],
-	[72, 74, "G"], [74, 76, "Df"], [76, 77, "Em"], [77, 78, "A"],
-	[78, 80, "G"], [80, 82, "A"], [82, 83, "Bm"], [83, 84, "Ac"],
-	[84, 90, "D"],
-];
-const chordAt = (t) => CH[(CHORDS.find(([a, b]) => t >= a - 1e-6 && t < b - 1e-6) ?? CHORDS[0])[2]];
-
-/** 旋律（ベル）。[時刻, MIDI, 長さ] */
-const MELODY = [];
-{
-	const phrase = {
-		G: [[0, 78, 1.5], [1.5, 81, 1], [3, 83, 3]],
-		A: [[0, 81, 2], [2.5, 76, 1], [4, 78, 3]],
-		Bm: [[0, 86, 1.5], [1.5, 83, 1], [3, 81, 2], [5, 78, 2]],
-		Df: [[0, 76, 2], [2, 78, 1], [3, 81, 4]],
-	};
-	for (const [a, , name] of CHORDS) {
-		if (a < 30 || a >= 54 || !phrase[name]) continue;
-		for (const [beat, m, len] of phrase[name]) MELODY.push([a + beat * BEAT, m, len * BEAT]);
-	}
-	// 静かな場面と、最後のひとふし
-	MELODY.push([72, 78, 1], [73, 81, 1], [76, 79, 0.5], [76.5, 78, 0.5], [77, 76, 1]);
-	MELODY.push([84, 81, 0.5], [84.5, 78, 0.5], [85, 74, 1], [86, 76, 0.5], [86.5, 78, 0.5], [87, 81, 1], [88, 86, 2]);
-}
+// 旋律（ベル）。和音ごとの 2 小節のひとふし: [拍, MIDI, 拍数]
+const PHRASE = {
+	IV: [[0, 78, 1.5], [1.5, 81, 1], [3, 83, 3]],
+	V: [[0, 81, 2], [2.5, 76, 1], [4, 78, 3]],
+	vi: [[0, 86, 1.5], [1.5, 83, 1], [3, 81, 2], [5, 78, 2]],
+	I3: [[0, 76, 2], [2, 78, 1], [3, 81, 4]],
+};
 
 /* ---------------- 部品 ---------------- */
 
@@ -354,152 +330,211 @@ class Synth {
 	}
 }
 
-/* ---------------- 曲 ---------------- */
+/* ---------------- 編曲 ---------------- */
 
-function music(s) {
-	const { ctx } = s;
+const CYCLE = ["IV", "V", "vi", "I3"];
+
+/** 区間の並びから、小節ごとの和音を決める。 */
+function harmony(plan) {
+	const bars = [];
+	let g = 0;
+	let prev = "";
+	for (const sec of plan.sections) {
+		const a = Math.round(sec.from / BAR);
+		const n = Math.round(sec.to / BAR) - a;
+		if (sec.type === "groove" && prev !== "groove") g = 0;
+		for (let k = 0; k < n; k++) {
+			let name = "I";
+			if (sec.type === "intro") name = "vi";
+			else if (sec.type === "reveal") name = k < Math.ceil((n * 2) / 3) ? "IV" : "V";
+			else if (sec.type === "groove") name = CYCLE[Math.floor(g++ / 2) % 4];
+			else if (sec.type === "peak") name = CYCLE[k % 4];
+			else if (sec.type === "calm") name = ["IV", "I3", "ii", "V"][k % 4];
+			else if (sec.type === "build") name = ["V3", "vi", "V", "IV"][(n - 1 - k) % 4];
+			bars[a + k] = name;
+		}
+		prev = sec.type;
+	}
+	return bars;
+}
+
+// パッドの明るさ（ローパスの周波数）: 区間の頭 → 終わり
+const BRIGHT = { intro: [520, 1350], reveal: [2750, 1900], groove: [2100, 2700], peak: [3500, 2800], calm: [1900, 2250], build: [2250, 4250], outro: [3500, 1750] };
+const HIT = { reveal: 1, peak: 0.75, outro: 1.05 };
+
+function compose(s, plan) {
+	const secs = plan.sections;
+	const end = secs[secs.length - 1].to;
+	const bars = harmony(plan);
+	const nameAt = (t) => bars[Math.min(bars.length - 1, Math.floor(t / BAR + 1e-6))];
+	const secAt = (t) => secs.find((x) => t >= x.from - 1e-6 && t < x.to - 1e-6);
+
+	// パッドの明るさと、和音
 	const pf = s.padFilter.frequency;
-	// パッドの明るさ：冒頭は暗く、進むにつれて開く
-	pf.setValueAtTime(500, 0);
-	pf.linearRampToValueAtTime(1400, 6.4);
-	pf.linearRampToValueAtTime(900, 7.9);
-	pf.setValueAtTime(2750, 8);
-	pf.linearRampToValueAtTime(1900, 14);
-	pf.linearRampToValueAtTime(2400, 30);
-	pf.linearRampToValueAtTime(2900, 46);
-	pf.linearRampToValueAtTime(2500, 56);
-	pf.linearRampToValueAtTime(4500, 58);
-	pf.setValueAtTime(3500, 58);
-	pf.linearRampToValueAtTime(2750, 66);
-	pf.linearRampToValueAtTime(1900, 72);
-	pf.linearRampToValueAtTime(2250, 78);
-	pf.linearRampToValueAtTime(4250, 84);
-	pf.setValueAtTime(3500, 84);
-	pf.linearRampToValueAtTime(1750, 90);
-
+	pf.setValueAtTime(BRIGHT[secs[0].type][0], 0);
+	for (const sec of secs) {
+		const [a, b] = BRIGHT[sec.type];
+		pf.setValueAtTime(a, sec.from);
+		pf.linearRampToValueAtTime(b, sec.to - 0.02);
+	}
 	if (s.on("pad")) {
-		// 冒頭：ロ短調の暗い和音と低い持続音
-		s.pad(0.4, 7.45, [59, 61, 62, 66], { gain: 0.022, attack: 2.6, release: 0.35 });
-		s.pad(0.2, 7.6, [35, 47], { gain: 0.028, attack: 1.8, release: 0.3 });
-		for (const [a, b, name] of CHORDS) {
-			const final = name === "D";
-			s.pad(a, b - a - (final ? 1.6 : 0.05), CH[name].pad, { gain: a < 14 ? 0.022 : a >= 72 && a < 78 ? 0.024 : 0.019, attack: a === 8 || final ? 0.06 : 0.35, release: final ? 2.4 : 0.9 });
+		for (const sec of secs) {
+			const len = sec.to - sec.from;
+			if (sec.type === "intro") {
+				// 暗い和音（短調に 9 度を足した濁り）と、低い持続音
+				s.pad(sec.from + 0.4, len - 0.95, [59, 61, 62, 66], { gain: 0.022, attack: Math.min(2.6, len * 0.4), release: 0.35 });
+				s.pad(sec.from + 0.2, len - 0.6, [35, 47], { gain: 0.028, attack: Math.min(1.8, len * 0.3), release: 0.3 });
+				continue;
+			}
+			for (let t = sec.from; t < sec.to - 1e-6; ) {
+				const name = nameAt(t);
+				let u = t + BAR;
+				while (u < sec.to - 1e-6 && nameAt(u) === name) u += BAR;
+				const first = t === sec.from && (sec.hit || sec.type === "outro");
+				const final = sec.type === "outro";
+				s.pad(t, u - t - (final ? 1.6 : 0.05), CH[name].pad, { gain: sec.type === "reveal" ? 0.022 : sec.type === "calm" ? 0.024 : 0.019, attack: first ? 0.06 : 0.35, release: final ? 2.4 : 0.9 });
+				if (s.on("bass") && sec.type === "reveal") s.bass(t, CH[name].bass, u - t - 0.2, 0.072);
+				t = u;
+			}
 		}
 	}
 
-	// 低い持続音（ロゴの場面と最後）
-	if (s.on("bass")) {
-		s.bass(8, 43, 3.8, 0.072);
-		s.bass(12, 45, 1.8, 0.072);
-		s.bass(84, 38, 3.6, 0.08);
-		s.bass(88, 38, 1.4, 0.068);
+	const wave = [0, 2, 1, 3, 2, 4, 3, 1];
+	for (let k = 0; k * STEP < end - 1e-6; k++) {
+		const t = k * STEP;
+		const i = k % 16;
+		const bar = Math.floor(k / 16);
+		const sec = secAt(t);
+		if (!sec) continue;
+		const type = sec.type;
+		const len = sec.to - sec.from;
+		const p = (t - sec.from) / len;
+		const ch = CH[nameAt(t)];
+		const lastBar = t >= sec.to - BAR - 1e-6;
+		const tail = type === "outro" && t >= sec.to - 2 - 1e-6;
+		const pan = ((i % 4) - 1.5) * 0.18;
+
+		if (s.on("drums")) {
+			if (type === "groove") {
+				if (i === 0 || i === 6 || i === 8 || (i === 14 && bar % 2 === 1)) s.kick(t, i === 0 ? 0.42 : 0.35);
+				if (i === 4 || i === 12) s.rim(t, 0.105);
+				if (i % 2 === 0) s.hat(t, { gain: i % 4 === 2 ? 0.075 : 0.044 });
+				if (sec.melody && i === 14 && bar % 4 === 3) s.hat(t, { gain: 0.055, open: true });
+			} else if (type === "peak") {
+				if (i % 4 === 0) s.kick(t, 0.42);
+				if (i === 4 || i === 12) s.clap(t, 0.12);
+				if (i % 4 === 2) s.hat(t, { gain: 0.064, open: true });
+				s.hat(t, { gain: i % 2 ? 0.024 : 0.036, pan: -0.2 });
+			} else if (type === "build") {
+				if (i % 4 === 0) s.kick(t, 0.3 + 0.12 * p);
+				if (i % 2 === 0) s.hat(t, { gain: 0.036 + 0.034 * p });
+				if (p >= 0.33 && (i === 4 || i === 12)) s.rim(t, 0.1);
+			} else if (type === "outro" && !tail && len >= 4) {
+				if (i === 0 || i === 8) s.kick(t, 0.36);
+				if (i % 2 === 0) s.hat(t, { gain: i % 4 === 2 ? 0.06 : 0.034 });
+				if (i === 4 || i === 12) s.rim(t, 0.09);
+			} else if (type === "reveal" && lastBar) {
+				if (i % 2 === 0) s.hat(t, { gain: 0.022 + 0.034 * (i / 16) });
+			} else if (type === "calm" && lastBar) {
+				if (i % 4 === 2) s.hat(t, { gain: 0.036 });
+			}
+		}
+
+		if (s.on("bass")) {
+			if (type === "groove") {
+				if (i === 0) s.bass(t, ch.bass, 0.62, 0.088);
+				if (i === 6) s.bass(t, ch.bass, 0.2, 0.076);
+				if (i === 8) s.bass(t, ch.bass, 0.45, 0.084);
+				if (i === 14 && bar % 2 === 1) s.bass(t, ch.bass + 12, 0.16, 0.064);
+			} else if (type === "peak" || type === "build") {
+				if (i % 4 === 0) s.bass(t, ch.bass, 0.2, 0.084);
+				if (i % 4 === 2) s.bass(t, ch.bass + 12, 0.14, 0.056);
+			} else if (type === "outro") {
+				if (t === sec.from) s.bass(t, ch.bass, Math.max(1, Math.min(3.6, len - 2.4)), 0.08);
+				if (Math.abs(t - (sec.to - 2)) < 1e-6) s.bass(t, ch.bass, 1.4, 0.068);
+				if (!tail && len >= 4 && (i === 0 || i === 8)) s.bass(t, ch.bass, 0.5, 0.076);
+			} else if (type === "calm" && i === 0) s.bass(t, ch.bass, BAR - 0.3, 0.064);
+		}
+
+		if (s.on("arp")) {
+			if (type === "reveal") {
+				const a = sec.from + len / 3;
+				const q = (t - a) / (sec.to - a);
+				if (q >= 0 && i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: 0.065 + 0.065 * q, bright: 0.7 + 0.3 * q, pan });
+			} else if (type === "groove") {
+				if (i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: sec.melody ? 0.15 : 0.13, bright: sec.melody ? 1 : 0.85, pan });
+			} else if (type === "peak") s.pluck(t, ch.arp[[0, 1, 2, 3, 4, 3, 2, 1][i % 8]], { gain: i % 2 ? 0.09 : 0.14, dur: 0.22, bright: 1.25, pan });
+			else if (type === "calm") {
+				if (i % 4 === 0) s.pluck(t, ch.arp[wave[i / 4]], { gain: 0.12, dur: 0.5, bright: 0.8, pan, delay: 0.7 });
+			} else if (type === "build") {
+				if (lastBar || i % 2 === 0) s.pluck(t, ch.arp[wave[(lastBar ? i : i / 2) % 8]], { gain: 0.11 + 0.05 * p, dur: 0.26, bright: 0.9 + 0.5 * p, pan });
+			} else if (type === "outro" && !tail && i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: 0.145 * (1 - p), bright: 1.1, pan });
+		}
 	}
 
-	const groove = (t) => (t >= 14 && t < 56) || (t >= 66 && t < 72);
-	const montage = (t) => t >= 58 && t < 66;
-	const build = (t) => t >= 78 && t < 84;
-	const outro = (t) => t >= 84 && t < 88;
-
-	for (let bar = 0; bar * BAR < 90; bar++) {
-		const b0 = bar * BAR;
-		for (let i = 0; i < 16; i++) {
-			const t = b0 + i * STEP;
-			const ch = chordAt(t);
-
-			/* 打楽器 */
-			if (s.on("drums")) {
-				if (groove(t)) {
-					if (i === 0 || i === 6 || i === 8 || (i === 14 && bar % 2 === 1)) s.kick(t, i === 0 ? 0.42 : 0.35);
-					if (i === 4 || i === 12) s.rim(t, 0.105);
-					if (i % 2 === 0) s.hat(t, { gain: i % 4 === 2 ? 0.075 : 0.044 });
-					if (t >= 30 && i === 14 && bar % 4 === 3) s.hat(t, { gain: 0.055, open: true });
-				} else if (montage(t)) {
-					if (i % 4 === 0) s.kick(t, 0.42);
-					if (i === 4 || i === 12) s.clap(t, 0.12);
-					if (i % 4 === 2) s.hat(t, { gain: 0.064, open: true });
-					s.hat(t, { gain: i % 2 ? 0.024 : 0.036, pan: -0.2 });
-				} else if (build(t)) {
-					if (i % 4 === 0) s.kick(t, 0.3 + 0.12 * ((t - 78) / 6));
-					if (i % 2 === 0) s.hat(t, { gain: 0.036 + 0.034 * ((t - 78) / 6) });
-					if (t >= 80 && (i === 4 || i === 12)) s.rim(t, 0.1);
-				} else if (outro(t)) {
-					if (i === 0 || i === 8) s.kick(t, 0.36);
-					if (i % 2 === 0) s.hat(t, { gain: i % 4 === 2 ? 0.06 : 0.034 });
-					if (i === 4 || i === 12) s.rim(t, 0.09);
-				} else if (t >= 12 && t < 14) {
-					if (i % 2 === 0) s.hat(t, { gain: 0.022 + 0.034 * ((t - 12) / 2) });
-				} else if (t >= 76 && t < 78) {
-					if (i % 4 === 2) s.hat(t, { gain: 0.036 });
+	if (s.on("melody")) {
+		const bell = (t, m, beats, gain = 0.15) => s.bell(s.music, t, m, { gain, dur: Math.max(0.9, beats * BEAT * 1.3), pan: 0.1, send: 0.5, verb: s.verbIn });
+		for (const sec of secs) {
+			if (sec.type === "groove" && sec.melody) {
+				for (let t = sec.from; t < sec.to - 1e-6; ) {
+					const name = nameAt(t);
+					let u = t + BAR;
+					while (u < sec.to - 1e-6 && nameAt(u) === name && u - t < 2 * BAR - 1e-6) u += BAR;
+					for (const [beat, m, beats] of PHRASE[name] ?? []) if (t + beat * BEAT < u - 1e-6) bell(t + beat * BEAT, m, beats);
+					t = u;
 				}
-			}
-
-			/* ベース */
-			if (s.on("bass")) {
-				if (groove(t)) {
-					if (i === 0) s.bass(t, ch.bass, 0.62, 0.088);
-					if (i === 6) s.bass(t, ch.bass, 0.2, 0.076);
-					if (i === 8) s.bass(t, ch.bass, 0.45, 0.084);
-					if (i === 14 && bar % 2 === 1) s.bass(t, ch.bass + 12, 0.16, 0.064);
-				} else if (montage(t) || build(t)) {
-					if (i % 4 === 0) s.bass(t, ch.bass, 0.2, 0.084);
-					if (i % 4 === 2) s.bass(t, ch.bass + 12, 0.14, 0.056);
-				} else if (outro(t)) {
-					if (i === 0 || i === 8) s.bass(t, ch.bass, 0.5, 0.076);
-				} else if (t >= 72 && t < 78 && i === 0) s.bass(t, ch.bass, 1.7, 0.064);
-			}
-
-			/* アルペジオ */
-			if (s.on("arp")) {
-				const wave = [0, 2, 1, 3, 2, 4, 3, 1];
-				const pan = ((i % 4) - 1.5) * 0.18;
-				if (t >= 10 && t < 14 && i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: 0.065 + 0.065 * ((t - 10) / 4), bright: 0.7 + 0.3 * ((t - 10) / 4), pan });
-				else if (groove(t) && i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: t < 30 ? 0.13 : 0.15, bright: t < 30 ? 0.85 : 1, pan });
-				else if (montage(t)) s.pluck(t, ch.arp[[0, 1, 2, 3, 4, 3, 2, 1][i % 8]] + (i >= 8 ? 0 : 0), { gain: i % 2 ? 0.09 : 0.14, dur: 0.22, bright: 1.25, pan });
-				else if (t >= 72 && t < 78 && i % 4 === 0) s.pluck(t, ch.arp[wave[i / 4]], { gain: 0.12, dur: 0.5, bright: 0.8, pan, delay: 0.7 });
-				else if (build(t) && (t >= 82 ? true : i % 2 === 0)) s.pluck(t, ch.arp[wave[(t >= 82 ? i : i / 2) % 8]], { gain: 0.11 + 0.05 * ((t - 78) / 6), dur: 0.26, bright: 0.9 + 0.5 * ((t - 78) / 6), pan });
-				else if (outro(t) && i % 2 === 0) s.pluck(t, ch.arp[wave[i / 2]], { gain: 0.145 * (1 - (t - 84) / 6), bright: 1.1, pan });
+			} else if (sec.type === "calm") {
+				for (let t = sec.from; t < sec.to - 1e-6; t += BAR) bell(t, CH[nameAt(t)].arp[2], 2, 0.13);
+			} else if (sec.type === "outro") {
+				if (sec.to - sec.from >= 5) for (const [beat, m] of [[0, 81], [1, 78], [2, 74], [4, 76], [5, 78], [6, 81]]) if (sec.from + beat * BEAT < sec.to - 2.2) bell(sec.from + beat * BEAT, m, 1, 0.16);
+				bell(sec.to - 2, 86, 4, 0.16);
 			}
 		}
 	}
-
-	if (s.on("melody")) for (const [t, m, len] of MELODY) s.bell(s.music, t, m, { gain: t >= 84 ? 0.16 : 0.15, dur: Math.max(0.9, len * 1.3), pan: 0.1, send: 0.5, verb: s.verbIn });
 
 	if (s.on("fx")) {
-		// 冒頭の脈（1 拍ごとの低い鼓動）
-		for (let t = 2; t < 6.4; t += BEAT) s.tone(s.sfx, t, { f: 62, f1: 44, dur: 0.24, gain: 0.15, attack: 0.004 });
-		// 場面の頭へ向かう上昇音
 		const riser = (t0, t1, gain) => {
 			s.hiss(s.sfx, t0, { dur: t1 - t0, gain, type: "bandpass", f: 400, f1: 7000, q: 1.3, shape: 0.985, send: 0.3 });
-			s.hiss(s.sfx, t1 - 0.9, { dur: 0.9, gain: gain * 0.9, type: "highpass", f: 5200, shape: 0.99 });
+			s.hiss(s.sfx, Math.max(t0, t1 - 0.9), { dur: Math.min(0.9, t1 - t0), gain: gain * 0.9, type: "highpass", f: 5200, shape: 0.99 });
 		};
-		riser(5.8, 8, 0.07);
-		riser(56, 58, 0.075);
-		riser(82, 84, 0.085);
 		// 細かい連打で盛り上げる
 		const roll = (t0, t1) => {
 			for (let t = t0; t < t1 - 1e-6; t += t > t1 - 0.5 ? STEP / 2 : STEP) s.hiss(s.music, t, { dur: 0.05, gain: 0.02 + 0.065 * ((t - t0) / (t1 - t0)) ** 2, type: "bandpass", f: 2100, q: 1.4 });
 		};
-		roll(56, 57.45);
-		roll(82.5, 84);
-		roll(13.5, 14);
-		// 場面の頭の一撃
-		s.impact(8, 1);
-		s.impact(58, 0.75);
-		s.impact(84, 1.05);
-		s.hiss(s.sfx, 14, { dur: 0.6, gain: 0.05, type: "highpass", f: 6500, send: 0.5 });
-		s.hiss(s.sfx, 72, { dur: 0.9, gain: 0.05, type: "highpass", f: 6500, send: 0.6 });
-		// 最後の和音
-		for (const [m, pan] of [[62, -0.3], [69, 0.3], [74, 0], [78, 0.2]]) s.bell(s.sfx, 84, m, { gain: 0.1, dur: 2.6, pan, send: 0.6 });
-		for (const [m, pan] of [[62, -0.3], [69, 0.3], [78, 0]]) s.bell(s.sfx, 88, m, { gain: 0.085, dur: 2.2, pan, send: 0.7 });
+		secs.forEach((sec, n) => {
+			const prev = secs[n - 1];
+			const next = secs[n + 1];
+			if (sec.type === "intro") for (let t = sec.from + BAR; t < sec.to - 1.6; t += BEAT) s.tone(s.sfx, t, { f: 62, f1: 44, dur: 0.24, gain: 0.15, attack: 0.004 });
+			if (sec.hit && prev) {
+				riser(Math.max(prev.from, sec.from - 2.2), sec.from, 0.075);
+				s.impact(sec.from, HIT[sec.type] ?? 0.7);
+				if (sec.type === "peak" && prev.type !== "build") roll(Math.max(prev.from, sec.from - 2), sec.from - 0.5);
+			} else if (prev && (sec.type === "groove" || sec.type === "calm")) s.hiss(s.sfx, sec.from, { dur: 0.7, gain: 0.05, type: "highpass", f: 6500, send: 0.5 });
+			if (sec.type === "build") roll(Math.max(sec.from, sec.to - 1.5), sec.to);
+			if (sec.type === "reveal" && next?.type === "groove") roll(sec.to - 0.5, sec.to);
+			if (sec.type === "outro") {
+				for (const [m, pan] of [[62, -0.3], [69, 0.3], [74, 0], [78, 0.2]]) s.bell(s.sfx, sec.from, m, { gain: 0.1, dur: 2.6, pan, send: 0.6 });
+				for (const [m, pan] of [[62, -0.3], [69, 0.3], [78, 0]]) s.bell(s.sfx, sec.to - 2, m, { gain: 0.085, dur: 2.2, pan, send: 0.7 });
+			}
+		});
 	}
 
-	// 曲全体の音量の流れ
+	// 終わりに向けて曲を絞る
 	const mg = s.music.gain;
 	mg.setValueAtTime(0.9, 0);
-	mg.setValueAtTime(0.9, 86.5);
-	mg.linearRampToValueAtTime(0.75, 88);
-	mg.linearRampToValueAtTime(0.0, 89.75);
-	void ctx;
+	mg.setValueAtTime(0.9, Math.max(0, end - 3.5));
+	mg.linearRampToValueAtTime(0.75, end - 2);
+	mg.linearRampToValueAtTime(0, end - 0.25);
+
+	// こもらせる区間（通信が切れる場面など）
+	for (const [a, b] of plan.muffle ?? []) {
+		const f = s.muffle.frequency;
+		f.setValueAtTime(20000, a);
+		f.exponentialRampToValueAtTime(420, a + 0.3);
+		f.setValueAtTime(420, b - 0.05);
+		f.exponentialRampToValueAtTime(20000, b + 0.4);
+	}
+	return end;
 }
 
 /* ---------------- 効果音 ---------------- */
@@ -516,18 +551,18 @@ function effects(s) {
 		const t = c.t;
 		switch (c.type) {
 			case "row": // PC のターミナルに 1 行出る
-				s.tone(x, t, { f: mtof(62), dur: 0.07, gain: c.far ? 0.035 : 0.05, pan: LEFT, type: "triangle" });
-				s.hiss(x, t, { dur: 0.02, gain: 0.02, f: 3000, pan: LEFT });
+				s.tone(x, t, { f: mtof(62), dur: 0.07, gain: c.far ? 0.035 : 0.05, pan: c.pan ?? LEFT, type: "triangle" });
+				s.hiss(x, t, { dur: 0.02, gain: 0.02, f: 3000, pan: c.pan ?? LEFT });
 				break;
 			case "rowPhone": // スマホに 1 行出る
-				s.tone(x, t, { f: mtof(81), dur: 0.09, gain: 0.04, pan: RIGHT, send: 0.2 });
+				s.tone(x, t, { f: mtof(81), dur: 0.09, gain: 0.04, pan: c.pan ?? RIGHT, send: 0.2 });
 				break;
 			case "blip":
 				s.tone(x, t, { f: mtof(86), dur: 0.08, gain: 0.03, pan: RIGHT * c.dir });
 				break;
 			case "tap":
-				s.tone(x, t, { f: 210, f1: 120, dur: 0.05, gain: 0.09, pan: RIGHT * 0.6 });
-				s.hiss(x, t, { dur: 0.012, gain: 0.05, type: "highpass", f: 3000, pan: RIGHT * 0.6 });
+				s.tone(x, t, { f: 210, f1: 120, dur: 0.05, gain: 0.09, pan: c.pan ?? RIGHT * 0.6 });
+				s.hiss(x, t, { dur: 0.012, gain: 0.05, type: "highpass", f: 3000, pan: c.pan ?? RIGHT * 0.6 });
 				break;
 			case "type": {
 				const n = c.n;
@@ -543,11 +578,11 @@ function effects(s) {
 				s.tone(x, t, { f: 160, f1: 110, dur: 0.05, gain: 0.08, pan: LEFT });
 				break;
 			case "send":
-				s.tone(x, t, { f: 520, f1: 1040, dur: 0.11, gain: 0.07, pan: RIGHT * 0.6, send: 0.3 });
+				s.tone(x, t, { f: 520, f1: 1040, dur: 0.11, gain: 0.07, pan: c.pan ?? RIGHT * 0.6, send: 0.3 });
 				break;
 			case "ask": // 質問が出る（解決しない上行）
-				s.bell(x, t, 78, { gain: 0.06, dur: 0.9, pan: LEFT * 0.4 });
-				s.bell(x, t + 0.13, 83, { gain: 0.06, dur: 1.3, pan: LEFT * 0.4 });
+				s.bell(x, t, 78, { gain: 0.06, dur: 0.9, pan: c.pan ?? LEFT * 0.4 });
+				s.bell(x, t + 0.13, 83, { gain: 0.06, dur: 1.3, pan: c.pan ?? LEFT * 0.4 });
 				break;
 			case "timelapse": {
 				// 時計の刻みが速くなっていく
@@ -592,15 +627,15 @@ function effects(s) {
 				s.bell(x, t + 0.08, 90, { gain: 0.045, dur: 1.8, send: 0.7, pan: 0.3 });
 				break;
 			case "answer":
-				s.bell(x, t, 81, { gain: 0.09, dur: 0.7, pan: RIGHT * 0.6 });
-				s.bell(x, t + 0.09, 86, { gain: 0.1, dur: 1.1, pan: RIGHT * 0.6 });
+				s.bell(x, t, 81, { gain: 0.09, dur: 0.7, pan: c.pan ?? RIGHT * 0.6 });
+				s.bell(x, t + 0.09, 86, { gain: 0.1, dur: 1.1, pan: c.pan ?? RIGHT * 0.6 });
 				break;
 			case "stream":
 				for (let tt = t; tt < t + c.dur; tt += 0.034) s.hiss(x, tt, { dur: 0.01, gain: 0.012 + r() * 0.008, f: 4200, q: 3, pan: RIGHT * 0.6 });
 				break;
 			case "done":
-				s.bell(x, t, 81, { gain: 0.07, dur: 1, pan: RIGHT * 0.5 });
-				s.bell(x, t + 0.1, 85, { gain: 0.07, dur: 1.3, pan: RIGHT * 0.5 });
+				s.bell(x, t, 81, { gain: 0.07, dur: 1, pan: c.pan ?? RIGHT * 0.5 });
+				s.bell(x, t + 0.1, 85, { gain: 0.07, dur: 1.3, pan: c.pan ?? RIGHT * 0.5 });
 				break;
 			case "cascade": // 差分の行が順に出る（音階を上る）
 				for (let i = 0; i < c.n; i++) s.tone(x, t + i * c.step, { f: mtof(PENTA[i % PENTA.length] - 12), dur: 0.08, gain: 0.03, pan: RIGHT * 0.6, send: 0.3 });
@@ -617,8 +652,8 @@ function effects(s) {
 				s.tone(x, t, { f: 300, f1: 620, dur: 0.07, gain: 0.05 });
 				break;
 			case "launch":
-				s.tone(x, t, { f: 330, f1: 1320, dur: 0.3, gain: 0.06, pan: RIGHT * 0.6, send: 0.4 });
-				s.bell(x, t + 0.22, 85, { gain: 0.09, dur: 1.2, pan: RIGHT * 0.6 });
+				s.tone(x, t, { f: 330, f1: 1320, dur: 0.3, gain: 0.06, pan: c.pan ?? RIGHT * 0.6, send: 0.4 });
+				s.bell(x, t + 0.22, 85, { gain: 0.09, dur: 1.2, pan: c.pan ?? RIGHT * 0.6 });
 				break;
 			case "attach": // PC 側でつながる
 				s.bell(x, t, 74, { gain: 0.09, dur: 0.8, pan: LEFT });
@@ -702,7 +737,7 @@ export async function render(duration, only) {
 	const skip = Math.round(LATENCY * SR);
 	const ctx = new OfflineAudioContext(2, Math.ceil(duration * SR) + skip, SR);
 	const s = new Synth(ctx, duration, only);
-	music(s);
+	compose(s, music);
 	effects(s);
 	muffle(s);
 	const buf = await ctx.startRendering();

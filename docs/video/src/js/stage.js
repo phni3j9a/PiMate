@@ -11,19 +11,17 @@ export const H = 1080;
 /* ---------------- 見出し ---------------- */
 
 const CAPS = {
-	c1: { cls: "center", size: "sm", lines: ["Pi が、あなたの返事を待っている。", "でも、あなたは席にいない。"], en: "YOUR AGENT NEEDS AN ANSWER. YOU'RE AWAY FROM YOUR DESK." },
-	c3a: { no: "01", tag: "SAME PI", lines: ["PC の Pi を、", "そのままスマホで。"], en: "THE SAME PI, NOW ON YOUR PHONE." },
-	c3b: { no: "01", tag: "SAME PI", lines: ["画面の転送ではなく、", "スマホのための UI。"], en: "NOT A TERMINAL MIRROR. A REAL MOBILE UI." },
-	c4: { no: "02", tag: "STEER", size: "xl", lines: ["作業中でも、", "その場で割り込む。"], en: "STEER IT WHILE IT WORKS." },
-	c5: { no: "03", tag: "REVIEW", size: "xl", lines: ["変更は、", "差分で確かめる。"], en: "REVIEW EVERY CHANGE AS A DIFF." },
-	c6: { no: "04", tag: "FLEET", lines: ["複数の PC、複数の Pi を、", "ひとつの一覧に。"], en: "EVERY MACHINE. EVERY PI. ONE LIST." },
-	c7: { no: "05", tag: "HANDOFF", lines: ["スマホで始めて、", "PC で続ける。"], en: "START ON YOUR PHONE. PICK IT UP ON YOUR PC." },
-	c8: { no: "06", tag: "TOOLKIT", size: "sm", lines: ["必要なものは、ぜんぶ手の中に。"], en: "EVERYTHING ELSE YOU NEED, BUILT IN." },
-	c9: { no: "07", tag: "RESILIENT", lines: ["切れても、", "Pi は止まらない。"], en: "CONNECTIONS DROP. YOUR PI KEEPS WORKING." },
-	c10: { no: "08", tag: "PRIVATE", cls: "center", size: "sm", lines: ['Pi はそのまま。<i class="sp"></i>データは PC のまま。'], en: "NO FORK. NO CLOUD RELAY. YOUR DATA STAYS ON YOUR PC." },
-	c11: { no: "09", tag: "SETUP", cls: "center", size: "sm", lines: ["はじめるのは、3 ステップ。"], en: "UP AND RUNNING IN THREE STEPS." },
+	c1: { cls: "center", size: "sm", lines: ["Pi が、あなたの返事を待っている。"], en: "YOUR AGENT NEEDS AN ANSWER. YOU'RE AWAY FROM YOUR DESK." },
+	c2: { no: "01", tag: "CONNECT", lines: ["PC の Pi に、", "スマホからつながる。"], en: "CONNECT TO THE PI RUNNING ON YOUR PC." },
+	c3: { no: "02", tag: "LAUNCH", lines: ["新しい Pi を、", "スマホから起動。"], en: "START A NEW PI FROM YOUR PHONE." },
+	c4: { no: "03", tag: "SYNC", lines: ["PC とスマホは、", "いつも同期。"], en: "YOUR PC AND PHONE, ALWAYS IN SYNC." },
+	c5: { no: "04", tag: "RESILIENT", lines: ["切れても、", "Pi は止まらない。"], en: "CONNECTIONS DROP. YOUR PI KEEPS WORKING." },
+	c6a: { no: "05", tag: "GROK BOT", cls: "center", size: "sm", lines: ["Grok Bot に頼めば、PC の Pi が動く。"], en: "ASK GROK BOT. PI RUNS ON YOUR PC." },
+	c6b: { no: "05", tag: "GROK BOT", cls: "center", size: "sm", lines: ["Pi の質問も完了も、会話に届く。"], en: "QUESTIONS AND RESULTS COME BACK TO THE CHAT." },
+	c7: { no: "06", tag: "TOOLKIT", size: "sm", lines: ["必要なものは、ぜんぶ手の中に。"], en: "EVERYTHING ELSE YOU NEED, BUILT IN." },
+	c8: { no: "07", tag: "SETUP", cls: "center", size: "sm", lines: ["はじめるのは、3 ステップ。"], en: "UP AND RUNNING IN THREE STEPS." },
 };
-export const CHAPTERS = 9;
+export const CHAPTERS = 7;
 
 function capHTML(id, c) {
 	const meta = c.no ? `<div class="cap-meta"><span class="no">${c.no}</span><i class="bar"></i><span>${c.tag}</span></div>` : "";
@@ -153,8 +151,7 @@ export function flash(node, at, { color = "77,154,191", peak = 0.28, dur = 0.9 }
 /* ---------------- タップ ---------------- */
 
 /** target の中央をタップする印を出す。位置はその時刻の配置から求める。 */
-export function tap(target, at, { dx = 0, dy = 0, press = true, sound = true } = {}) {
-	const root = $("#pscreen");
+export function tap(target, at, { dx = 0, dy = 0, press = true, sound = true, root = $("#pscreen") } = {}) {
 	const dot = el('<div class="touch"><i></i><b></b></div>');
 	root.appendChild(dot);
 	const a = at - 0.24;
@@ -276,25 +273,29 @@ const tilesHTML = `
 		<div class="cmds"><span>/new</span><span>/resume</span><span>/tree</span><span>/fork</span><span>/compact</span></div>
 		<div class="im-cap">分岐・圧縮・ツリーも、PC の Pi と同じセッションで</div>
 	</div></div>
-	<div class="tile"><div class="tile-h"><b>ライトとダーク</b><span>THEMES</span></div><div class="tile-b">
-		<div class="th"><div class="th-l"><i></i><b></b><b></b></div><div class="th-d" id="th-d"><i></i><b></b><b></b></div></div>
-		<div class="im-cap">テーマと文字サイズは、設定からすぐ切り替え</div>
+	<div class="tile"><div class="tile-h"><b>変更の確認</b><span>REVIEW</span></div><div class="tile-b">
+		<div class="tdiff"><div class="tdf"><em>M</em><span>src/auth/LoginForm.tsx</span><i class="p">+24</i><i class="m">−3</i></div>
+			<div class="tdl m"><b>−</b>&lt;PasswordField /&gt;</div><div class="tdl p"><b>+</b>&lt;EmailField /&gt;</div><div class="tdl p"><b>+</b>&lt;SendLinkButton /&gt;</div></div>
+		<div class="im-cap">ターンごとの差分を見て、そのまま Pi に依頼</div>
 	</div></div>
 </div>`;
 
-const diagramHTML = `
-<div id="dia" class="abs">
-	<div id="dia-net" class="abs"><span id="dia-lb">${ic.shield(22)}Tailscale の中だけで通信</span></div>
-	<svg id="dia-link" class="abs" width="1920" height="1080"><path d="M830,560 L1090,560"/></svg>
-	<div class="node" id="dia-pc" style="width:360px;height:250px">${ic.laptop(64)}<b>あなたの PC</b><span>Pi + PiMate Host</span></div>
-	<div class="node" id="dia-ph" style="width:360px;height:250px">${ic.phone(64)}<b>あなたのスマホ</b><span>PiMate アプリ</span></div>
-	<i class="dia-pk" id="dia-pk1"></i><i class="dia-pk" id="dia-pk2"></i>
+// Grok Bot との会話（05 の場面）。xAI の画面の再現ではなく、会話の流れを示すための簡単なパネル。
+const grokHTML = `
+<div id="gchat">
+	<div class="gc-hd"><span class="gc-av">${markMono("#fff")}</span><div><b>PiMate</b><span>Grok Bot</span></div></div>
+	<div class="gc-body">
+		<div class="gc-u" id="g-u1"><div>週次レポートを作って</div></div>
+		<div class="gc-b" id="g-b1"><div>dev-laptop で Pi を起動しました。</div></div>
+		<div class="gc-q" id="g-q"><div class="gc-card"><div class="lb"><i></i>Pi からの質問</div><div class="qt">どの期間をまとめますか？</div><div class="ops"><span id="g-o1">先週</span><span id="g-o2">今月</span></div></div></div>
+		<div class="gc-b" id="g-b2"><div>終わりました。<code>reports/weekly.md</code> にまとめました。</div></div>
+	</div>
+	<div class="gc-ft"><span>メッセージ</span><i>${ic.send}</i></div>
 </div>
-<div class="checks" id="checks">
-	<div class="check">${ic.check(26, 2.6)}Pi 本体は改造なし</div>
-	<div class="check">${ic.check(26, 2.6)}履歴・設定・認証は PC のまま</div>
-	<div class="check">${ic.check(26, 2.6)}インターネットに公開しない</div>
-</div>`;
+<div class="gpill" id="gp1">${ic.check(18, 2.8)}Pi を起動</div>
+<div class="gpill" id="gp2">${ic.check(18, 2.8)}質問を会話へ</div>
+<div class="gpill" id="gp3">${ic.check(18, 2.8)}回答を Pi へ</div>
+<div class="gpill" id="gp4">${ic.check(18, 2.8)}完了を報告</div>`;
 
 const stepsHTML = `
 <div class="step" id="step1"><span class="n" style="background:var(--blue)">1</span><div class="t">PC に PiMate を入れる</div><div class="e">INSTALL</div>
@@ -306,7 +307,7 @@ const stepsHTML = `
 <div id="setup-note">はじめに、PC とスマホを<b>同じアカウントの Tailscale</b> につないでおきます</div>`;
 
 export const extraText =
-	"テストは vitest に合わせて トップページを速くして pimate attach pimate-4f2a91c0 ~/work/site pi install npm:@phni3j9a/pimate /pimate setup このターンの変更（src/auth/LoginForm.tsx ほか 2 ファイル）について： Pi にメッセージ 0123456789:%秒";
+	"トップページを速くして pimate attach pimate-4f2a91c0 ~/work/site pi install npm:@phni3j9a/pimate /pimate setup 上の質問に回答すると入力できます Pi にメッセージ 入力待ち 完了 dev-laptop — bash pi — ~/work/web pi — ~/work/site pi — ~/work/reports 0123456789:%秒";
 
 export function mount() {
 	const world = $("#world");
@@ -318,15 +319,7 @@ export function mount() {
 		<svg id="link-x" class="abs" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20"/><path d="M15 15l14 14M29 15L15 29"/></svg>`,
 	);
 	for (const [id, c] of Object.entries(CAPS)) world.insertAdjacentHTML("beforeend", capHTML(id, c));
-	world.insertAdjacentHTML(
-		"beforeend",
-		`<div class="notif" id="notif"><div class="notif-hd"><span class="notif-ic">${markMono("#fff")}</span><span>PiMate</span><span>·</span><span>今</span></div><div class="notif-t">Pi が入力を待っています</div><div class="notif-b">ログイン画面の改修 · dev-laptop</div></div>`,
-	);
-	world.insertAdjacentHTML("beforeend", tilesHTML + diagramHTML + stepsHTML);
-	world.insertAdjacentHTML(
-		"beforeend",
-		`<ul class="pts" id="pts6"><li><i class="dot" style="background:var(--yellow)"></i><i class="dot" style="background:var(--coral)"></i>入力待ち・失敗は、いちばん上に。</li><li><i class="dot" style="background:var(--blue)"></i>PC ごとにまとまり、フォルダもひと目で。</li></ul>`,
-	);
+	world.insertAdjacentHTML("beforeend", tilesHTML + stepsHTML + grokHTML);
 
 	$("#wipe").innerHTML = Array.from({ length: COLS * ROWS }, (_, i) => `<i style="left:${(i % COLS) * 120}px;top:${Math.floor(i / COLS) * 120}px"></i>`).join("");
 

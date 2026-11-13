@@ -162,55 +162,6 @@ const chatA = `
 	${composer("A", { placeholder: "上の質問に回答すると入力できます" })}
 </div>`;
 
-const dl = (k, a, b, text) =>
-	`<div class="dl ${k === "+" ? "plus" : k === "-" ? "minus" : ""}"><i>${a}</i><i>${b}</i><b>${k === " " ? "" : k}</b><span>${text}</span></div>`;
-
-const review = `
-<div class="screen" id="review">
-	<div class="hd" style="padding: 0 2px 0 6px">
-		<span class="ib">${ic.back}</span>
-		<div class="hd-title" style="line-height:20px">変更<div class="hd-sub" id="rv-sub">ログイン画面の改修 · 3 ファイル</div></div>
-		<span class="mono" style="font-size:12px"><span class="add" id="rv-add">+97</span> <span class="del" id="rv-del">−3</span></span>
-		<span class="ib dim">${ic.copy}</span>
-	</div>
-	<div style="flex-shrink:0;padding:4px 20px 12px">
-		<div class="seg" id="rv-seg"><i class="pill"></i><span class="on">このターン</span><span>セッション全体</span></div>
-	</div>
-	<div class="rv" id="rv-list">
-		<div class="file" id="rv-f1"><span class="k">M</span><span class="p">src/auth/LoginForm.tsx</span><span class="n"><span class="add">+24</span> <span class="del">−3</span></span><span class="chev">${ic.up(16)}</span></div>
-		<div class="diff" id="rv-diff">
-			<div class="hunk">@@ -12,6 +12,13 @@ export function LoginForm</div>
-			${dl("-", 12, "", `  const [pass, setPass] = useState("");`)}
-			${dl("+", "", 12, `  const [sent, setSent] = useState(false);`)}
-			${dl("+", "", 13, "")}
-			${dl("+", "", 14, "  async function sendLink() {")}
-			${dl("+", "", 15, "    await requestMagicLink(email);")}
-			${dl("+", "", 16, "    setSent(true);")}
-			${dl("+", "", 17, "  }")}
-			${dl(" ", 13, 18, "")}
-			${dl(" ", 14, 19, "  return (")}
-			${dl("-", 15, "", "    &lt;PasswordField value={pass} /&gt;")}
-			${dl("+", "", 20, "    &lt;EmailField value={email} /&gt;")}
-			${dl("+", "", 21, "    &lt;SendLinkButton onPress={sendLink} /&gt;")}
-		</div>
-		<div class="file" id="rv-f2"><span class="k a">A</span><span class="p">src/api/magic-link.ts</span><span class="n"><span class="add">+41</span></span><span class="chev">${ic.down(16)}</span></div>
-		<div class="diff" id="rv-diff2">
-			<div class="hunk">@@ -0,0 +1,41 @@</div>
-			${dl("+", "", 1, `import { createToken } from "./session";`)}
-			${dl("+", "", 2, `import { sendMail } from "./mail";`)}
-			${dl("+", "", 3, "")}
-			${dl("+", "", 4, "export async function requestMagicLink(")}
-			${dl("+", "", 5, "  email: string,")}
-			${dl("+", "", 6, ") {")}
-			${dl("+", "", 7, "  const token = await createToken(email);")}
-			${dl("+", "", 8, "  await sendMail(email, linkFor(token));")}
-			${dl("+", "", 9, "}")}
-		</div>
-		<div class="file"><span class="k a">A</span><span class="p">src/auth/magic-link.test.ts</span><span class="n"><span class="add">+32</span></span><span class="chev">${ic.down(16)}</span></div>
-	</div>
-	<div class="rv-ft"><div class="pb big" id="rv-ask">この変更について依頼</div></div>
-</div>`;
-
 const inst = ({ id = "", cls = "", mk, t, s, sCls = "", tm }) => `
 <div class="inst ${cls}" ${id ? `id="${id}"` : ""}>
 	<i class="hl"></i>
@@ -277,6 +228,7 @@ const chatB = `
 			${tool({ id: "b-t2", name: "bash", arg: "npm run build", st: "14秒" })}
 			${tool({ id: "b-t3", name: "read", arg: "components/Hero.tsx", st: "86 行" })}
 			${tool({ id: "b-t4", name: "edit", arg: "components/Hero.tsx", add: 9, del: 14 })}
+			${tool({ id: "b-t4b", name: "read", arg: "app/layout.tsx", st: "42 行" })}
 			${tool({ id: "b-t5", name: "edit", arg: "app/page.tsx", add: 12, del: 4 })}
 			${tool({ id: "b-t6", name: "write", arg: "app/loading.tsx", add: 18 })}
 			${tool({ id: "b-t7", name: "edit", arg: "next.config.ts", add: 3 })}
@@ -292,7 +244,6 @@ export function phoneHTML() {
 	<div class="phone-body"></div>
 	<div class="phone-screen" id="pscreen">
 		${chatA}
-		${review}
 		${drawer}
 		${newpi}
 		${chatB}
@@ -354,6 +305,7 @@ const tvB = `
 		${tTool("tb-2", "bash", "npm run build")}
 		${tTool("tb-3", "read", "components/Hero.tsx")}
 		${tTool("tb-4", "edit", "components/Hero.tsx", '<em><span class="p">+9</span> <span class="m">−14</span></em>')}
+		${tTool("tb-4b", "read", "app/layout.tsx")}
 		${tTool("tb-5", "edit", "app/page.tsx", '<em><span class="p">+12</span> <span class="m">−4</span></em>')}
 		${tTool("tb-6", "write", "app/loading.tsx", '<em><span class="p">+18</span></em>')}
 		${tTool("tb-7", "edit", "next.config.ts", '<em><span class="p">+3</span></em>')}
@@ -364,10 +316,33 @@ const tvB = `
 	${tuiFoot("~/work/site (main)", "claude-opus-5-5 · high")}
 </div>`;
 
+const tvG = `
+<div class="term-view" id="tvG">
+	${tuiHead}
+	<div class="t-scroll" id="tsG">
+		<div class="t-user" id="tg-u">週次レポートを作って</div>
+		${tTool("tg-1", "read", "docs/weekly-template.md")}
+		${tTool("tg-2", "bash", "git log --oneline -20")}
+		<div class="t-ask" id="tg-ask">
+			<div class="tt">どの期間をまとめますか？</div>
+			<div class="op on"><i>❯</i>先週</div>
+			<div class="op"><i></i>今月</div>
+			<div class="ask-ft"><span>↑↓ 選択 · Enter 決定</span><b>入力待ち</b></div>
+		</div>
+		<div class="t-text t-dim" id="tg-ans">どの期間をまとめますか？ → <span style="color:#f2f4f7">先週</span></div>
+		${tTool("tg-3", "bash", 'git log --since="1 week ago"')}
+		${tTool("tg-4", "write", "reports/weekly.md", '<em><span class="p">+48</span></em>')}
+		<div class="t-text" id="tg-done">先週分を reports/weekly.md にまとめました。</div>
+		<div class="t-work" id="tg-work"><span class="t-spin"></span><span>Working…</span></div>
+	</div>
+	${tuiEdit("G")}
+	${tuiFoot("~/work/reports (main)", "claude-opus-5-5 · high")}
+</div>`;
+
 export function termHTML() {
 	return `
 <div class="term" id="term">
 	<div class="term-bar"><i></i><i></i><i></i><span class="term-title" id="term-title">pi — ~/work/web</span></div>
-	<div class="term-body">${tvA}${tvShell}${tvB}</div>
+	<div class="term-body">${tvA}${tvShell}${tvB}${tvG}</div>
 </div>`;
 }
