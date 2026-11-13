@@ -47,7 +47,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 	};
 
 	return (
-		<View style={[styles.root, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }]}>
+		<View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 16 }]}>
 			<View style={styles.searchRow}>
 				<View style={styles.search}>
 					<SearchIcon />

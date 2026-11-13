@@ -165,8 +165,8 @@ export const radii = {
 	sheet: 16,
 	/** Code / tool output block. */
 	code: 10,
-	/** 主ボタン・1行の入力欄・コマンド表示: rounded rectangle (no capsules, Tokens.dc.html). */
-	control: 12,
+	/** 主ボタン・1行の入力欄・コマンド表示: capsule — single-line elements only (Tokens.dc.html). */
+	control: 9999,
 	/** Round icon buttons only (equal width and height, e.g. send, jump to latest). */
 	capsule: 9999,
 } as const;
