@@ -94,7 +94,7 @@ node render.mjs --audio      # out/audio.wav と、音量をそろえた out/aud
 表示される 2 行を読む。
 
 ```
-audio  out/audio.wav  15.4s  peak -0.2 dBFS
+audio  out/audio.wav  長さ 30.0 秒（合成に 15.4 秒）  peak -0.2 dBFS
 master -16.9 LUFS / -1 dBTP  →  -15.1 LUFS / -1.2 dBTP
 ```
 

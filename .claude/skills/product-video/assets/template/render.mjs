@@ -32,6 +32,36 @@ const flag = (name) => argv.includes(`--${name}`);
 /** 使い方の誤りなど、説明だけ出して止めたいとき。 */
 class Stop extends Error {}
 
+const USAGE = `使い方: node render.mjs [オプション]
+
+  確認用（速い）
+    --shot 3.5,12,40          その時刻（秒）の静止画を out/shots/ に書き出す
+    --sheet 0:30:2            0〜30 秒を 2 秒おきに並べた一覧を out/sheet.png に書き出す（--cols 4  --w 640  --out <file>）
+    --lint                    全編を 0.25 秒おきに調べ、文字切れ・重なりなどを報告する（--step 0.25）
+    --from 14 --to 26         その区間だけ動画にする（音声なし。out/part.mp4）
+    --audio                   音だけを out/audio.wav と out/audio-master.wav に書き出す（--stems pad,bass,drums,arp,melody,fx,sfx で系統ごと）
+  書き出し（オプションなしで実行すると、全編の書き出しが始まる。数分以上かかる）
+    （なし）                   全編を等倍で撮影して out/video.mp4 に書き出す（下見用）
+    --scale 2 --keep-frames   2 倍で撮影して縮小する（完成版）
+    --resume --reuse-audio    途中で止まった撮影を続きから行う
+  そのほか: --fps 60  --size 1920:1080  --workers 4  --crf 16  --preset slow  --out <file>  --no-audio
+  ブラウザ: 環境変数 CHROME_PATH（実行ファイル）か CHROME_CHANNEL（chrome / msedge）。未指定なら Playwright の Chromium`;
+const WITH_VALUE = ["shot", "sheet", "cols", "w", "out", "step", "from", "to", "stems", "scale", "size", "workers", "crf", "preset", "fps"];
+const SWITCHES = ["lint", "audio", "no-audio", "keep-frames", "resume", "reuse-audio"];
+if (flag("help") || argv.includes("-h")) {
+	console.log(USAGE);
+	process.exit(0);
+}
+// 知らない指定を黙って無視すると、全編の書き出しが始まってしまう。先に確かめて止める
+for (let i = 0; i < argv.length; i++) {
+	const name = argv[i].startsWith("--") ? argv[i].slice(2) : null;
+	if (name && WITH_VALUE.includes(name) && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) i++;
+	else if (!name || !SWITCHES.includes(name)) {
+		console.error(name && WITH_VALUE.includes(name) ? `--${name} には値が必要です\n\n${USAGE}` : `分からない指定です: ${argv[i]}\n\n${USAGE}`);
+		process.exit(1);
+	}
+}
+
 const fps = Number(opt("fps", 60));
 const scale = Number(opt("scale", 1));
 const workers = Number(opt("workers", Math.max(1, Math.min(6, os.cpus().length))));
@@ -134,7 +164,8 @@ async function renderAudio(page, file, stem) {
 	const step = 3 * 1024 * 1024;
 	for (let o = 0; o < size; o += step) parts.push(Buffer.from(await page.evaluate(([a, b]) => window.__video.audioChunk(a, b), [o, step]), "base64"));
 	fs.writeFileSync(file, Buffer.concat(parts));
-	console.log(`audio  ${path.relative(root, file)}  ${((Date.now() - t0) / 1000).toFixed(1)}s  peak ${(20 * Math.log10(peak || 1e-9)).toFixed(1)} dBFS`);
+	const seconds = await page.evaluate(() => window.__video.duration);
+	console.log(`audio  ${path.relative(root, file)}  長さ ${seconds.toFixed(1)} 秒（合成に ${((Date.now() - t0) / 1000).toFixed(1)} 秒）  peak ${(20 * Math.log10(peak || 1e-9)).toFixed(1)} dBFS`);
 	return file;
 }
 

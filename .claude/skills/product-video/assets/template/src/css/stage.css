@@ -450,7 +450,7 @@ svg {
 }
 .tile-f {
 	margin-top: 12px;
-	font-size: 14.5px;
+	font-size: 18px;
 	line-height: 1.5;
 	color: var(--ink2);
 	white-space: nowrap;

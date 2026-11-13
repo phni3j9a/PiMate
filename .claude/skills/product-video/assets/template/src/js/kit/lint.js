@@ -76,6 +76,16 @@ export function lint() {
 		if (main < 17) add("ui-text-small", "warn", n, `${name(n)} の中の文字が、画面上で約 ${main.toFixed(0)}px です。18px 以上になるよう、入れ物を大きくするか、見せたい所に寄ってください`);
 	}
 
+	// 3c. 舞台の部品（タイル、手順、要点、通知）の文字が、画面上で小さすぎる。飾りの英字ラベルは数えない
+	for (const box of $$(".tile, .step, .checks, .pts, .notif").filter(shown)) {
+		const s = box.offsetWidth ? box.getBoundingClientRect().width / box.offsetWidth : 1;
+		for (const leaf of box.querySelectorAll("*")) {
+			if (leaf.children.length || !leaf.textContent.trim() || !shown(leaf) || leaf.closest("svg") || leaf.matches(".tile-h span, .step .e, .step .n, .notif-hd *")) continue;
+			const px = Number.parseFloat(getComputedStyle(leaf).fontSize) * s;
+			if (px < 16) add("stage-text-small", "warn", leaf, `「${text(leaf)}」が画面上で約 ${px.toFixed(0)}px です。18px 以上にしてください（スマホで動画を見る人には読めません）`);
+		}
+	}
+
 	// 4. 何も映っていない
 	const anything = $$("#world > *, #over > *, #logo > *").some((n) => {
 		if (!shown(n)) return false;
