@@ -109,12 +109,13 @@ function loudness(file) {
 /** 音量を target（LUFS）にそろえ、ピークは -1 dBTP を超えないようにした WAV を作る。 */
 function master(file, target = -15) {
 	const before = loudness(file);
+	const seconds = Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file], { encoding: "utf8" }).stdout);
 	const out = file.replace(/\.wav$/, "-master.wav");
 	let gain = target - before.lufs;
 	let after = before;
 	// リミッターで少し下がるぶんを、測り直して詰める
 	for (let pass = 0; pass < 4; pass++) {
-		const chain = `lowshelf=f=140:g=-1.5,highshelf=f=6500:g=3,volume=${gain.toFixed(2)}dB,alimiter=limit=0.8:level=false:attack=2:release=80:asc=1,afade=t=in:d=0.02,afade=t=out:st=89.2:d=0.78,aresample=48000`;
+		const chain = `lowshelf=f=140:g=-1.5,highshelf=f=6500:g=3,volume=${gain.toFixed(2)}dB,alimiter=limit=0.8:level=false:attack=2:release=80:asc=1,afade=t=in:d=0.02,afade=t=out:st=${(seconds - 0.8).toFixed(2)}:d=0.78,aresample=48000`;
 		ffmpeg(["-i", file, "-af", chain, "-c:a", "pcm_s24le", out]);
 		after = loudness(out);
 		if (Math.abs(target - after.lufs) < 0.15) break;

@@ -1,10 +1,10 @@
 # PiMate 紹介動画
 
-PiMate を 90 秒で紹介する動画と、その作り方一式です。
+PiMate を約 1 分（64 秒）で紹介する動画と、その作り方一式です。
 
 | ファイル | 内容 |
 |---|---|
-| [pimate-intro.mp4](pimate-intro.mp4) | 完成した動画（1920×1080・60fps・H.264 / AAC・約 90 秒） |
+| [pimate-intro.mp4](pimate-intro.mp4) | 完成した動画（1920×1080・60fps・H.264 / AAC・64 秒） |
 | [pimate-intro-web.mp4](pimate-intro-web.mp4) | 軽量版（1280×720・30fps）。README や Issue への貼り付け用（10 MB 未満） |
 | [poster.png](poster.png) | 動画の見出し用の静止画 |
 
@@ -16,18 +16,18 @@ PiMate を 90 秒で紹介する動画と、その作り方一式です。
 
 | 秒 | 場面 | 伝えること |
 |---|---|---|
-| 0–8 | 冒頭 | PC の Pi が質問を出したまま待っている。でも席にいない |
-| 8–14 | ロゴ | PC の Pi を、ポケットに。 |
-| 14–26 | 01 SAME PI | PC の Pi をそのままスマホで。画面の転送ではなく、スマホのための UI |
-| 26–32 | 02 STEER | 作業中でも、その場で割り込む |
-| 32–40 | 03 REVIEW | 変更は、差分で確かめる |
-| 40–48 | 04 FLEET | 複数の PC・複数の Pi を、ひとつの一覧に |
-| 48–58 | 05 HANDOFF | スマホで始めて、PC で続ける（`pimate attach`） |
-| 58–66 | 06 TOOLKIT | サブエージェント、モデルと Thinking、利用枠、通知、Issue と PR、画像、セッション操作、テーマ |
-| 66–72 | 07 RESILIENT | 切れても、Pi は止まらない |
-| 72–78 | 08 PRIVATE | Pi はそのまま。データは PC のまま（Tailscale の中だけで通信） |
-| 78–84 | 09 SETUP | はじめるのは、3 ステップ |
-| 84–90 | 最後のカード | ロゴ、ひとこと、リポジトリの URL |
+| 0–4 | 導入 | PC の Pi が質問を出したまま、返事を待っている |
+| 4–8 | ロゴ | PC の Pi を、ポケットに。 |
+| 8–14 | 01 CONNECT | PC の Pi に、スマホからつながる。同じ質問がスマホにも出て、スマホで答えられる |
+| 14–22 | 02 LAUNCH | 新しい Pi を、スマホから起動する（マシン・フォルダ・最初のメッセージ） |
+| 22–28 | 03 SYNC | PC とスマホは、いつも同期（`pimate attach` で同じ Pi につなぐと、同じ行が両方に流れる） |
+| 28–34 | 04 RESILIENT | 切れても、Pi は止まらない。つながり直すと今の状態に追いつく |
+| 34–44 | 05 GROK BOT | Grok Bot に頼めば、PC の Pi が動く。Pi の質問も完了も、会話に届く |
+| 44–52 | 06 TOOLKIT | サブエージェント、モデルと Thinking、利用枠、通知、Issue と PR、画像、セッション操作、変更の確認 |
+| 52–58 | 07 SETUP | はじめるのは、3 ステップ |
+| 58–64 | 最後のカード | ロゴ、ひとこと、リポジトリの URL |
+
+場面の順番と時間割は `src/js/cues.js` の先頭にあります。曲は、同じファイルの「区間の並び」（`music.sections`）から編曲されるので、時間割を変えれば曲もついてきます。
 
 ## 作り直す
 
@@ -37,16 +37,16 @@ Node.js 22.18 以降と ffmpeg が必要です。依存はこのフォルダだ�
 cd docs/video
 npm install --ignore-scripts
 npx playwright install chromium   # Chromium が未導入のときだけ
-npm run render                    # out/pimate-intro.mp4 を書き出す（2 倍で撮影して縮小。4 コアで 30 分ほど）
-node render.mjs                   # 等倍で撮影する（15 分ほど。確認用）
+npm run render                    # out/pimate-intro.mp4 を書き出す（2 倍で撮影して縮小。4 コアで 20 分ほど）
+node render.mjs                   # 等倍で撮影する（5 分ほど。確認用）
 ```
 
 `render.mjs` は `src/` のページを開き、時刻を 1/60 秒ずつ進めながら 1 枚ずつ撮影して、ffmpeg で動画にします。音も同じページの中（OfflineAudioContext）で合成するため、素材ファイルはありません。
 
 ```sh
-node render.mjs --shot 16.6,43,87      # その時刻の静止画を out/shots に書き出す
-node render.mjs --sheet 14:26:1        # 14〜26 秒を 1 秒おきに並べた一覧を out/sheet.png に書き出す
-node render.mjs --from 14 --to 26      # 一部だけを動画にする（音声なし）
+node render.mjs --shot 10.4,38.7,61    # その時刻の静止画を out/shots に書き出す
+node render.mjs --sheet 34:44:0.5      # 34〜44 秒を 0.5 秒おきに並べた一覧を out/sheet.png に書き出す
+node render.mjs --from 34 --to 44      # 一部だけを動画にする（音声なし）
 node render.mjs --audio                # 音だけを書き出す（--stems pad,bass,drums,arp,melody,fx,sfx で系統ごと）
 node render.mjs --scale 2 --size 3840:2160   # 4K で書き出す
 node render.mjs --scale 2 --keep-frames --resume --reuse-audio   # 途中で止まった撮影を続きから行う
@@ -56,7 +56,7 @@ node render.mjs --scale 2 --keep-frames --resume --reuse-audio   # 途中で止�
 
 ```sh
 node tools/extras.mjs web            # out/pimate-intro-web.mp4（1280×720・30fps・10 MB 未満）
-node tools/extras.mjs poster 15.9    # out/poster.png（15.9 秒の 1 枚）
+node tools/extras.mjs poster 12.7    # out/poster.png（12.7 秒の 1 枚）
 node tools/extras.mjs uhd            # out/pimate-intro-4k.mp4（3840×2160・60fps）
 ```
 
@@ -73,12 +73,12 @@ node tools/extras.mjs uhd            # out/pimate-intro-4k.mp4（3840×2160・60
 | `tools/gen-qr.mjs` | `src/js/qr.js` を作り直すスクリプト |
 | `src/index.html` | 舞台（1920×1080）の土台 |
 | `src/css/` | `base.css`（舞台・見出し・タイル）、`phone.css`（スマホとアプリの画面）、`term.css`（PC のターミナル） |
-| `src/js/cues.js` | 場面の開始時刻と、効果音の合図 |
+| `src/js/cues.js` | 構成の表、場面の開始時刻、曲の区間、効果音の合図 |
 | `src/js/engine.js` | 時刻だけで見た目を決めるための土台（GSAP のタイムラインと、毎フレームの関数） |
 | `src/js/ui.js` | スマホの画面とターミナルの HTML |
 | `src/js/stage.js` | 見出し・ロゴ・タイルなど舞台の部品と、共通の動き |
 | `src/js/scenes.js` | 全場面の動き（ここを直すことが多い） |
-| `src/js/audio.js` | 曲と効果音の合成 |
+| `src/js/audio.js` | 曲（区間の並びから編曲）と効果音の合成 |
 | `src/js/tokens.js` | 色。アプリの色は `apps/mobile/src/theme/tokens.ts`、舞台とマークの色は [icon kit](../design/icon-kit/README.md) と同じ値 |
 | `src/js/qr.js` | 「はじめかた」の場面に出す QR のマス目（`tools/gen-qr.mjs` が生成。中身はこのリポジトリの URL） |
 
@@ -88,8 +88,9 @@ node tools/extras.mjs uhd            # out/pimate-intro-4k.mp4（3840×2160・60
 - **見た目は時刻だけで決める。** CSS の animation / transition は止めてあります。動きは `tl`（GSAP のタイムライン）に時刻を指定して積むか、`onFrame((t) => …)` で t から直接求めます。こうしておくと、どの時刻から撮っても同じ絵になり、並列に撮影できます。
 - **行の高さは組み立て時に測る。** 会話の行を開く `growIn` / `openRow` は、全部を表示した状態で測った高さを使います。文言を変えたら、その場面を `--sheet` で確認してください。
 - **効果音は映像から決まる。** 場面を組むときに `cue("tap", 時刻)` のように合図を積み、`audio.js` がその時刻で鳴らします。動きの時刻をずらせば音もずれます。
-- **文言はアプリと README に合わせる。** 通知の文（「Pi が入力を待っています」）や「この変更について依頼」の下書きの形は、アプリの実装と同じにしてあります。機能の説明を変えるときは、[README](../../README.md) と食い違わないようにしてください。
-- 他社のロゴは描いていません（利用枠の輪は文字だけ）。
+- **文言はアプリと README に合わせる。** 通知の文（「Pi が入力を待っています」）や画面の文言は、アプリの実装と同じにしてあります。機能の説明を変えるときは、[README](../../README.md) と食い違わないようにしてください。
+- **Grok Bot の場面は、資料どおりの流れにする。** Grok Bot が PC で Pi を起動し、指示を送り、Pi の質問をカードで会話に届け、完了を知らせる、という流れは [PC パッケージの説明](../../packages/pimate/README.md#grok-bot-skills任意) に沿っています。左の会話のパネルは xAI の画面の再現ではなく、会話の流れを示すための簡単な図です。
+- 他社のロゴは描いていません（利用枠の輪も、Grok Bot の場面も、名前は文字だけ）。
 
 ## 使っているもの
 
