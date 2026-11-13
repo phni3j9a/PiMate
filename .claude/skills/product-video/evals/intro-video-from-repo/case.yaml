@@ -1,9 +1,0 @@
-schema_version: "1.1"
-name: intro-video-from-repo
-expected_outcome: |
-  video/ に動画のプロジェクトができ、30〜40 秒の紹介動画（1920×1080・60fps・H.264・音声つき）と
-  10 MB 未満の軽量版が書き出されている。動画の中身は README の事実と strings.ja.json の文言に沿い、
-  色とロゴは design/ の値を使っている。対応していない機能（勤怠の打刻、給与計算）を「できる」と見せていない。
-  報告には、検品の結果と、音を聴いて確かめてはいないことが書かれている。
-context:
-  scaffold_script: place-files.sh

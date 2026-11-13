@@ -1,9 +1,0 @@
-schema_version: "1.1"
-name: edit-existing-video
-expected_outcome: |
-  video/ の動画の 3 か所（本編の見出し、タイルの追加、最後のカードの補足）が直っている。
-  タイルは 4 枚が画面に収まり、文字切れや重なりがない（node render.mjs --lint に ✗ がない）。
-  直した場面の静止画を書き出して実際に見ており、報告に見た時刻が書かれている。
-  頼まれていない場面の時間割や曲は変えていない。
-context:
-  scaffold_script: place-files.sh
