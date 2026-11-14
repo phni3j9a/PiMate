@@ -91,7 +91,12 @@ export const TranscriptRow = memo(function TranscriptRow({
 							onPress={() => onOpenSubagent(subagent)}
 						/>
 						<View style={styles.toolImages}>
-							<TranscriptImages images={row.images} imageIndices={row.imageIndices} imageCount={row.imageCount} />
+							<TranscriptImages
+								images={row.images}
+								imageIndices={row.imageIndices}
+								imageCount={row.imageCount}
+								entryId={row.entryId}
+							/>
 						</View>
 					</View>
 				);
@@ -232,7 +237,12 @@ function ToolRow({
 				)}
 			</Pressable>
 			<View style={styles.toolImages}>
-				<TranscriptImages images={row.images} imageIndices={row.imageIndices} imageCount={row.imageCount} />
+				<TranscriptImages
+					images={row.images}
+					imageIndices={row.imageIndices}
+					imageCount={row.imageCount}
+					entryId={row.entryId}
+				/>
 			</View>
 			{expanded && change ? (
 				<View style={styles.diff}>
