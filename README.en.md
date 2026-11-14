@@ -40,7 +40,7 @@ Pi itself is not modified. Conversation history, settings and credentials stay w
 |---|---|
 | PC | Linux x64 (tested). Linux arm64 is built but untested. macOS lacks service registration; Windows is not supported. |
 | PC software | Node.js 22+, Pi 1.2.0+ |
-| Phone | Android 7.0+ (in practice Android 8.0+, required by the Tailscale app). No iOS build is distributed. |
+| Phone | Android 7.0+ (in practice Android 8.0+, required by the Tailscale app). iOS is distributed only to the TestFlight internal group and is not public; notifications appear only while the app is in the foreground. |
 | Network | PC and phone on the same [Tailscale](https://tailscale.com/) account |
 | Optional | [GitHub CLI](https://cli.github.com/) on the PC (after `gh auth login`) for Issues / PRs |
 
