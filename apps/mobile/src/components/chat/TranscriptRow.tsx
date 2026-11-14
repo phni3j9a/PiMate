@@ -56,7 +56,12 @@ export const TranscriptRow = memo(function TranscriptRow({
 				<View style={margin}>
 					<View style={styles.userWrap}>
 						<View style={styles.bubble}>
-							<TranscriptImages {...row} entryId={row.key.startsWith("outbox:") ? undefined : row.key} />
+							<TranscriptImages
+								images={row.images}
+								imageIndices={row.imageIndices}
+								imageCount={row.imageCount}
+								entryId={row.key.startsWith("outbox:") ? undefined : row.key}
+							/>
 							{row.text ? (
 								<Text style={styles.bubbleText} selectable>
 									{row.text}
@@ -86,7 +91,12 @@ export const TranscriptRow = memo(function TranscriptRow({
 							onPress={() => onOpenSubagent(subagent)}
 						/>
 						<View style={styles.toolImages}>
-							<TranscriptImages {...row} />
+							<TranscriptImages
+								images={row.images}
+								imageIndices={row.imageIndices}
+								imageCount={row.imageCount}
+								entryId={row.entryId}
+							/>
 						</View>
 					</View>
 				);
@@ -227,7 +237,12 @@ function ToolRow({
 				)}
 			</Pressable>
 			<View style={styles.toolImages}>
-				<TranscriptImages {...row} />
+				<TranscriptImages
+					images={row.images}
+					imageIndices={row.imageIndices}
+					imageCount={row.imageCount}
+					entryId={row.entryId}
+				/>
 			</View>
 			{expanded && change ? (
 				<View style={styles.diff}>
