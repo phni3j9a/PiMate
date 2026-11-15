@@ -12,7 +12,7 @@ iOS 版は TestFlight の内部グループ「Internal」だけに配布して�
 | VM | macOS 26.6 / Xcode 26.6 / Node 24 / iPhone 17 シミュレーター（2026-11 時点。変わることがある） |
 | blueprint | リポジトリ単位で登録。正本は [ios-devin-blueprint.yaml](ios-devin-blueprint.yaml)。変更したら `devin cloud drs blueprint-write --blueprint-id <id> --from-file docs/ios-devin-blueprint.yaml` → `devin cloud drs build-start` で反映する（ID は `devin cloud drs blueprint-list`） |
 | スナップショット | blueprint の maintenance で `npm install`・`expo prebuild -p ios`（Pods 込み）・シミュレーター向けビルドを済ませ、セッション開始時から差分ビルドになるようにしている |
-| Secrets（Devin の org） | `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_PRIVATE_KEY` / `APPLE_TEAM_ID`。API キーは App Manager 権限 |
+| Secrets（Devin の org） | `ASC_KEY_ID` / `ASC_ISSUER_ID` / `ASC_PRIVATE_KEY` / `APPLE_TEAM_ID`。API キーは Admin 権限（2026-11-15 に App Manager のキーから差し替え） |
 | App Store Connect | アプリ「PiMate」（Apple ID 6834810849、Bundle ID `dev.pimate.app`、SKU `pimate-ios`）、TestFlight 内部グループ「Internal」 |
 
 ## セッションの始め方
@@ -41,8 +41,9 @@ Rules:
 - ios/ is generated (CNG); never commit it. Native config only via app.json / app.config.js / plugins.
 - Use plain `npx expo prebuild -p ios` (the snapshot is pre-built). Use `--clean` only if native config changed.
 - Do not change Android behavior; guard iOS-only fixes with Platform checks.
-- Do NOT create or revoke signing certificates / profiles, and do not change App Store Connect settings
-  other than uploading a build and adding it to "Internal". If signing is impossible, stop and ask.
+- Sign only with Xcode automatic signing (`-allowProvisioningUpdates` + the -authenticationKey* flags).
+  Do NOT create or revoke certificates / profiles by hand (API, openssl), and do not change App Store Connect
+  settings other than uploading a build and adding it to "Internal". If signing fails, stop and ask.
 - Never commit secrets (*.p8, *.p12, keys). Do not merge the PR or publish outside TestFlight Internal.
 - Every item you could not actually verify (only partially, or blocked by the simulator) must be listed under 残事項.
 
@@ -65,10 +66,8 @@ Reply with: PR URL, TestFlight version/build, verified / not verified, questions
 3. `xcodebuild archive`（Release、`generic/platform=iOS`）→ `xcodebuild -exportArchive`（`method=app-store-connect`、`destination=upload`）→ ビルドを「Internal」へ追加。
 4. 暗号化の申告は `ITSAppUsesNonExemptEncryption: false`（app.json）で毎回不要。
 
-**署名の現状（要判断）**: App Manager の API キーでは Xcode の自動署名で配布用証明書を作れなかったため、#147 では Devin が API で Apple Distribution 証明書とプロファイルを作って手動署名した。その秘密鍵は当時の VM にしかなく、新しいセッションでは使えない。次のどれかに決めるまで、Devin には証明書を作らせない。
-- 証明書の `.p12` を Devin の Secrets に保存して使い回す
-- API キーを Admin 権限にして自動署名に任せる
-- 既存の証明書を失効させ、その都度作り直す（作れる数に上限がある）
+**署名**: Admin 権限の API キーで、Xcode の自動署名（`-allowProvisioningUpdates` と `-authenticationKey*` の指定）に任せる。配布用証明書は Apple 側で管理される（cloud-managed）ため、VM に秘密鍵を置く必要はない。証明書・プロファイルを API や openssl で手作りしない。失敗したら止めて確認する。
+経緯: #147 の時点では App Manager のキーだったため自動署名で配布用証明書を作れず、Devin が API で Apple Distribution 証明書とプロファイルを手作りした（秘密鍵は当時の VM にしかなく再利用できない）。2026-11-15 に Admin のキーへ差し替えた。Admin キーでの自動署名はまだ実際には試していない（次のアップロードで確認する）。
 
 ## 監査（Main 側）
 

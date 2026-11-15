@@ -46,4 +46,4 @@ knowledge:
       Secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY, APPLE_TEAM_ID. Bundle ID dev.pimate.app, app Apple ID 6834810849, TestFlight group "Internal".
       Write $ASC_PRIVATE_KEY to ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8 (chmod 600); never commit it.
       iOS buildNumber defaults to the Android versionCode (0.1.18 -> 1018); override with PIMATE_IOS_BUILD_NUMBER, always higher than the latest build in App Store Connect.
-      The App Manager API key cannot use cloud-managed signing; an Apple Distribution certificate was created on 2026-11-14 whose private key is NOT available in new sessions. Do not create additional distribution certificates without asking the owner.
+      Sign with Xcode automatic signing only (-allowProvisioningUpdates + -authenticationKey* flags; the API key has the Admin role, so the distribution certificate is cloud-managed). Never create or revoke certificates/profiles by hand; if signing fails, stop and ask the owner.
