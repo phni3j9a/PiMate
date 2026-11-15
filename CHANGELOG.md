@@ -4,6 +4,13 @@ Android アプリ（タグ `app-v…`）と PC パッケージ `@phni3j9a/pimate
 
 新しい機能を使うには、アプリと PC の両方の更新、Host の再起動（`/pimate restart`）、起動中の Pi の `/reload` または再起動が必要なことがあります。各項目の「必要」の記載を確認してください。
 
+## Android 0.1.19
+
+- チャットで、考えている間の Thinking と実行中のツールを開いて表示し、終わったら閉じるようにしました。手動で開閉した行はその選択を保ちます（[#149](https://github.com/phni3j9a/PiMate/pull/149)）。
+- Thinking の行の表示を英語にしました（「Thinking…」「Thought for 12s」「Thought」）（[#149](https://github.com/phni3j9a/PiMate/pull/149)）。
+
+必要: APK の更新だけです。PC 側の更新は不要で、どの PC パッケージにもそのまま接続できます。
+
 ## Android 0.1.18
 
 - 主ボタン・1行の入力欄・検索欄・コマンド表示を、0.1.13 の角丸 12px からカプセル型（両端がまるい形）に戻しました（[#144](https://github.com/phni3j9a/PiMate/pull/144)）。
