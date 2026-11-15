@@ -153,7 +153,7 @@ function foldTurns(rows: Row[], view: InstanceView, turns: TurnInfo[]): Row[] {
 		const range = rows.slice(turn.rowStart, turn.rowEnd);
 		next = turn.rowEnd;
 		const tools = range.filter((r) => r.kind === "tool" && !pinned(r)).length;
-		// A turn without tool calls has nothing worth folding (a lone "考えた" row stays as it is).
+		// A turn without tool calls has nothing worth folding (a lone "Thought" row stays as it is).
 		if ((index === turns.length - 1 && inProgress) || tools === 0) {
 			out.push(...range);
 			return;

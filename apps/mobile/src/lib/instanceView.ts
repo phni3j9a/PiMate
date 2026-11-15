@@ -94,7 +94,7 @@ export interface InstanceView {
 	agentActive: boolean;
 	/**
 	 * How long the model thought, per assistant entryId. Only measurable while watching live (the session file
-	 * has no timing), so history shows "考えた" without seconds.
+	 * has no timing), so history shows "Thought" without seconds.
 	 */
 	thinkingMs: Record<string, number>;
 	/** Per-user-entry elapsed time, only for turns observed live through agent_settled. */

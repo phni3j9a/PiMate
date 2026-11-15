@@ -52,6 +52,13 @@ export function seconds(ms: number): string {
 	return `${Math.floor(total / 60)}分${total % 60}秒`;
 }
 
+/** `12s`, `1m 5s` for the English thinking label. */
+export function secondsEn(ms: number): string {
+	const total = Math.max(0, Math.round(ms / 1000));
+	if (total < 60) return `${total}s`;
+	return `${Math.floor(total / 60)}m ${total % 60}s`;
+}
+
 export function tokens(n: number): string {
 	if (n < 1000) return String(n);
 	if (n < 10_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
