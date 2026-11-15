@@ -5,7 +5,7 @@ import { Pressable, Text, View } from "react-native";
 import { ChangeDiff } from "@/components/diff/DiffView";
 import { BulbIcon, ChevronDownIcon, ChevronRightIcon, ChevronUpIcon, SwapIcon } from "@/components/icons";
 import { Spinner, StatusMark } from "@/components/StatusMark";
-import { seconds, tailLines } from "@/lib/format";
+import { seconds, secondsEn, tailLines } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { toolRowInfo } from "@/lib/subagents";
 import type { SpacedRow } from "@/lib/transcriptRows";
@@ -147,17 +147,17 @@ function ThinkingRow({
 			<Pressable
 				accessibilityRole="button"
 				accessibilityState={{ expanded }}
-				accessibilityLabel={row.live ? "考えています" : "考えた内容"}
+				accessibilityLabel={row.live ? "Thinking" : "Thought"}
 				onPress={() => onToggle(row.key, !expanded)}
 				style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
 			>
 				<View style={styles.markCol}>{row.live ? <Spinner /> : <BulbIcon color={colors.textSecondary} />}</View>
 				<Text style={styles.thinkingLabel}>
 					{row.live
-						? "考えています…"
+						? "Thinking…"
 						: row.durationMs !== undefined && row.durationMs >= 1000
-							? `${seconds(row.durationMs)} 考えた`
-							: "考えた"}
+							? `Thought for ${secondsEn(row.durationMs)}`
+							: "Thought"}
 				</Text>
 				{expanded ? <ChevronUpIcon color={colors.textSecondary} /> : <ChevronDownIcon color={colors.textSecondary} />}
 			</Pressable>
@@ -192,14 +192,16 @@ function ToolRow({
 	// A finished edit/write opens its diff (or why it is missing) instead of the raw tool text.
 	const change = row.change;
 	const hasOutput = !!change || !!row.output.trim();
+	// A running tool can be opened before any output arrives.
+	const canOpen = hasOutput || row.state === "running";
 	const stateLabel = row.state === "running" ? "実行中" : row.state === "error" ? "エラー" : "完了";
 	return (
 		<View style={{ marginTop: margin }}>
 			<Pressable
 				accessibilityRole="button"
 				accessibilityLabel={`${row.name} ${row.subject} ${stateLabel}`}
-				accessibilityState={{ expanded, disabled: !hasOutput }}
-				disabled={!hasOutput}
+				accessibilityState={{ expanded, disabled: !canOpen }}
+				disabled={!canOpen}
 				onPress={() => onToggle(row.key, !expanded)}
 				style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
 			>
@@ -216,7 +218,7 @@ function ToolRow({
 				) : row.meta ? (
 					<Text style={[styles.toolMeta, row.state === "error" && { color: colors.statusFailedText }]}>{row.meta}</Text>
 				) : null}
-				{hasOutput ? (
+				{canOpen ? (
 					expanded ? (
 						<ChevronUpIcon color={colors.textSecondary} />
 					) : (
@@ -233,10 +235,10 @@ function ToolRow({
 				<View style={styles.diff}>
 					<ChangeDiff piece={change} variant="compact" />
 				</View>
-			) : expanded && hasOutput ? (
+			) : expanded && canOpen ? (
 				<View style={styles.output}>
 					<Text style={styles.outputText} selectable>
-						{tailLines(row.output, 14)}
+						{hasOutput ? tailLines(row.output, 14) : "出力を待っています…"}
 						{row.truncated ? "\n…（長いため省略されています）" : ""}
 					</Text>
 				</View>

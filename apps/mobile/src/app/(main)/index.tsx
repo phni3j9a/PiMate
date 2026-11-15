@@ -423,9 +423,12 @@ function Transcript({
 		setExpanded((prev) => ({ ...prev, [k]: open }));
 	}, []);
 
-	// Running tool output is open by default; the user's choice wins once made. Folded turns start closed.
+	// Running tools and live thinking are open by default and close when done; the user's choice wins once made.
+	// Folded turns start closed.
 	const isOpen = (row: SpacedRow) =>
-		expanded[row.key] ?? (row.kind === "tool" && row.state === "running" && row.output.trim().length > 0);
+		expanded[row.key] ??
+		((row.kind === "tool" && row.state === "running") ||
+			(row.kind === "thinking" && row.live && row.text.trim().length > 0));
 	const rows = useMemo(() => spaceRows(visibleRows(allRows, (turn) => expanded[turn] ?? false)), [allRows, expanded]);
 	const openReview = useCallback(
 		(turn: string) => router.push({ pathname: "/review", params: { scope: "turn", turn } }),
