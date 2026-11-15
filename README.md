@@ -40,7 +40,7 @@ Pi 本体は改造しません。会話の履歴・設定・認証は PC の Pi 
 |---|---|
 | PC | Linux x64（動作確認済み）。Linux arm64 はビルドのみで未確認です。macOS は常駐登録に未対応、Windows は非対応です。 |
 | PC のソフト | Node.js 22 以上、Pi 1.2.0 以上 |
-| スマホ | Android 7.0 以上（Tailscale アプリの都合で、実際は Android 8.0 以上）。iOS 版は配布していません。 |
+| スマホ | Android 7.0 以上（Tailscale アプリの都合で、実際は Android 8.0 以上）。iOS は TestFlight の Internal 配布のみで、一般公開していません（通知はフォアグラウンドのときだけ表示されます）。 |
 | ネットワーク | PC とスマホを、同じアカウントの [Tailscale](https://tailscale.com/) につなぐ |
 | 任意 | GitHub の Issue / PR 表示には、PC に [GitHub CLI](https://cli.github.com/)（`gh auth login` 済み） |
 

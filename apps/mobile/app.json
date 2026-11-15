@@ -15,6 +15,7 @@
       },
       "bundleIdentifier": "dev.pimate.app",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSExceptionDomains": {

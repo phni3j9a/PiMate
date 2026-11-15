@@ -29,10 +29,9 @@ Run lint and typecheck before declaring any task done.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
 
-## Building with EAS
+## Release builds (this project does not use EAS)
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+Do not use EAS Build / Submit / Update here. Android release APKs are built with `npm run build:android` (`scripts/build-android-release.sh`). iOS builds, Simulator verification and TestFlight uploads run on a Devin Cloud macOS VM with Xcode, following [docs/ios.md](../../docs/ios.md).
 
 ## Rules
 

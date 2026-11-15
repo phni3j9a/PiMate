@@ -990,6 +990,9 @@ const RC = {
 	models(id) {
 		return { result: { models: MODELS, current: instances.get(id).model, scoped } };
 	},
+	commands() {
+		return { result: { commands: [] } };
+	},
 	set_scoped_models(_id, params) {
 		scoped = params.models.map((m) => ({ provider: m.provider, id: m.id }));
 		return { result: { scoped } };
@@ -1159,6 +1162,7 @@ function snapshot(id) {
 		promptImages: true,
 		...(inst.oldImages ? {} : { promptImageLimit: 4, entryImages: true, fileImages: true }),
 		providerAuth: !authOptions.old,
+		slashCommands: true,
 		instanceId: id,
 		pid: 4242,
 		cwd: s.cwd,
