@@ -1,0 +1,49 @@
+runs-on: macos
+
+initialize:
+  - name: Install CocoaPods
+    run: brew list cocoapods >/dev/null 2>&1 || brew install cocoapods
+  - name: UTF-8 locale for CocoaPods
+    run: |
+      echo "LANG=en_US.UTF-8" >> $ENVRC
+      echo "LC_ALL=en_US.UTF-8" >> $ENVRC
+
+maintenance:
+  - name: Install npm dependencies
+    run: npm install
+  - name: Generate iOS project and pods (warm cache)
+    run: |
+      export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+      cd apps/mobile && npx expo prebuild -p ios
+  - name: Warm Xcode simulator build
+    run: |
+      export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+      echo "node: $(command -v node) $(node -v 2>/dev/null)"
+      cd apps/mobile && if xcodebuild -workspace ios/PiMate.xcworkspace -scheme PiMate -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build > /tmp/warm.log 2>&1; then echo "warm build ok"; else echo "warm build failed (non-fatal)"; grep -E ' error:|Command .* failed|BUILD FAILED' /tmp/warm.log | sort -u | head -30; tail -30 /tmp/warm.log; fi
+
+knowledge:
+  - name: ios-procedure
+    contents: |
+      Read docs/ios.md first: iOS build / Simulator verification / TestFlight procedure, rules, and known unverifiable items.
+  - name: checks
+    contents: |
+      From the repo root: npm run typecheck && npm run lint && npm test -w @pimate/mobile
+      PC package tests (packages/) are verified by Linux GitHub CI; do not modify them to pass on macOS.
+  - name: ios-build
+    contents: |
+      The app is apps/mobile (Expo SDK 57, Continuous Native Generation). ios/ is generated and gitignored; never commit it.
+      The snapshot already contains a prebuilt ios/ with Pods and a warm DerivedData. Do NOT use `expo prebuild --clean` unless native config (app.json/app.config.js/plugins/native deps) changed; plain `npx expo prebuild -p ios` is incremental.
+      CocoaPods needs LANG/LC_ALL=en_US.UTF-8 (set in the env file).
+      Simulator run: cd apps/mobile && npx expo run:ios --device <simulator UDID>
+      Configure native behavior only via app.json / app.config.js / config plugins.
+  - name: fake-host
+    contents: |
+      Dev-only fake PiMate Host: node apps/mobile/scripts/dev-fake-host.mjs --port 47800 --listen 127.0.0.1 --address 127.0.0.1:47800
+      It prints a pimate://pair?... link; open it in the simulator with `xcrun simctl openurl booted '<link>'`.
+      Dev controls are documented at the top of the script (curl -X POST http://127.0.0.1:47800/_dev/<cmd>).
+  - name: testflight
+    contents: |
+      Secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY, APPLE_TEAM_ID. Bundle ID dev.pimate.app, app Apple ID 6834810849, TestFlight group "Internal".
+      Write $ASC_PRIVATE_KEY to ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8 (chmod 600); never commit it.
+      iOS buildNumber defaults to the Android versionCode (0.1.18 -> 1018); override with PIMATE_IOS_BUILD_NUMBER, always higher than the latest build in App Store Connect.
+      The App Manager API key cannot use cloud-managed signing; an Apple Distribution certificate was created on 2026-11-14 whose private key is NOT available in new sessions. Do not create additional distribution certificates without asking the owner.
