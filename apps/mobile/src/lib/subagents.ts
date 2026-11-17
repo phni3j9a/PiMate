@@ -193,12 +193,12 @@ export interface SubagentSummary {
 
 /**
  * The line above the composer: shown while any child is active, and after they finish until the next prompt is
- * sent (`watch` holds the runs seen active since the last prompt).
+ * sent (`watch` holds the runs seen active since the last prompt). Counts cover all runs, matching the sheet.
  */
 export function subagentSummary(runs: readonly SubagentRun[], watch: readonly string[]): SubagentSummary | null {
 	const shown = runs.filter((r) => runActive(r) || watch.includes(r.id));
 	if (!shown.length) return null;
-	const c = stateCounts(shown);
+	const c = stateCounts(runs);
 	const text = countsText(c);
 	if (!text) return null;
 	const spoken = COUNT_LABELS.filter(([k]) => c[k] > 0)

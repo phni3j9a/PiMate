@@ -254,6 +254,10 @@ describe("summary line", () => {
 		expect(subagentSummary([done], [])).toBeNull();
 		expect(subagentSummary([done], ["r1"])?.text).toBe("3 完了");
 		expect(subagentSummary([done], ["r1"])?.mark).toBe("done");
+		// counts include runs finished before the last prompt, like the sheet
+		const old = run({ id: "old", state: "complete" });
+		expect(subagentSummary([parallel, old], [])?.text).toBe("2 実行中 · 2 完了");
+		expect(subagentSummary([old], [])).toBeNull();
 	});
 
 	it("watch adds active runs and clears finished ones on prompt", () => {
