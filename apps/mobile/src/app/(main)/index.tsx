@@ -482,6 +482,7 @@ function Transcript({
 		follow();
 	};
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: once on mount; scrollToLatest only reads refs
 	useEffect(() => {
 		const t = setTimeout(() => scrollToLatest(false), 50);
 		return () => clearTimeout(t);
