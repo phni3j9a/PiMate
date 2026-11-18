@@ -46,6 +46,8 @@
  *   sub?kind=answer[&i=]    waiting children continue (as if the parent answered)
  *   sub?kind=finish[&i=]    all active children run to completion
  *   sub?kind=hold           freeze / unfreeze subagent progress (for screenshots)
+ *   sub?kind=rate[&ms=250][&steps=1]  tick faster/slower (default 3500 ms, 3 ticks/step); default-rate restores it
+ *   sub?kind=notes[&ms=250][&on=0]  append a parent-transcript notice every ms (Issue #152 repro); on=0 stops
  *   sub?kind=reset[&i=]     subagents_reset with no runs
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -1510,10 +1512,15 @@ function abortTurn(id) {
 // Runs as the RC would normalize them (packages/protocol/src/subagents.ts): `subagent_run` upserts, counts in the
 // host list, `subagent_transcript` with a cursor, `subagent_control` gated by each run's/child's `actions`.
 
-const SUB_TICK_MS = 3500;
+const DEFAULT_SUB_TICK_MS = 3500;
 /** Ticks per step of a running child (~10 s), so a run lasts minutes. */
-const SUB_STEP_TICKS = 3;
+const DEFAULT_SUB_STEP_TICKS = 3;
+// Mutable so /_dev/sub?kind=rate can stress the app at the RC's real 250 ms update rate (Issue #152).
+let subTickMs = DEFAULT_SUB_TICK_MS;
+let subStepTicks = DEFAULT_SUB_STEP_TICKS;
 let subHold = false;
+let subNoteSeq = 0;
+let subNoteTimer = null;
 const SUB_ACTIVE = new Set(["queued", "running", "waiting", "stopping"]);
 const subTranscripts = new Map(); // `${runId}/${childId}` -> { task, items: [], pending: null, followUps: [] }
 let subSeq = 0;
@@ -1566,6 +1573,22 @@ function publishRun(id, run) {
 	emit(id, { type: "subagent_run", run: publicRun(run) });
 	instances.get(id).summary.subagents = subCounts(subState(id).runs);
 	broadcastInstances();
+}
+
+function emitSubNotice(id) {
+	const n = ++subNoteSeq;
+	emit(id, {
+		type: "message_end",
+		item: {
+			kind: "other",
+			entryId: `sub-note-${n}`,
+			label: n % 2 ? "subagent-notify" : "subagent_control_notice",
+			text:
+				n % 2
+					? "Background task completed: **hybrid-subagents.worker**"
+					: "Subagent needs attention: hybrid-subagents.worker",
+		},
+	});
 }
 
 function publicRun(run) {
@@ -1654,7 +1677,7 @@ function tickRun(id, run) {
 	const working = run.children.filter((c) => c.state === "running");
 	for (const child of working) {
 		child.wait = (child.wait ?? 0) + 1;
-		if (child.wait < SUB_STEP_TICKS) continue;
+		if (child.wait < subStepTicks) continue;
 		child.wait = 0;
 		stepChild(run, child);
 		changed = true;
@@ -1673,11 +1696,14 @@ function tickRun(id, run) {
 	if (changed) publishRun(id, run);
 }
 
-setInterval(() => {
-	if (subHold) return;
-	for (const [id, inst] of instances)
-		for (const run of inst.subagents?.runs ?? []) if (SUB_ACTIVE.has(run.state)) tickRun(id, run);
-}, SUB_TICK_MS).unref();
+// Reschedules itself so /_dev/sub?kind=rate takes effect on the next tick.
+const subTick = () => {
+	if (!subHold)
+		for (const [id, inst] of instances)
+			for (const run of inst.subagents?.runs ?? []) if (SUB_ACTIVE.has(run.state)) tickRun(id, run);
+	setTimeout(subTick, subTickMs).unref();
+};
+setTimeout(subTick, subTickMs).unref();
 
 const fileRead = (n) => Array.from({ length: n }, (_, i) => `${String(i + 1).padStart(3)}  // …`).join("\n");
 
@@ -2159,7 +2185,7 @@ seedPrevious(AUTH_ID);
 startParallel(AUTH_ID, AUTH_TOOL);
 
 /** /_dev/sub?kind=… */
-function devSubagents(kind, id) {
+function devSubagents(kind, id, query) {
 	switch (kind) {
 		case "parallel":
 			return startParallel(id ?? AUTH_ID).id;
@@ -2196,6 +2222,30 @@ function devSubagents(kind, id) {
 							publishRun(iid, run);
 						}
 			return "ok";
+		}
+		case "rate": {
+			// Issue #152: the RC sends run updates at most every 250 ms; keep the default 3.5 s unless asked.
+			const ms = Number(query?.get("ms") ?? "");
+			const steps = Number(query?.get("steps") ?? "");
+			if (Number.isFinite(ms) && ms > 0) subTickMs = Math.max(50, ms);
+			if (Number.isFinite(steps) && steps > 0) subStepTicks = Math.max(1, steps);
+			return `${subTickMs}ms/${subStepTicks}`;
+		}
+		case "notes": {
+			// Issue #152: a steady stream of parent-transcript notices, independent of run progress.
+			if (subNoteTimer) clearInterval(subNoteTimer);
+			subNoteTimer = null;
+			if (query?.get("on") === "0") return "off";
+			const ms = Math.max(50, Number(query?.get("ms") ?? 250));
+			const target = id ?? AUTH_ID;
+			subNoteTimer = setInterval(() => emitSubNotice(target), ms);
+			subNoteTimer.unref?.();
+			return `${ms}ms`;
+		}
+		case "default-rate": {
+			subTickMs = DEFAULT_SUB_TICK_MS;
+			subStepTicks = DEFAULT_SUB_STEP_TICKS;
+			return `${subTickMs}ms/${subStepTicks}`;
 		}
 		case "reset": {
 			const iid = id ?? AUTH_ID;
@@ -2433,8 +2483,15 @@ const server = createServer((req, res) => {
 				break;
 			}
 			case "sub": {
-				const result = devSubagents(url.searchParams.get("kind"), url.searchParams.get("i") ?? undefined);
-				if (!result) return reply(400, { error: "kind must be parallel|waiting|chain|answer|finish|hold|reset" });
+				const result = devSubagents(
+					url.searchParams.get("kind"),
+					url.searchParams.get("i") ?? undefined,
+					url.searchParams,
+				);
+				if (!result)
+					return reply(400, {
+						error: "kind must be parallel|waiting|chain|answer|finish|hold|rate|notes|default-rate|reset",
+					});
 				return reply(200, { ok: true, result });
 			}
 			case "refuse-shutdown":

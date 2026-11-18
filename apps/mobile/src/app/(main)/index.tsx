@@ -413,6 +413,7 @@ function Transcript({
 	const { colors } = useAppearance();
 	const listRef = useRef<FlatList<SpacedRow>>(null);
 	const atBottom = useRef(true);
+	const dragging = useRef(false);
 	const [showJump, setShowJump] = useState(false);
 	const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -453,12 +454,24 @@ function Transcript({
 		setAtBottom(measuredAtBottom());
 	};
 
+	// `scrollToEnd` lands short of the bottom: it ignores the content padding and uses estimated cell lengths
+	// (Issue #152). The native content height minus the viewport is exact.
+	const scrollToLatest = (animated: boolean) => {
+		const m = metrics.current;
+		listRef.current?.scrollToOffset({ offset: Math.max(0, m.content - m.viewport), animated });
+	};
+
 	// Follow new output while at the bottom. Deferred a frame: on a viewport shrink (keyboard) the list must
 	// measure its new size first. Right after the user expands a row, stay put and offer the jump button instead.
 	const follow = () => {
-		if (!atBottom.current) return;
+		if (!atBottom.current || dragging.current) return;
 		if (Date.now() < holdFollowUntil.current) setAtBottom(measuredAtBottom());
-		else requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: false }));
+		else
+			requestAnimationFrame(() => {
+				// The user may have scrolled up while this frame was pending.
+				if (!atBottom.current || dragging.current || Date.now() < holdFollowUntil.current) return;
+				scrollToLatest(false);
+			});
 	};
 	const onContentSizeChange = (_w: number, h: number) => {
 		metrics.current.content = h;
@@ -470,7 +483,7 @@ function Transcript({
 	};
 
 	useEffect(() => {
-		const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
+		const t = setTimeout(() => scrollToLatest(false), 50);
 		return () => clearTimeout(t);
 	}, []);
 
@@ -497,6 +510,13 @@ function Transcript({
 				extraData={[expanded, runs]}
 				contentContainerStyle={styles.listContent}
 				onScroll={onScroll}
+				// Do not pull the list back under the user's finger while new output arrives.
+				onScrollBeginDrag={() => {
+					dragging.current = true;
+				}}
+				onScrollEndDrag={() => {
+					dragging.current = false;
+				}}
 				scrollEventThrottle={32}
 				onContentSizeChange={onContentSizeChange}
 				onLayout={onLayout}
@@ -515,7 +535,7 @@ function Transcript({
 					onPress={() => {
 						atBottom.current = true;
 						setShowJump(false);
-						listRef.current?.scrollToEnd({ animated: true });
+						scrollToLatest(true);
 					}}
 					size={36}
 					style={styles.jump}
