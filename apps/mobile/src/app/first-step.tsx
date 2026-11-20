@@ -15,7 +15,7 @@ import { PrimaryButton, TextButton } from "@/components/ui";
 import { relativeTime } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
 import { firstStepPhase } from "@/lib/onboarding";
-import { buildDrawerGroups, type DrawerRow, hostConnectionLabel, needsAttention } from "@/lib/presentation";
+import { buildDrawerGroups, type DrawerRow, hostConnectionLabel, isWorking, needsAttention } from "@/lib/presentation";
 import { appStore, notificationCenter } from "@/lib/runtime";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { spacing } from "@/theme/tokens";
@@ -115,7 +115,7 @@ export default function FirstStepScreen() {
 									row={row}
 									selected={false}
 									attention={attentionText(row)}
-									right={row.status === "running" ? "作業中" : relativeTime(row.updatedAt, now)}
+									right={isWorking(row) ? "作業中" : relativeTime(row.updatedAt, now)}
 									onPress={() => open(row)}
 								/>
 							))}
