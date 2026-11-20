@@ -69,6 +69,12 @@ export function needsAttention(row: DrawerRow): boolean {
 	return row.status === "waiting_input" || (row.subagents?.waiting ?? 0) > 0;
 }
 
+/** The parent runs a turn, or ended it and waits for subagents still working (pi-subagents launches async). */
+export function isWorking(row: DrawerRow): boolean {
+	const c = row.subagents;
+	return row.status === "running" || (row.status === "idle" && !!c && c.active > c.waiting);
+}
+
 /**
  * Subagent activity after the path (Drawer.html): "サブエージェント 2 実行中". Failures are left out — the counts
  * cover the run history, so they would stay forever.

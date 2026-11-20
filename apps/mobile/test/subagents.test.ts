@@ -8,7 +8,7 @@ import type {
 } from "@pimate/protocol";
 import { describe, expect, it } from "vitest";
 import { createView, type InstanceView, reduceView } from "../src/lib/instanceView";
-import { buildDrawerGroups, drawerSubagentText, originLabel } from "../src/lib/presentation";
+import { buildDrawerGroups, drawerSubagentText, isWorking, originLabel } from "../src/lib/presentation";
 import type { HostRuntime } from "../src/lib/store";
 import { mergeTranscript, subagentRows } from "../src/lib/subagentRows";
 import {
@@ -530,6 +530,29 @@ describe("drawer", () => {
 		expect(drawerSubagentText({ active: 3, waiting: 1, paused: 1, failed: 0 })).toBe(
 			"サブエージェント 2 実行中 · 1 待ち · 1 一時停止",
 		);
+	});
+
+	it("an idle parent with working subagents counts as working", () => {
+		const c = (active: number, waiting = 0) => ({ active, waiting, paused: 0, failed: 0 });
+		const g = buildDrawerGroups([
+			host([
+				summary("run", { status: "running" }),
+				summary("sub", { subagents: c(1) }),
+				summary("ask", { subagents: c(1, 1) }),
+				summary("input", { status: "waiting_input", subagents: c(1) }),
+				summary("done", { subagents: { active: 0, waiting: 0, paused: 1, failed: 2 } }),
+				summary("none"),
+			]),
+		]);
+		const rows = [...g.attention, ...(g.hosts[0]?.rows ?? [])];
+		expect(Object.fromEntries(rows.map((r) => [r.instanceId, isWorking(r)]))).toEqual({
+			run: true,
+			sub: true,
+			ask: false,
+			input: false,
+			done: false,
+			none: false,
+		});
 	});
 
 	it("a waiting subagent puts an idle parent under 要対応", () => {

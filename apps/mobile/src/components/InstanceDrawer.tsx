@@ -6,7 +6,13 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { relativeTime } from "@/lib/format";
 import { useAppState, useNow } from "@/lib/hooks";
-import { buildDrawerGroups, type DrawerRow, drawerSubagentText, hostConnectionLabel } from "@/lib/presentation";
+import {
+	buildDrawerGroups,
+	type DrawerRow,
+	drawerSubagentText,
+	hostConnectionLabel,
+	isWorking,
+} from "@/lib/presentation";
 import { appStore } from "@/lib/runtime";
 import type { HostRuntime } from "@/lib/store";
 import { makeStyles, useAppearance } from "@/theme/appearance";
@@ -88,7 +94,7 @@ export function InstanceDrawer({ navigation }: DrawerContentComponentProps) {
 							key={row.key}
 							row={row}
 							selected={row.key === selectedKey}
-							right={row.status === "running" ? "作業中" : relativeTime(row.updatedAt, now)}
+							right={isWorking(row) ? "作業中" : relativeTime(row.updatedAt, now)}
 							onPress={() => open(row)}
 						/>
 					);
@@ -199,8 +205,11 @@ export function InstanceRow({
 }) {
 	const styles = useStyles();
 	const asking = row.status !== "waiting_input" && (row.subagents?.waiting ?? 0) > 0;
-	const mark = row.status === "running" ? "running" : row.status === "waiting_input" || asking ? "waiting" : "idle";
-	const statusText = row.status === "running" ? "作業中" : row.status === "waiting_input" ? "入力待ち" : "待機";
+	const working = isWorking(row);
+	// A parent's own turn outranks a subagent's question; subagents merely working do not.
+	const mark =
+		row.status === "waiting_input" || (asking && row.status !== "running") ? "waiting" : working ? "running" : "idle";
+	const statusText = working ? "作業中" : row.status === "waiting_input" ? "入力待ち" : "待機";
 	const subagents = drawerSubagentText(row.subagents);
 	const bot = row.origin === "grok-bot";
 	return (
