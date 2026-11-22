@@ -29,5 +29,10 @@ guard let source = find(want) else {
     exit(1)
 }
 TISEnableInputSource(source)
-TISSelectInputSource(source)
-if let current = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() { print("current: \(sourceID(current))") }
+let status = TISSelectInputSource(source)
+let current = TISCopyCurrentKeyboardInputSource().map { sourceID($0.takeRetainedValue()) } ?? "?"
+print("current: \(current)")
+if status != noErr || current != want {
+    print("could not select \(want) (status \(status)); pick a keyboard mode ID, not its parent input method")
+    exit(1)
+}

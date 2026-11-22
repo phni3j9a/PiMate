@@ -12,12 +12,13 @@ VM の中で Devin（エージェント）に作業させるのではなく、Li
 |---|---|
 | VM | macOS 26.6.2（Apple Silicon の VM）、12 コア・16 GB。Xcode 26.6 と Xcode 27 RC、iOS 26.5 / 27.0 のシミュレーター、Rust、Node 24、Homebrew が最初から入っている |
 | ssh・rsync・scp | `devin forward` で VM の sshd を手元に転送し、普通の ssh で入る。接続を使い回すので、2回目以降のコマンドは1秒未満 |
-| VM が眠る条件 | **Devin が5分間何もしないと眠る。ssh の接続や操作、`devin cloud drs run` は「作業」と見なされない。** 起き直すと再起動になり（約30秒）、実行中のプロセスと `/tmp` は消える。ホームの内容（ビルドのキャッシュ、鍵、ツール）は残る |
+| VM が眠る条件 | **Devin が5分間何もしないと眠る。ssh の接続や操作、`devin cloud drs run` は「作業」と見なされない。** 待機を頼んでいないと、起こしてから5分経たずに眠ることもあった |
+| 起き直したとき | 再起動になる（約30秒）。実行中のプロセスと `/tmp` は消える。`~/.ssh/authorized_keys` は Devin の鍵だけに戻される（`devin-mac` が毎回登録し直す）。ホームのそれ以外（ビルドのキャッシュ、ツール）とアクセシビリティの許可は残る |
 | 起こしたままにする | `devin-mac keepalive` で Devin に長い待機コマンドを実行してもらうと、その間は起きたまま（20分と45分で確認） |
 | iOS シミュレーター | 起動・インストール・起動したアプリのスクリーンショット（`simctl`）・VNC からのタップができる。Rust を UniFFI で呼ぶ SwiftUI アプリが動くことも確認 |
 | macOS アプリ | GPUI（Zed の UI フレームワーク）のアプリが描画され、日本語も表示された。ssh から起動できる |
 | 画面の取得 | `screencapture` は macOS のアクセス許可（TCC）で失敗する。代わりに Devin の VNC（6080 番ポート、WebSocket）を転送して取得する |
-| 日本語 IME | 物理キーとして送れば、macOS の日本語入力を通る（変換中の表示、候補ウィンドウ）。VNC のキー入力は文字として届くので IME を通らない |
+| 日本語 IME | `devin-mac key`（物理キー）で送れば、macOS の日本語入力を通り、変換中の表示・候補ウィンドウ・確定まで確かめられる。VNC の英字キーも IME を通るが、VNC の Return では確定しなかった。VNC で送れるのは ASCII だけ（ほかの文字は「a」のキーになる） |
 | 逆向きの転送（`ssh -R`） | Devin の中継サーバーに拒否される。VM から手元の Host にはつなげない |
 | 実機 | USB でつなげないので、実機での確認は TestFlight で行う。性能の計測（Instruments）は VM なので参考にならない |
 
@@ -45,16 +46,16 @@ scripts/devin-mac/devin-mac setup    # ssh 鍵の登録・転送の開始・IME 
 D=scripts/devin-mac/devin-mac
 $D keepalive 60          # 作業の最初に。Devin に60分の待機を頼む
 $D status                # VM の稼働時間と、待機の最新の記録を見る
-$D sync                  # この checkout を VM の ~/work/<名前> に送る（.gitignore に従う）
+$D sync                  # この git checkout 全体を VM の ~/work/<名前> に送る（.gitignore に従い、無視されたファイルは送らず消さない）
 $D ssh 'cd ~/work/PiMate && …'   # ビルドやテスト
 $D vnc "shot /tmp/s.png"         # デスクトップ全体のスクリーンショット（1600x1200）
 $D pull path/on/vm.png /tmp/x.png
 ```
 
-- **VM が眠っていても、どのコマンドも自動で起こしてから実行します**（`up`。約30秒）。
-- `keepalive` を頼まずに作業すると、約5分で VM が眠り、ビルドや起動中のアプリが止まります。
+- **VM が眠っていても、どのコマンドも自動で起こしてから実行します**（`up`。約10〜30秒）。起こすときに ssh の鍵も登録し直します。
+- `keepalive` を頼まずに作業すると、数分で VM が眠り、ビルドや起動中のアプリが止まります。眠っている間は、転送が「administratively prohibited」で失敗します。
 - 待機は、前の待機が終わってから頼みます。`status` の `keepalive (VM time)` が進んでいれば待機中です。
-- `vnc` の座標はスクリーンショットの画素（1600x1200）です。操作は `"click X Y"`、`"type TEXT"`、`"key Return"`、`"sleep 0.5"` を並べて書けます。
+- `vnc` の座標はスクリーンショットの画素（1600x1200）です。操作は `"click X Y"`、`"type TEXT"`（ASCII のみ）、`"key Return"`、`"sleep 0.5"` を並べて書けます。日本語の入力を試すときは、次の節の `devin-mac key` を使います。
 
 ## iOS（SwiftUI / Expo）
 

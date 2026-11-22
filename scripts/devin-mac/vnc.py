@@ -5,7 +5,8 @@ usage: vnc.py [--url ws://127.0.0.1:16080/] ACTION...
 actions: "shot FILE" | "click X Y" | "type TEXT" | "key NAME" | "sleep SEC"
   X/Y are framebuffer pixels (the size is printed on connect).
   key names: Return space Escape BackSpace Tab Left Right Up Down
-  "type" sends characters, which skip the input method; use `devin-mac key` to test IME input.
+  "type" is ASCII only: the Devin VNC server turns other keysyms into the "a" key. Letters go through the
+  input method, but its Return did not commit IME text; use `devin-mac key` for IME checks.
 Only the "None" security type is supported (what the Devin VM offers).
 Needs: websockets, pillow (devin-mac creates a venv for them).
 """
@@ -68,9 +69,9 @@ async def shot(c, w, h, path):
         t = (await c.read(1))[0]
         if t == 2:  # bell
             continue
-        if t == 1:  # colour map
-            await c.read(5)
-            await c.read(struct.unpack(">H", await c.read(2))[0] * 6)
+        if t == 1:  # colour map: padding, first colour, count, then 6 bytes per colour
+            count = struct.unpack(">xHH", await c.read(5))[1]
+            await c.read(count * 6)
             continue
         if t == 3:  # server cut text
             await c.read(struct.unpack(">xxxI", await c.read(7))[0])
@@ -111,7 +112,8 @@ async def main(url, actions):
                     await asyncio.sleep(0.08)
             elif op == "type":
                 for ch in arg:
-                    await key(c, ord(ch))
+                    cp = ord(ch)  # X11 keysyms: Latin-1 as is, other Unicode with the 0x01000000 prefix
+                    await key(c, cp if cp <= 0xFF else 0x01000000 | cp)
             elif op == "key":
                 await key(c, KEYS[arg])
             elif op == "sleep":

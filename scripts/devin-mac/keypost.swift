@@ -1,5 +1,5 @@
 // Physical key input on the macOS VM through the HID event tap, so it goes through the input method
-// (VNC key events arrive as characters and skip it). Needs Accessibility permission for the ssh process;
+// (the VNC server's Return did not commit IME text). Needs Accessibility permission for the ssh process;
 // when missing it asks macOS to show the permission prompt and exits 1.
 // usage: keypost TOKEN...   letters/digits/"-" are typed key by key; ":space" ":return" ":escape" ":delete"
 //        ":tab" ":left" ":right" ":up" ":down" ":eisu" ":kana" are single keys. 0.5 s pause after each token.
