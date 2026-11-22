@@ -27,7 +27,7 @@ export type Block =
 	| { type: "item"; marker: string; depth: number; checked?: boolean; spans: Span[] }
 	| { type: "code"; text: string; lang?: string }
 	| { type: "quote"; blocks: Block[] }
-	| { type: "table"; align: Align[]; header: Span[][]; rows: Span[][][] }
+	| { type: "table"; raw: string; align: Align[]; header: Span[][]; rows: Span[][][] }
 	| { type: "rule" }
 	| { type: "image"; image: MarkdownImage };
 
@@ -155,6 +155,7 @@ function toBlocks(tokens: Token[], images: ImageParsing): Block[] {
 				const table = t as Tokens.Table;
 				out.push({
 					type: "table",
+					raw: table.raw,
 					align: table.align,
 					header: table.header.map((c) => inline(c.tokens, {}, images)),
 					rows: table.rows.map((r) => r.map((c) => inline(c.tokens, {}, images))),

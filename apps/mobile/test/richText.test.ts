@@ -61,6 +61,7 @@ describe("parseBlocks", () => {
 		expect(parseBlocks("| a | b |\n|---|:-:|\n| 1 | `c` |\n\n> 引用\n\n---\n\n- [x] 済\n- [ ] 未")).toEqual([
 			{
 				type: "table",
+				raw: "| a | b |\n|---|:-:|\n| 1 | `c` |",
 				align: [null, "center"],
 				header: [[{ text: "a" }], [{ text: "b" }]],
 				rows: [[[{ text: "1" }], [{ text: "c", code: true }]]],
