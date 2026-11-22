@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# Use a Devin Cloud macOS VM from this Linux PC: plain ssh/rsync through a tunnel, VNC screenshots/clicks,
+# physical key input for IME checks, and a keep-awake request. Usage and limits: docs/devin-macos.md
+set -euo pipefail
+
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+STATE_DIR=${DEVIN_MAC_STATE_DIR:-$HOME/.cache/pimate-devin-mac}
+KEY=${DEVIN_MAC_KEY:-$HOME/.ssh/pimate_devin_mac_ed25519}
+SSH_PORT=${DEVIN_MAC_SSH_PORT:-2222}
+VNC_PORT=${DEVIN_MAC_VNC_PORT:-16080}
+REPO=${DEVIN_MAC_REPO:-phni3j9a/PiMate}
+mkdir -p "$STATE_DIR"
+
+die() { echo "devin-mac: $*" >&2; exit 1; }
+[[ $SSH_PORT =~ ^[0-9]+$ && $VNC_PORT =~ ^[0-9]+$ ]] || die "DEVIN_MAC_SSH_PORT / DEVIN_MAC_VNC_PORT must be numbers"
+
+# Accepts an id, "devin-<id>" or a session URL. Validated because it ends up in script(1)'s shell command.
+session() {
+	local s=${DEVIN_MAC_SESSION:-$(cat "$STATE_DIR/session" 2>/dev/null || true)}
+	[ -n "$s" ] || die "no session: run 'devin-mac create' or 'devin-mac use <session-id|url>'"
+	s=${s%%[?#]*}
+	s=${s%/}
+	s=${s##*/sessions/}
+	[[ $s == devin-* ]] || s="devin-$s"
+	[[ $s =~ ^devin-[0-9a-f]{32}$ ]] || die "invalid session id: $s"
+	echo "$s"
+}
+
+# `devin ssh` refuses to run without a TTY, so give it one with script(1). The command travels base64-encoded
+# to avoid quoting through two shells. Slow (~5 s, ~30 s when it wakes the VM); use only before the tunnel exists.
+devin_ssh() {
+	local b64
+	b64=$(printf '%s\n' "$1" | base64 -w0)
+	script -qec "devin ssh $(session) -o StrictHostKeyChecking=accept-new 'echo $b64 | base64 -D | zsh'" /dev/null |
+		tr -d '\r\000'
+}
+
+# The VM host key changes with every new session, and the tunnel only reaches the session the CLI authorized.
+COMMON_OPTS=(-i "$KEY" -o StrictHostKeyChecking=no -o "UserKnownHostsFile=$STATE_DIR/known_hosts"
+	-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o LogLevel=ERROR
+	-o ControlMaster=auto -o "ControlPath=$STATE_DIR/cm-%C" -o ControlPersist=10m)
+SSH_OPTS=("${COMMON_OPTS[@]}" -p "$SSH_PORT")
+SCP_OPTS=("${COMMON_OPTS[@]}" -P "$SSH_PORT")
+vm() { ssh "${SSH_OPTS[@]}" devin@127.0.0.1 "$@"; }
+tunnel_pid() { cat "$STATE_DIR/tunnel.pid" 2>/dev/null || true; }
+# The pid file can outlive the process; only trust it while that pid still runs our `devin forward`.
+tunnel_alive() {
+	local p
+	p=$(tunnel_pid)
+	[[ $p =~ ^[0-9]+$ ]] && grep -qa 'devin forward' "/proc/$p/cmdline" 2>/dev/null
+}
+# A tunnel (and its ssh ControlMaster) opened for another session must never be reused.
+tunnel_ours() { tunnel_alive && [ "$(cat "$STATE_DIR/tunnel.session" 2>/dev/null)" = "$(session)" ]; }
+ssh_ok() { tunnel_ours && vm true >/dev/null 2>&1; }
+tunnel_stop() {
+	ssh "${SSH_OPTS[@]}" -O exit devin@127.0.0.1 >/dev/null 2>&1 || true
+	if tunnel_alive; then kill -- "-$(tunnel_pid)" 2>/dev/null || true; fi
+	rm -f "$STATE_DIR/tunnel.pid" "$STATE_DIR/tunnel.session"
+}
+
+ensure_venv() {
+	# shortcut: unpinned versions; pin them if the VNC client ever breaks on an upgrade.
+	"$STATE_DIR/venv/bin/python" -c 'import websockets, PIL' 2>/dev/null && return 0
+	[ -x "$STATE_DIR/venv/bin/python" ] || python3 -m venv "$STATE_DIR/venv"
+	"$STATE_DIR/venv/bin/pip" install -q websockets pillow
+}
+
+cmd_create() {
+	local out id
+	out=$(devin cloud drs sandbox-create --repo "$REPO" \
+		--prompt "Sandbox VM for the repo owner's ssh-based development. Do not do any work, do not edit files, do not open PRs. Reply only 'ready' and wait.")
+	id=$(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_id"])')
+	tunnel_stop
+	echo "$id" >"$STATE_DIR/session"
+	echo "session: $(session)  https://app.devin.ai/sessions/$id"
+	local os
+	os=$(devin_ssh 'sw_vers -productVersion 2>/dev/null || uname -s' | tail -1)
+	echo "VM OS: $os"
+	[[ $os == [0-9]* ]] || echo "warning: not macOS. The repo's Devin blueprint needs 'runs-on: macos'." >&2
+}
+
+cmd_use() {
+	[ $# -eq 1 ] || die "usage: devin-mac use <session-id|url>"
+	local id
+	id=$(DEVIN_MAC_SESSION=$1 session)
+	tunnel_stop
+	echo "$id" >"$STATE_DIR/session"
+	echo "session: $id"
+}
+
+cmd_up() {
+	ssh_ok && return 0
+	[ -f "$KEY" ] || die "no ssh key: run 'devin-mac setup'"
+	echo "devin-mac: waking the VM, installing the ssh key and opening the tunnel..." >&2
+	# Waking reboots the VM and resets ~/.ssh/authorized_keys to Devin's own key, so install ours every time.
+	local pub
+	pub=$(cat "$KEY.pub")
+	devin_ssh "mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+grep -qxF '$pub' ~/.ssh/authorized_keys || echo '$pub' >> ~/.ssh/authorized_keys" >/dev/null
+	tunnel_stop
+	setsid nohup script -qec "devin forward $(session) $SSH_PORT:22 $VNC_PORT:6080" /dev/null \
+		>"$STATE_DIR/tunnel.log" 2>&1 &
+	echo $! >"$STATE_DIR/tunnel.pid"
+	session >"$STATE_DIR/tunnel.session"
+	for _ in $(seq 1 45); do
+		ssh_ok && return 0
+		sleep 2
+	done
+	die "ssh through the tunnel failed (log: $STATE_DIR/tunnel.log). If the VM fell asleep again, run 'devin-mac keepalive' first"
+}
+
+cmd_setup() {
+	[ -f "$KEY" ] || ssh-keygen -q -t ed25519 -N "" -C "pimate-devin-mac" -f "$KEY"
+	cmd_up
+	vm 'mkdir -p ~/.devin-mac'
+	scp -q "${SCP_OPTS[@]}" "$HERE/keypost.swift" "$HERE/input-source.swift" devin@127.0.0.1:.devin-mac/
+	vm 'cd ~/.devin-mac && swiftc -O -o keypost keypost.swift && swiftc -O -o input-source input-source.swift'
+	ensure_venv
+	echo "setup done. For IME checks, grant Accessibility once (docs/devin-macos.md#日本語-ime-の確認)."
+}
+
+cmd_keepalive() {
+	local min=${1:-60}
+	[[ $min =~ ^[0-9]+$ ]] || die "usage: devin-mac keepalive [minutes]"
+	local prompt="Please run exactly this one shell command in your terminal in the foreground and wait for it to finish before replying (about $min minutes): for i in \$(seq 1 $((min * 2))); do date >> ~/.devin-mac-keepalive.log; sleep 30; done . Do not run anything else, do not edit files, do not open PRs. When it finishes, reply only \"done\"."
+	setsid nohup timeout $((min * 60 + 600)) devin --cloud -r "$(session)" -p -- "$prompt" \
+		>"$STATE_DIR/keepalive.log" 2>&1 &
+	echo "asked Devin to keep the VM awake for ~$min min (client log: $STATE_DIR/keepalive.log)"
+}
+
+cmd_status() {
+	local s
+	s=$(session)
+	echo "session: $s  https://app.devin.ai/sessions/${s#devin-}"
+	if tunnel_alive; then echo "tunnel:  up (ssh 127.0.0.1:$SSH_PORT, vnc ws://127.0.0.1:$VNC_PORT/)"; else echo "tunnel:  down"; fi
+	if ssh_ok; then
+		vm 'echo "vm:      $(uptime)"; echo "keepalive (VM time): $(tail -1 ~/.devin-mac-keepalive.log 2>/dev/null || echo none)"'
+	else
+		echo "vm:      not reachable (asleep, or tunnel down) — 'devin-mac up' wakes it"
+	fi
+}
+
+cmd_ssh() {
+	cmd_up
+	if [ $# -eq 0 ]; then exec ssh -t "${SSH_OPTS[@]}" devin@127.0.0.1; fi
+	vm "$@"
+}
+
+# Always syncs a whole git checkout, so every .gitignore from its root applies.
+cmd_sync() {
+	local src dst
+	src=$(git -C "${1:-.}" rev-parse --show-toplevel) || die "sync: ${1:-.} is not inside a git checkout"
+	dst=${2:-work/$(basename "$src")}
+	[[ $dst =~ ^[A-Za-z0-9._/-]+$ && $dst != /* && $dst != *..* ]] ||
+		die "sync: destination '$dst' must be relative to the VM home and use only letters, digits, . _ - /"
+	cmd_up
+	vm "mkdir -p $dst"
+	# Ignored files (node_modules, target, .env, ...) are neither sent nor deleted on the VM. --delete-after makes
+	# the receiver judge deletions with the .gitignore files it has just received.
+	rsync -a --delete-after --filter=':- .gitignore' --exclude .git \
+		-e "ssh ${SSH_OPTS[*]}" "$src/" "devin@127.0.0.1:$dst/"
+	echo "synced $src -> ~/$dst"
+}
+
+cmd_pull() {
+	[ $# -eq 2 ] || die "usage: devin-mac pull <remote-path> <local-path>"
+	cmd_up
+	scp -q "${SCP_OPTS[@]}" "devin@127.0.0.1:$1" "$2"
+}
+
+cmd_vnc() {
+	cmd_up
+	ensure_venv
+	"$STATE_DIR/venv/bin/python" "$HERE/vnc.py" --url "ws://127.0.0.1:$VNC_PORT/" "$@"
+}
+
+usage() {
+	cat <<'EOF'
+usage: devin-mac <command> [args]
+  create                 new Devin sandbox session for the repo (macOS via the repo blueprint); saves its id
+  use <id|url>           use an existing session
+  setup                  install the ssh key, open the tunnel, build the IME helpers, prepare the VNC client
+  up                     wake the VM if needed and (re)open the tunnel
+  keepalive [minutes]    ask Devin to hold the VM awake (default 60); ssh alone does not keep it awake
+  status                 session, tunnel, VM uptime and the last keepalive tick
+  ssh [command...]       shell or command on the VM (plain ssh through the tunnel)
+  sync [path] [dst]      rsync the git checkout containing path (default: here) to ~/work/<name> on the VM
+  pull <remote> <local>  copy a file from the VM
+  vnc <action...>        desktop actions: "shot FILE" "click X Y" "type TEXT" "key NAME" "sleep SEC"
+  key <token...>         physical key input that goes through the IME, e.g. key nihongo :space :return
+  input-source [id]      enable/select an input source (default: Japanese Romaji)
+  down                   close the tunnel
+EOF
+}
+
+cmd=${1:-help}
+[ $# -gt 0 ] && shift
+case $cmd in
+create) cmd_create "$@" ;;
+use) cmd_use "$@" ;;
+setup) cmd_setup ;;
+up) cmd_up ;;
+keepalive) cmd_keepalive "$@" ;;
+status) cmd_status ;;
+ssh) cmd_ssh "$@" ;;
+sync) cmd_sync "$@" ;;
+pull) cmd_pull "$@" ;;
+vnc) cmd_vnc "$@" ;;
+key) cmd_up && vm .devin-mac/keypost "$(printf '%q ' "$@")" ;; # remote commands start in the VM home
+input-source) cmd_up && vm .devin-mac/input-source "$@" ;;
+down) tunnel_stop && echo "tunnel closed" ;;
+help | -h | --help) usage ;;
+*) usage >&2 && exit 2 ;;
+esac
