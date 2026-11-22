@@ -38,6 +38,7 @@ PC の Pi なしで画面を確認する方法（開発用 fake Host）は [apps
 
 - PC パッケージの生成・未公開 tarball での検証・公開手順: [packages/pimate/README.md](packages/pimate/README.md#配布パッケージとリリースm5a)
 - Android APK のビルド・署名・配布: [apps/mobile/README.md](apps/mobile/README.md#android-apk-のビルドと配布m5b)
+- iOS・macOS のビルドと確認（Linux から Devin Cloud の macOS VM を ssh で使う）: [docs/devin-macos.md](docs/devin-macos.md)
 - リリースは Android が `app-v…`、PC パッケージが `v…` のタグで、別々に版を上げます。利用者向けの変更点は [CHANGELOG.md](CHANGELOG.md) に追記してください。
 
 ## Issue と PR
