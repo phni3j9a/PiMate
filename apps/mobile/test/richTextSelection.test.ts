@@ -18,6 +18,7 @@ vi.mock("react-native", async () => {
 	const { createElement } = await import("react");
 	return {
 		Alert: { alert: native.alert },
+		useWindowDimensions: () => ({ fontScale: 1 }),
 		StyleSheet: { create: (styles: unknown) => styles },
 		View: ({ children }: { children: ReactNode }) => createElement("div", null, children),
 		ScrollView: ({ children }: { children: ReactNode }) => createElement("div", null, children),

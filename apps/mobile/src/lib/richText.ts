@@ -216,3 +216,19 @@ export function cellWidth(spans: Span[]): number {
 	}
 	return w;
 }
+
+export const TABLE_MIN_WIDTH = 100;
+export const CELL_PADDING = 8;
+
+/** Scale text space, not padding, by the rendered cell font size. */
+export function tableWidths(charWidths: number[], available: number, fontRatio: number): number[] {
+	const padding = CELL_PADDING * 2;
+	const min = padding + (TABLE_MIN_WIDTH - padding) * fontRatio;
+	const natural = charWidths.map((w) => Math.min(240, padding + Math.max(40, w * 7.5) * fontRatio));
+	const total = natural.reduce((sum, w) => sum + w, 0);
+	const floor = natural.reduce((sum, w) => sum + Math.min(w, min), 0);
+	if (total <= available || floor > available) return natural;
+	// Distribute spare space in proportion to each column's room above its floor.
+	const share = (available - floor) / (total - floor);
+	return natural.map((w) => (w <= min ? w : min + (w - min) * share));
+}

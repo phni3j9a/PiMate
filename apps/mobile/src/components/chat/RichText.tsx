@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, type TextStyle, View } from "react-native";
+import { Alert, ScrollView, Text, type TextStyle, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { CheckIcon, CopyIcon } from "@/components/icons";
@@ -11,11 +11,13 @@ import { markdownImageGallery } from "@/lib/markdownImages";
 import {
 	type Align,
 	type Block,
+	CELL_PADDING,
 	cellWidth,
 	markdownImages,
 	parseBlocks,
 	type Span,
 	splitImageSpans,
+	tableWidths,
 } from "@/lib/richText";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { fontFamily, radii, typography } from "@/theme/tokens";
@@ -108,6 +110,8 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 
 const ALIGN: Record<string, TextStyle["textAlign"]> = { left: "left", center: "center", right: "right" };
 
+const CELL_FONT_SIZE = 13;
+
 function Table({
 	align,
 	header,
@@ -129,9 +133,13 @@ function Table({
 			),
 		[],
 	);
-	// Column widths from the longest cell (no table layout in RN); wide tables scroll sideways.
-	const widths = header.map((h, c) =>
-		Math.min(240, Math.max(56, Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? []))) * 7.5 + 24)),
+	const { scale } = useAppearance();
+	const { fontScale } = useWindowDimensions();
+	const [available, setAvailable] = useState(0);
+	const widths = tableWidths(
+		header.map((h, c) => Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? [])))),
+		available,
+		(scale(CELL_FONT_SIZE) / CELL_FONT_SIZE) * fontScale,
 	);
 	const row = (cells: Span[][], head: boolean, key: string) => (
 		<View key={key} style={[styles.tableRow, !head && styles.tableBodyRow]}>
@@ -139,7 +147,7 @@ function Table({
 				<View
 					// biome-ignore lint/suspicious/noArrayIndexKey: columns have no identity beyond their position
 					key={c}
-					style={{ width: w, paddingVertical: 8, paddingHorizontal: 12 }}
+					style={{ width: w, paddingVertical: 8, paddingHorizontal: CELL_PADDING }}
 				>
 					{cells[c]?.some((span) => span.image) ? (
 						<Blocks blocks={splitImageSpans({ type: "paragraph", spans: cells[c] })} gallery={gallery} />
@@ -154,7 +162,12 @@ function Table({
 	);
 	return (
 		<GestureDetector gesture={scrollGesture}>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.table}>
+			<ScrollView
+				horizontal
+				onLayout={(e) => setAvailable(e.nativeEvent.layout.width)}
+				showsHorizontalScrollIndicator={false}
+				style={styles.table}
+			>
 				<View>
 					{row(header, true, "h")}
 					{rows.map((r, i) => row(r, false, `r${i}`))}
@@ -313,7 +326,7 @@ const useStyles = makeStyles(({ colors, typography, scale }) => ({
 	tableBodyRow: { borderTopWidth: 1, borderTopColor: colors.background },
 	cell: {
 		...typography.caption,
-		fontSize: 13,
+		fontSize: CELL_FONT_SIZE,
 		lineHeight: 19,
 		color: colors.text,
 	},
