@@ -18,6 +18,7 @@ import ExternalLink from "lucide-react-native/icons/external-link";
 import Laptop from "lucide-react-native/icons/laptop";
 import Layers from "lucide-react-native/icons/layers";
 import Lightbulb from "lucide-react-native/icons/lightbulb";
+import Maximize2 from "lucide-react-native/icons/maximize-2";
 import Menu from "lucide-react-native/icons/menu";
 import Monitor from "lucide-react-native/icons/monitor";
 import Pencil from "lucide-react-native/icons/pencil";
@@ -83,6 +84,7 @@ export const LaptopIcon = icon(Laptop, 15, "textSecondary", 1.9);
 /** This phone (first-connection drawings). */
 export const PhoneIcon = icon(Smartphone, 20, "textCode", 1.9);
 export const MoreIcon = icon(Ellipsis, 20);
+export const ExpandIcon = icon(Maximize2, 16, "textSecondary", 1.9);
 export const CopyIcon = icon(Copy, 18, "text", 1.9);
 export const TerminalIcon = icon(SquareTerminal, 16, "text", 1.9);
 export const CheckIcon = icon(Check, 18, "accent", 2.4);

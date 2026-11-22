@@ -27,7 +27,7 @@ export type Block =
 	| { type: "item"; marker: string; depth: number; checked?: boolean; spans: Span[] }
 	| { type: "code"; text: string; lang?: string }
 	| { type: "quote"; blocks: Block[] }
-	| { type: "table"; align: Align[]; header: Span[][]; rows: Span[][][] }
+	| { type: "table"; raw: string; align: Align[]; header: Span[][]; rows: Span[][][] }
 	| { type: "rule" }
 	| { type: "image"; image: MarkdownImage };
 
@@ -155,6 +155,7 @@ function toBlocks(tokens: Token[], images: ImageParsing): Block[] {
 				const table = t as Tokens.Table;
 				out.push({
 					type: "table",
+					raw: table.raw,
 					align: table.align,
 					header: table.header.map((c) => inline(c.tokens, {}, images)),
 					rows: table.rows.map((r) => r.map((c) => inline(c.tokens, {}, images))),
@@ -215,4 +216,20 @@ export function cellWidth(spans: Span[]): number {
 		else for (const ch of s.text) w += /[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(ch) ? 2 : 1;
 	}
 	return w;
+}
+
+export const TABLE_MIN_WIDTH = 100;
+export const CELL_PADDING = 8;
+
+/** Scale text space, not padding, by the rendered cell font size. */
+export function tableWidths(charWidths: number[], available: number, fontRatio: number): number[] {
+	const padding = CELL_PADDING * 2;
+	const min = padding + (TABLE_MIN_WIDTH - padding) * fontRatio;
+	const natural = charWidths.map((w) => Math.min(240, padding + Math.max(40, w * 7.5) * fontRatio));
+	const total = natural.reduce((sum, w) => sum + w, 0);
+	const floor = natural.reduce((sum, w) => sum + Math.min(w, min), 0);
+	if (total <= available || floor > available) return natural;
+	// Distribute spare space in proportion to each column's room above its floor.
+	const share = (available - floor) / (total - floor);
+	return natural.map((w) => (w <= min ? w : min + (w - min) * share));
 }

@@ -18,6 +18,7 @@ vi.mock("react-native", async () => {
 	const { createElement } = await import("react");
 	return {
 		Alert: { alert: native.alert },
+		useWindowDimensions: () => ({ fontScale: 1 }),
 		StyleSheet: { create: (styles: unknown) => styles },
 		View: ({ children }: { children: ReactNode }) => createElement("div", null, children),
 		ScrollView: ({ children }: { children: ReactNode }) => createElement("div", null, children),
@@ -34,13 +35,14 @@ vi.mock("react-native-gesture-handler", () => {
 		GestureDetector: "div",
 	};
 });
-vi.mock("@/components/icons", () => ({ CheckIcon: () => null, CopyIcon: () => null }));
+vi.mock("@/components/icons", () => ({ CheckIcon: () => null, CopyIcon: () => null, ExpandIcon: () => null }));
 vi.mock("@/components/ui", () => ({
 	IconButton: (props: { label: string; onPress: () => void }) => {
 		native.buttons.push(props);
 		return null;
 	},
 }));
+vi.mock("@/lib/tableViewer", () => ({ openTableViewer: vi.fn() }));
 vi.mock("@/lib/imageViewer", () => ({ openImageViewer: vi.fn() }));
 vi.mock("@/theme/tokens", () => ({
 	colors: {},
@@ -58,7 +60,9 @@ vi.mock("../src/components/chat/MarkdownImage", async () => {
 	return { FileImageContext: createContext(undefined), MarkdownImageTile: () => null };
 });
 
-import { RichText } from "../src/components/chat/RichText";
+import { parseBlocks } from "@/lib/richText";
+import { openTableViewer } from "@/lib/tableViewer";
+import { RichText, Table } from "../src/components/chat/RichText";
 
 const markdown =
 	"# 見出し\n\n本文 **太字**\n\n- 項目\n\n> 引用\n\n```ts\n\tconst value = 1;\n```\n\n| 列 |\n| --- |\n| セル |";
@@ -70,16 +74,37 @@ beforeEach(() => {
 });
 
 describe("answer text selection and copying", () => {
-	it("makes each content block selectable and keeps inline formatting", () => {
+	it("keeps inline formatting and selection outside inline tables", () => {
 		const html = renderToStaticMarkup(createElement(RichText, { text: markdown }));
 		const selectableTexts = native.texts
 			.filter((props) => props.selectable)
 			.map((props) => renderToStaticMarkup(createElement("span", null, props.children)).replace(/<[^>]+>/g, ""));
 		expect(selectableTexts).toEqual(
-			expect.arrayContaining(["見出し", "本文 太字", "項目", "引用", "列", "セル", "  const value = 1;"]),
+			expect.arrayContaining(["見出し", "本文 太字", "項目", "引用", "  const value = 1;"]),
+		);
+		expect(html).toContain("セル");
+		expect(selectableTexts).not.toContain("セル");
+		expect(selectableTexts).not.toContain("列");
+		native.buttons.find((b) => b.label === "表を全画面で見る")!.onPress();
+		expect(openTableViewer).toHaveBeenCalledWith(
+			expect.objectContaining({ block: expect.objectContaining({ raw: "| 列 |\n| --- |\n| セル |" }) }),
 		);
 		expect(html).toContain("太字");
 		expect(native.copy).not.toHaveBeenCalled();
+	});
+
+	it("allows selection in the viewer, including text next to an image", () => {
+		const [block] = parseBlocks("| Header |\n|---|\n| Hello ![a](a.png) |", true);
+		if (block.type !== "table") throw new Error("expected a table");
+		for (const viewer of [false, true]) {
+			native.texts.length = 0;
+			renderToStaticMarkup(createElement(Table, { block, gallery: [], viewer }));
+			expect(
+				native.texts
+					.filter((p) => p.selectable)
+					.map((p) => renderToStaticMarkup(createElement("span", null, p.children))),
+			).toEqual(viewer ? ["<span>Header</span>", "<span>Hello </span>"] : []);
+		}
 	});
 
 	it("copies original Markdown and code bytes, not the displayed indentation", async () => {

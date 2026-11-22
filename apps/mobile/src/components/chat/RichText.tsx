@@ -1,22 +1,24 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, type TextStyle, View } from "react-native";
+import { Alert, ScrollView, Text, type TextStyle, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { CheckIcon, CopyIcon } from "@/components/icons";
+import { CheckIcon, CopyIcon, ExpandIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui";
 import { openImageViewer, type ViewerImage } from "@/lib/imageViewer";
 import { markdownImageGallery } from "@/lib/markdownImages";
 import {
-	type Align,
 	type Block,
+	CELL_PADDING,
 	cellWidth,
 	markdownImages,
 	parseBlocks,
 	type Span,
 	splitImageSpans,
+	tableWidths,
 } from "@/lib/richText";
+import { openTableViewer } from "@/lib/tableViewer";
 import { makeStyles, useAppearance } from "@/theme/appearance";
 import { fontFamily, radii, typography } from "@/theme/tokens";
 import { FileImageContext, MarkdownImageTile } from "./MarkdownImage";
@@ -64,7 +66,7 @@ function Spans({ spans }: { spans: Span[] }) {
 	});
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({ text, label }: { text: string; label: string }) {
 	const { colors } = useAppearance();
 	const [copied, setCopied] = useState(false);
 	useEffect(() => {
@@ -108,17 +110,19 @@ function CodeBlock({ text, lang }: { text: string; lang?: string }) {
 
 const ALIGN: Record<string, TextStyle["textAlign"]> = { left: "left", center: "center", right: "right" };
 
-function Table({
-	align,
-	header,
-	rows,
+const CELL_FONT_SIZE = 13;
+
+export function Table({
+	block,
 	gallery,
+	viewer = false,
 }: {
-	align: Align[];
-	header: Span[][];
-	rows: Span[][][];
+	block: Extract<Block, { type: "table" }>;
 	gallery: ViewerImage[];
+	viewer?: boolean;
 }) {
+	const { align, header, rows } = block;
+	const loadFile = useContext(FileImageContext);
 	const styles = useStyles();
 	const scrollGesture = useMemo(
 		// Recognize horizontal drags before the drawer's 5dp pan, not long presses or vertical drags.
@@ -129,9 +133,13 @@ function Table({
 			),
 		[],
 	);
-	// Column widths from the longest cell (no table layout in RN); wide tables scroll sideways.
-	const widths = header.map((h, c) =>
-		Math.min(240, Math.max(56, Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? []))) * 7.5 + 24)),
+	const { scale } = useAppearance();
+	const { fontScale } = useWindowDimensions();
+	const [available, setAvailable] = useState(0);
+	const widths = tableWidths(
+		header.map((h, c) => Math.max(cellWidth(h), ...rows.map((r) => cellWidth(r[c] ?? [])))),
+		available,
+		(scale(CELL_FONT_SIZE) / CELL_FONT_SIZE) * fontScale,
 	);
 	const row = (cells: Span[][], head: boolean, key: string) => (
 		<View key={key} style={[styles.tableRow, !head && styles.tableBodyRow]}>
@@ -139,12 +147,19 @@ function Table({
 				<View
 					// biome-ignore lint/suspicious/noArrayIndexKey: columns have no identity beyond their position
 					key={c}
-					style={{ width: w, paddingVertical: 8, paddingHorizontal: 12 }}
+					style={{ width: w, paddingVertical: 8, paddingHorizontal: CELL_PADDING }}
 				>
 					{cells[c]?.some((span) => span.image) ? (
-						<Blocks blocks={splitImageSpans({ type: "paragraph", spans: cells[c] })} gallery={gallery} />
+						<Blocks
+							blocks={splitImageSpans({ type: "paragraph", spans: cells[c] })}
+							gallery={gallery}
+							selectable={viewer}
+						/>
 					) : (
-						<Text style={[styles.cell, head && styles.bold, { textAlign: ALIGN[align[c] ?? ""] ?? "left" }]} selectable>
+						<Text
+							style={[styles.cell, head && styles.bold, { textAlign: ALIGN[align[c] ?? ""] ?? "left" }]}
+							selectable={viewer}
+						>
 							<Spans spans={cells[c] ?? []} />
 						</Text>
 					)}
@@ -152,19 +167,42 @@ function Table({
 			))}
 		</View>
 	);
+	const grid = (
+		<ScrollView
+			horizontal
+			onLayout={(e) => setAvailable(e.nativeEvent.layout.width)}
+			showsHorizontalScrollIndicator={viewer}
+			style={styles.table}
+		>
+			<View>
+				{row(header, true, "h")}
+				{rows.map((r, i) => row(r, false, `r${i}`))}
+			</View>
+		</ScrollView>
+	);
+	if (viewer) return grid;
 	return (
-		<GestureDetector gesture={scrollGesture}>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.table}>
-				<View>
-					{row(header, true, "h")}
-					{rows.map((r, i) => row(r, false, `r${i}`))}
-				</View>
-			</ScrollView>
-		</GestureDetector>
+		<View style={styles.table}>
+			<View style={styles.tableHead}>
+				<Text style={styles.codeLang}>表</Text>
+				<IconButton label="表を全画面で見る" size={32} onPress={() => openTableViewer({ block, gallery, loadFile })}>
+					<ExpandIcon />
+				</IconButton>
+			</View>
+			<GestureDetector gesture={scrollGesture}>{grid}</GestureDetector>
+		</View>
 	);
 }
 
-function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }) {
+function Blocks({
+	blocks,
+	gallery,
+	selectable = true,
+}: {
+	blocks: Block[];
+	gallery: ViewerImage[];
+	selectable?: boolean;
+}) {
 	const styles = useStyles();
 	const { colors, scale } = useAppearance();
 	const HEADING: TextStyle[] = [4, 2, 1].map((up) => ({
@@ -223,12 +261,12 @@ function Blocks({ blocks, gallery }: { blocks: Block[]; gallery: ViewerImage[] }
 					</View>
 				);
 			case "table":
-				return <Table key={key} align={block.align} header={block.header} rows={block.rows} gallery={gallery} />;
+				return <Table key={key} block={block} gallery={gallery} />;
 			case "rule":
 				return <View key={key} style={styles.rule} />;
 			default:
 				return (
-					<Text key={key} style={styles.paragraph} selectable>
+					<Text key={key} style={styles.paragraph} selectable={selectable}>
 						<Spans spans={block.spans} />
 					</Text>
 				);
@@ -309,11 +347,12 @@ const useStyles = makeStyles(({ colors, typography, scale }) => ({
 	codeText: { fontFamily: fontFamily.mono, fontSize: 12, lineHeight: 18, color: colors.textCode },
 	quote: { gap: 8, paddingLeft: 12, borderLeftWidth: 3, borderLeftColor: colors.control },
 	table: { borderRadius: radii.code, backgroundColor: colors.surface },
+	tableHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
 	tableRow: { flexDirection: "row" },
 	tableBodyRow: { borderTopWidth: 1, borderTopColor: colors.background },
 	cell: {
 		...typography.caption,
-		fontSize: 13,
+		fontSize: CELL_FONT_SIZE,
 		lineHeight: 19,
 		color: colors.text,
 	},

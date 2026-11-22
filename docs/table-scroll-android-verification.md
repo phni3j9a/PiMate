@@ -1,5 +1,7 @@
 # Markdown 表の横スクロール: Android 確認（#63）
 
+**後続変更（#159）**: 会話内の表は長押しで選択せず、右上から開く全画面ビューアでセルの部分コピー・表の Markdown コピーを行います。以下は当時の記録です。[現在の仕様と再確認手順](table-readability-android-verification.md)。
+
 以下は #63 時点の記録です。開発版の [#82](https://github.com/phni3j9a/PiMate/issues/82) では、長押しをセル内の範囲選択へ変更し、回答全文のコピーを専用ボタンへ移しました。[現在の確認結果](text-selection-android-verification.md) を参照してください。
 
 ## 原因と修正

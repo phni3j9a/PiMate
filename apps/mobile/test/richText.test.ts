@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cellWidth, markdownImages, parseBlocks } from "../src/lib/richText";
+import { cellWidth, markdownImages, parseBlocks, tableWidths } from "../src/lib/richText";
 
 describe("parseBlocks", () => {
 	it("splits list items and headings out of paragraphs", () => {
@@ -61,6 +61,7 @@ describe("parseBlocks", () => {
 		expect(parseBlocks("| a | b |\n|---|:-:|\n| 1 | `c` |\n\n> 引用\n\n---\n\n- [x] 済\n- [ ] 未")).toEqual([
 			{
 				type: "table",
+				raw: "| a | b |\n|---|:-:|\n| 1 | `c` |",
 				align: [null, "center"],
 				header: [[{ text: "a" }], [{ text: "b" }]],
 				rows: [[[{ text: "1" }], [{ text: "c", code: true }]]],
@@ -140,5 +141,22 @@ describe("Markdown image blocks", () => {
 		expect(markdownImages(parseBlocks("`![x](x.png)`\n\n```\n![x](x.png)\n```\n\n![x](https://x.dev/", true))).toEqual(
 			[],
 		);
+	});
+});
+
+describe("tableWidths", () => {
+	it("leaves fitting columns at natural width", () => {
+		expect(tableWidths([2, 12], 320, 1)).toEqual([56, 106]);
+	});
+	it("preserves short columns and shares spare space between long columns", () => {
+		const [short, medium, long] = tableWidths([2, 20, 100], 320, 1);
+		expect(short).toBe(56);
+		expect(medium).toBeGreaterThanOrEqual(100);
+		expect(long).toBeGreaterThan(medium);
+		expect(short + medium + long).toBeCloseTo(320);
+	});
+	it("falls back to natural widths when the minimums cannot fit", () => {
+		expect(tableWidths([100, 100, 100], 290, 1)).toEqual([240, 240, 240]);
+		expect(tableWidths([100, 100], 300, 2)).toEqual([240, 240]);
 	});
 });

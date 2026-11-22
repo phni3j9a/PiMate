@@ -62,6 +62,7 @@ export default function RootLayout() {
 				<Stack.Screen name="tree" />
 				<Stack.Screen name="subagent" />
 				<Stack.Screen name="notification" />
+				<Stack.Screen name="table-viewer" />
 				<Stack.Screen
 					name="image-viewer"
 					options={{
