@@ -21,6 +21,10 @@ vi.mock("react-native", async () => {
 		useWindowDimensions: () => ({ fontScale: 1 }),
 		StyleSheet: { create: (styles: unknown) => styles },
 		View: ({ children }: { children: ReactNode }) => createElement("div", null, children),
+		Pressable: (props: { accessibilityLabel: string; children: ReactNode; onPress: () => void }) => {
+			native.buttons.push({ label: props.accessibilityLabel, onPress: props.onPress });
+			return createElement("button", null, props.children);
+		},
 		ScrollView: ({ children }: { children: ReactNode }) => createElement("div", null, children),
 		Text: (props: { children: ReactNode; selectable?: boolean }) => {
 			native.texts.push(props);
@@ -35,7 +39,7 @@ vi.mock("react-native-gesture-handler", () => {
 		GestureDetector: "div",
 	};
 });
-vi.mock("@/components/icons", () => ({ CheckIcon: () => null, CopyIcon: () => null, ExpandIcon: () => null }));
+vi.mock("@/components/icons", () => ({ CheckIcon: () => null, CopyIcon: () => null }));
 vi.mock("@/components/ui", () => ({
 	IconButton: (props: { label: string; onPress: () => void }) => {
 		native.buttons.push(props);
@@ -85,7 +89,7 @@ describe("answer text selection and copying", () => {
 		expect(html).toContain("セル");
 		expect(selectableTexts).not.toContain("セル");
 		expect(selectableTexts).not.toContain("列");
-		native.buttons.find((b) => b.label === "表を全画面で見る")!.onPress();
+		native.buttons.find((b) => b.label === "表（1列・2行）。全画面で開く")!.onPress();
 		expect(openTableViewer).toHaveBeenCalledWith(
 			expect.objectContaining({ block: expect.objectContaining({ raw: "| 列 |\n| --- |\n| セル |" }) }),
 		);

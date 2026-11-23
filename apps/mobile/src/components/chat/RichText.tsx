@@ -1,10 +1,10 @@
 import * as Clipboard from "expo-clipboard";
 import * as WebBrowser from "expo-web-browser";
 import { Fragment, useContext, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, type TextStyle, useWindowDimensions, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, type TextStyle, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { CheckIcon, CopyIcon, ExpandIcon } from "@/components/icons";
+import { CheckIcon, CopyIcon } from "@/components/icons";
 import { IconButton } from "@/components/ui";
 import { openImageViewer, type ViewerImage } from "@/lib/imageViewer";
 import { markdownImageGallery } from "@/lib/markdownImages";
@@ -167,6 +167,12 @@ export function Table({
 			))}
 		</View>
 	);
+	const content = (
+		<>
+			{row(header, true, "h")}
+			{rows.map((r, i) => row(r, false, `r${i}`))}
+		</>
+	);
 	const grid = (
 		<ScrollView
 			horizontal
@@ -174,24 +180,23 @@ export function Table({
 			showsHorizontalScrollIndicator={viewer}
 			style={styles.table}
 		>
-			<View>
-				{row(header, true, "h")}
-				{rows.map((r, i) => row(r, false, `r${i}`))}
-			</View>
+			{viewer ? (
+				<View>{content}</View>
+			) : (
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel={`表（${header.length}列・${rows.length + 1}行）。全画面で開く`}
+					onPress={() => openTableViewer({ block, gallery, loadFile })}
+					// Like Android's tap timeout: a drag that starts on the table does not dim it first.
+					unstable_pressDelay={100}
+					style={({ pressed }) => pressed && styles.pressed}
+				>
+					{content}
+				</Pressable>
+			)}
 		</ScrollView>
 	);
-	if (viewer) return grid;
-	return (
-		<View style={styles.table}>
-			<View style={styles.tableHead}>
-				<Text style={styles.codeLang}>表</Text>
-				<IconButton label="表を全画面で見る" size={32} onPress={() => openTableViewer({ block, gallery, loadFile })}>
-					<ExpandIcon />
-				</IconButton>
-			</View>
-			<GestureDetector gesture={scrollGesture}>{grid}</GestureDetector>
-		</View>
-	);
+	return viewer ? grid : <GestureDetector gesture={scrollGesture}>{grid}</GestureDetector>;
 }
 
 function Blocks({
@@ -347,7 +352,7 @@ const useStyles = makeStyles(({ colors, typography, scale }) => ({
 	codeText: { fontFamily: fontFamily.mono, fontSize: 12, lineHeight: 18, color: colors.textCode },
 	quote: { gap: 8, paddingLeft: 12, borderLeftWidth: 3, borderLeftColor: colors.control },
 	table: { borderRadius: radii.code, backgroundColor: colors.surface },
-	tableHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8 },
+	pressed: { opacity: 0.6 },
 	tableRow: { flexDirection: "row" },
 	tableBodyRow: { borderTopWidth: 1, borderTopColor: colors.background },
 	cell: {

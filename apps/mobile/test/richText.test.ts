@@ -79,6 +79,9 @@ describe("parseBlocks", () => {
 });
 
 describe("cellWidth", () => {
+	it("counts padding spaces around inline code", () => {
+		expect(cellWidth([{ text: "PAUSE_FREE_ANALYSIS", code: true }])).toBe(21);
+	});
 	it("counts CJK as two columns", () => {
 		expect(cellWidth([{ text: "ab" }, { text: "日本" }])).toBe(6);
 	});
@@ -145,8 +148,8 @@ describe("Markdown image blocks", () => {
 });
 
 describe("tableWidths", () => {
-	it("leaves fitting columns at natural width", () => {
-		expect(tableWidths([2, 12], 320, 1)).toEqual([56, 106]);
+	it("fills fitting tables in proportion to natural widths", () => {
+		expect(tableWidths([2, 12], 324, 1)).toEqual([112, 212]);
 	});
 	it("preserves short columns and shares spare space between long columns", () => {
 		const [short, medium, long] = tableWidths([2, 20, 100], 320, 1);

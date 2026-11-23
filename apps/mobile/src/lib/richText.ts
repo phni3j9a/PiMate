@@ -213,7 +213,10 @@ export function cellWidth(spans: Span[]): number {
 	for (const s of spans) {
 		if (s.image)
 			w += 24; // Reserve one 180px tile plus cell padding.
-		else for (const ch of s.text) w += /[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(ch) ? 2 : 1;
+		else {
+			if (s.code) w += 2; // Spans renders one space on each side of inline code.
+			for (const ch of s.text) w += /[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(ch) ? 2 : 1;
+		}
 	}
 	return w;
 }
@@ -228,7 +231,8 @@ export function tableWidths(charWidths: number[], available: number, fontRatio: 
 	const natural = charWidths.map((w) => Math.min(240, padding + Math.max(40, w * 7.5) * fontRatio));
 	const total = natural.reduce((sum, w) => sum + w, 0);
 	const floor = natural.reduce((sum, w) => sum + Math.min(w, min), 0);
-	if (total <= available || floor > available) return natural;
+	if (total < available) return natural.map((w) => (w / total) * available);
+	if (total === available || floor > available) return natural;
 	// Distribute spare space in proportion to each column's room above its floor.
 	const share = (available - floor) / (total - floor);
 	return natural.map((w) => (w <= min ? w : min + (w - min) * share));
