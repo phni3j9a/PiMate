@@ -187,6 +187,8 @@ export function Table({
 					accessibilityRole="button"
 					accessibilityLabel={`表（${header.length}列・${rows.length + 1}行）。全画面で開く`}
 					onPress={() => openTableViewer({ block, gallery, loadFile })}
+					// Like Android's tap timeout: a drag that starts on the table does not dim it first.
+					unstable_pressDelay={100}
 					style={({ pressed }) => pressed && styles.pressed}
 				>
 					{content}
